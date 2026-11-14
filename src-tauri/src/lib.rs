@@ -258,6 +258,20 @@ fn handle_line(app: &AppHandle, line: &str) {
     }
 }
 
+/// On Windows, Tauri can hand back `\\?\C:\...` paths. Node fails to start from those
+/// (`EISDIR: lstat 'C:'`), so drop the prefix before passing a path to it.
+fn plain_path(p: std::path::PathBuf) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(rest) = p.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+            if !rest.starts_with("UNC\\") {
+                return std::path::PathBuf::from(rest);
+            }
+        }
+    }
+    p
+}
+
 /// Start the Harness server with the bundled Node, and restart it a few times if it dies.
 fn start_server(app: &AppHandle) -> tauri::Result<()> {
     let (script, data_dir) = if cfg!(debug_assertions) {
@@ -268,6 +282,7 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
         let res = app.path().resource_dir()?.join("app");
         (res.join("src").join("server.js"), Some(app.path().app_data_dir()?))
     };
+    let (script, data_dir) = (plain_path(script), data_dir.map(plain_path));
 
     let mut cmd = app
         .shell()
