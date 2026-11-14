@@ -12,7 +12,7 @@ function Hero() {
     <section className="hero">
       <div className="wrap hero-grid">
         <div className="hero-copy">
-          <h1>Let your agent run.<br /><span>Keep it on a <span className="h1-end">harness.</span></span></h1>
+          <h1>Let your agent run.<br /><span>Keep it on a harness.</span></h1>
           <p className="lead">Harness watches everything your coding agent does on your computer, including the parts its window leaves out, and pauses it before something risky finishes.</p>
           <p className="hero-cta">
             <a className="btn btn-ink" href="#download">Download for macOS or Windows</a>
