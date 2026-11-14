@@ -102,6 +102,7 @@ export function startGuard() {
     if (settings.autoProtect === 'off' || !e.agentId || e.kind === 'system' || e.kind === 'task') return;
     if (riskRank(e.risk) < riskRank(THRESHOLD[settings.autoProtect])) return;
     if (e.attribution === 'guess') return; // never freeze a session over a guess about who did it
+    if (e.prevented) return; // a Claude Code hook already blocked it before it ran
     const a = getAgent(e.agentId);
     if (!a?.alive || a.paused) return;
     // Lead with the most serious reason (decoy secrets and Keychain/disk wipes outrank the rest).
