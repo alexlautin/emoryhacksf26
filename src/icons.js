@@ -7,7 +7,7 @@ import { ROOT } from './paths.js';
 export const ICONS = [
   'terminal', 'square-terminal', 'globe', 'file', 'file-text', 'wrench', 'message-square', 'eye', 'eye-off',
   'key-round', 'upload', 'package', 'pause', 'play', 'octagon-x', 'octagon-alert', 'triangle-alert', 'circle-pause',
-  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x', 'bot',
+  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x', 'bot', 'settings',
 ];
 export const BRANDS = {
   claude: 'claudecode', codex: 'codex', gemini: 'geminicli', cursor: 'cursor',

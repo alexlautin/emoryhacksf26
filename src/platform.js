@@ -3,6 +3,7 @@
 // and pausing, resuming or stopping processes.
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -42,7 +43,7 @@ async function macProcesses() {
 
 // On Windows, starting PowerShell for every poll is slow, so one PowerShell process keeps
 // printing a JSON snapshot of all processes, separated by a marker line.
-const MARK = '<<seatbelt-snapshot>>';
+const MARK = '<<lookout-snapshot>>';
 let winLatest = null;
 let winWaiters = [];
 let winPs = null;
@@ -96,6 +97,9 @@ export function listProcesses(opts) {
  */
 export async function processCwd(pid) {
   if (IS_WIN) return null;
+  if (process.platform === 'linux') {
+    try { return fs.realpathSync(`/proc/${pid}/cwd`); } catch { return null; }
+  }
   try {
     const { stdout } = await run('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn']);
     const line = stdout.split('\n').find((l) => l.startsWith('n'));
@@ -145,10 +149,10 @@ export async function listConnections(pids) {
 
 // ---------- pause / resume / stop ----------
 
-const NT = `Add-Type -Namespace Seatbelt -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);'`;
+const NT = `Add-Type -Namespace Lookout -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);'`;
 
 async function winEach(pids, call) {
-  const script = `${NT}; foreach ($id in @(${pids.join(',')})) { try { $p = [Diagnostics.Process]::GetProcessById($id); [Seatbelt.Nt]::${call}($p.Handle) | Out-Null } catch {} }`;
+  const script = `${NT}; foreach ($id in @(${pids.join(',')})) { try { $p = [Diagnostics.Process]::GetProcessById($id); [Lookout.Nt]::${call}($p.Handle) | Out-Null } catch {} }`;
   await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true });
 }
 

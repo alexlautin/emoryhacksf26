@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Seatbelt",
+  "productName": "Lookout",
   "version": "0.1.0",
-  "identifier": "dev.seatbelt.monitor",
+  "identifier": "dev.lookout.monitor",
   "build": {
     "frontendDist": "loading",
     "beforeDevCommand": "node scripts/stage-desktop.mjs",
