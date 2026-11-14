@@ -114,10 +114,6 @@ Set Auto-protect to Off if you want to watch the attack go all the way through. 
 
 When the demo starts, the window opens the demo agent's process tree, so you can watch the install script appear under `npm install`, read the decoy, and get paused (or finish the upload, if Auto-protect is off).
 
-Open **Gemini Review Demo** from Home or from the demo session’s details. Both fictional timelines show an unfamiliar connection rated **Worth a look**. Choose a case and click **Review with Gemini** to get an assessment with links to the observations it cites. The request sends only the selected fictional timeline to Google. Gemini’s assessment is advisory. The local rules determine risk ratings, scores, blocking, and pausing.
-
-For a live review, set `GEMINI_API_KEY` in the environment you use to launch Harness, then start it with `pnpm desktop` or `pnpm start`. If you’re using an installed build, launch its executable from that environment. `GEMINI_MODEL` optionally overrides the default `gemini-2.5-flash`. The demo timelines can be viewed without a key.
-
 To try it with a real agent:
 
 ```bash
@@ -127,6 +123,14 @@ claude
 ```
 
 Then ask it to set up and run the project. We haven't tested this with a real agent yet, so use the scripted demo when showing it to people.
+
+## Review with Gemini
+
+Select a **Worth a look** event in **Activity**, **Alerts**, or an agent’s session, then click **Review with Gemini**. Harness previews the observations it will send. After you click **Send for review**, Gemini assesses the event, cites observations, and suggests a check. Harness’s local rules still control scores, blocking, and pausing.
+
+The review shares derived facts such as whether an unfamiliar destination was named in the task and whether the process came from a dependency install. Raw commands, hostnames, file paths, file contents, and task text stay local. See [Google’s Gemini API terms](https://ai.google.dev/gemini-api/terms) for how Google may use free-tier requests.
+
+Set `GEMINI_API_KEY` in the environment you use to launch Harness, then run `pnpm start` or `pnpm desktop`. If you’re using an installed build, launch its executable from that environment. `GEMINI_MODEL` overrides the default `gemini-3.5-flash-lite`. Standard text requests on this model are available within the Gemini Developer API’s [free-tier quota](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
 
 ## How it works
 
