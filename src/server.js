@@ -214,8 +214,9 @@ async function handle(req, res, { remote = false } = {}) {
       return json(res, 200, { ok: true });
     }
     if (url.pathname === '/icons.svg') {
+      const sprite = iconSprite(); // before the headers, so a failure is a clean 500
       res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' });
-      return res.end(iconSprite());
+      return res.end(sprite);
     }
     if (url.pathname === '/fonts/instrument-sans.woff2') {
       res.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'max-age=86400' });
@@ -228,7 +229,9 @@ async function handle(req, res, { remote = false } = {}) {
     fs.createReadStream(file).pipe(res);
   } catch (err) {
     console.error(err);
-    json(res, 500, { error: err.message });
+    // One bad request must never stop the monitor. If the reply already started, just end it.
+    if (res.headersSent) res.end();
+    else json(res, 500, { error: err.message });
   }
 }
 

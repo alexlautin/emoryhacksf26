@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ICONS, BRANDS, LUCIDE_DIR, BRAND_DIR, FONT_FILE } from '../src/icons.js';
+import { iconFiles, FONT_FILE } from '../src/icons.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TAURI = path.join(ROOT, 'src-tauri');
@@ -31,8 +31,7 @@ copy(path.join(ROOT, 'public'));
 fs.cpSync(path.join(ROOT, 'public', 'ui'), path.join(TAURI, 'loading', 'ui'), { recursive: true });
 copy(path.join(ROOT, 'demo'));
 copy(path.join(ROOT, 'hooks'));
-for (const name of ICONS) copy(path.join(LUCIDE_DIR, `${name}.svg`));
-for (const file of Object.values(BRANDS)) copy(path.join(BRAND_DIR, `${file}.svg`));
+for (const file of iconFiles()) copy(file);
 copy(FONT_FILE);
 // Phone access draws its pairing QR code with this (no dependencies of its own).
 const QR = path.dirname(fileURLToPath(import.meta.resolve('qrcode-generator')));

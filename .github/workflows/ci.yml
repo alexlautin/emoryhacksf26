@@ -81,6 +81,10 @@ jobs:
       - name: Stage the sidecar and app files
         run: node scripts/stage-desktop.mjs
 
+      # The installed app runs these staged files, not the repo: make sure they work on their own.
+      - name: Smoke test the staged app
+        run: node scripts/smoke-staged.mjs
+
       - name: Check the menu bar app
         working-directory: src-tauri
         run: cargo check --locked
