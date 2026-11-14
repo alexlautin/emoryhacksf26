@@ -577,10 +577,10 @@ main:focus { outline: none; }
 @media (prefers-reduced-motion: reduce) { .scn-cue i { animation: none; } }
 @media (max-width: 900px) { .scn-cue { bottom: 14px; } .scn-skip { display: none; } }
 
-.scn-note { position: absolute; left: max(24px, calc((100% - 1180px) / 2)); bottom: 18px; max-width: 28%; font-size: 12px; line-height: 1.45; color: var(--night-dim); }
+.scn-note { position: absolute; left: max(24px, calc((100% - 1180px) / 2)); bottom: 18px; max-width: none; white-space: nowrap; font-size: 12px; line-height: 1.45; color: var(--night-dim); }
 .scn-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .scn-note a:hover { color: var(--night-ink); }
-@media (max-width: 1100px) { .scn-note { left: 0; right: 0; max-width: none; bottom: 58px; padding: 0 24px; text-align: center; } }
+@media (max-width: 1100px) { .scn-note { left: 0; right: 0; max-width: none; white-space: normal; bottom: 58px; padding: 0 24px; text-align: center; } }
 
 .dl-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 13.5px; }
 .dl-links a { text-decoration: underline; text-underline-offset: 3px; }
