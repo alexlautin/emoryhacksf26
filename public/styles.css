@@ -32,9 +32,6 @@
   --b-good: light-dark(#ca8a04, #facc15);
   --b-fair: light-dark(#ea580c, #fb923c);
   --b-poor: light-dark(#dc2626, #f87171);
-  --claude: #d97757;
-  --codex: light-dark(#111318, #e5e7eb);
-  --demo: light-dark(#64748b, #94a3b8);
   --shadow: light-dark(0 1px 2px rgba(15, 17, 21, .04), none);
   --font: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, Menlo, monospace;
@@ -181,11 +178,11 @@ main > *, .item > div { min-width: 0; }
 .session.selected { border-color: var(--text); }
 .session.paused { border-color: color-mix(in srgb, var(--pause) 55%, var(--line)); }
 .s-head { display: flex; gap: 12px; align-items: center; }
-.avatar { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 14px; flex: none; }
-.avatar.sm { width: 24px; height: 24px; border-radius: 7px; font-size: 11px; }
-.avatar.claude { background: var(--claude); }
-.avatar.codex { background: var(--codex); color: var(--bg); }
-.avatar.demo { background: var(--demo); }
+.avatar { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.avatar.sm { width: 24px; height: 24px; border-radius: 7px; }
+.avatar .brand, .avatar .i { width: 18px; height: 18px; }
+.avatar.sm .brand, .avatar.sm .i { width: 14px; height: 14px; }
+.avatar .i { vertical-align: 0; }
 .s-id { flex: 1; min-width: 0; }
 .s-name { font-weight: 600; }
 .s-proj { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

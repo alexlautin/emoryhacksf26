@@ -65,4 +65,7 @@ export function truncate(s, n = 140) {
   return one.length > n ? one.slice(0, n - 1) + '…' : one;
 }
 
-export const AGENT_LABELS = { claude: 'Claude Code', codex: 'Codex', demo: 'Demo agent' };
+export const AGENT_LABELS = {
+  claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', copilot: 'GitHub Copilot',
+  opencode: 'opencode', amp: 'Amp', demo: 'Demo agent',
+};
