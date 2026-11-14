@@ -1,20 +1,20 @@
 // The Harness pug: the brand pug from the landing page, brought to life above the safety score.
 //
-// The art is the same image the landing page uses (public/ui/pug.png). It is drawn three times
-// inside one SVG: the whole dog, then just the head and just the tail (clipped out of the same
-// image), so the head can tilt and nod and the tail can wag. A fawn eyelid over the real eye
-// handles blinks and sleep. A requestAnimationFrame loop eases every value toward the pose for
-// the current mood (critically damped, so nothing snaps), and springs add the hops and head jerks.
+// The art is the same image the landing page uses (public/ui/pug.png), untouched. It is drawn
+// twice inside one SVG: the whole dog, then just the head (clipped out of the same image) so the
+// head can tilt and nod. Everything else is posture: breathing, crouching, leaning, hops and a
+// tremble. A requestAnimationFrame loop eases every value toward the pose for the current mood
+// (critically damped, so nothing snaps), and springs add the hops and head jerks.
 //
 // Moods, from the score and the agents:
-//   asleep   no agents running and nothing wrong: eyes shut, head down, slow breaths, z's
-//   happy    score Clear and an agent is working: tail going, a little prance
-//   content  score Clear or Steady: easy breathing, a slow tail sway
-//   alert    score Review: stands taller, head up, tail still
-//   worried  score Act: crouched, head low, tail tucked, a slight tremble
+//   asleep   no agents running and nothing wrong: head down, slow deep breaths, z's
+//   happy    score Clear and an agent is working: a little prance, head bobbing
+//   content  score Clear or Steady: easy breathing
+//   alert    score Review: stands taller, head up
+//   worried  score Act: crouched, head low, leaning back, a slight tremble
 //   guard    Harness paused an agent: braced and leaning in, head up, a short bark now and then
-// Reactions: a startle when the score gets worse, a happy hop when it recovers, and a squint and
-// wag when you click it. With reduced motion it holds each pose and skips the movement.
+// Reactions: a startle when the score gets worse, a happy hop when it recovers, and a hop when
+// you click it. With reduced motion it holds each pose and skips the movement.
 
 const NS = 'http://www.w3.org/2000/svg';
 const SRC = '/ui/pug.png';
@@ -26,23 +26,19 @@ const RANK = { loading: 0, clear: 1, steady: 2, review: 3, act: 4 };
 // Image-space geometry (pixels of pug.png).
 const FEET = [600, 1188];
 const HEAD_PIVOT = [820, 540];
-const TAIL_PIVOT = [330, 480];
 const HEAD_CLIP = '575,470 560,300 600,170 700,92 900,70 1080,108 1200,168 1292,238 1302,380 1232,472 1120,522 1060,562 1040,592 650,456';
-const TAIL_CLIP = '140,530 150,450 175,338 300,298 420,312 488,378 498,470 462,500 350,536 286,570 216,606 166,588';
-const EYE = { cx: 1006, cy: 268, rx: 39, ry: 50 };
-const FAWN = '#f3cca5';
 
-//          crouch lean  head  tail  wag   wagHz bounce lid   tremble zz  bark breathHz breathAmp
+//          crouch lean  head  bounce bob  tremble zz  bark breathHz breathAmp
 const MOODS = {
-  loading: [0,     0,    0,    0,    0,    1,    0,     0.3,  0,      0,  0,   0.35,    1],
-  asleep:  [0.05,  0,    7,    5,    0,    1,    0,     1,    0,      1,  0,   0.22,    2.2],
-  happy:   [0,     0.6, -1.5,  -2,   1,    3.2,  1,     0,    0,      0,  0,   0.6,     1.2],
-  content: [0,     0,    0,    0,    0.32, 1.2,  0,     0,    0,      0,  0,   0.32,    1],
-  alert:   [-0.025,0.4, -4.5, -4,    0,    1,    0,     0,    0,      0,  0,   0.45,    0.8],
-  worried: [0.06, -1.6,  4.5,  16,   0,    1,    0,     0.28, 1,      0,  0,   0.7,     0.8],
-  guard:   [0.025, 1.8, -2.5, -7,    0,    1,    0,     0,    0,      0,  1,   0.5,     0.9],
+  loading: [0,     0,    0,    0,     0,   0,      0,  0,   0.35,    1],
+  asleep:  [0.05,  0,    7,    0,     0,   0,      1,  0,   0.22,    2.2],
+  happy:   [0,     0.6, -1.5,  1,     1,   0,      0,  0,   0.6,     1.2],
+  content: [0,     0,    0,    0,     0,   0,      0,  0,   0.32,    1],
+  alert:   [-0.025,0.4, -4.5,  0,     0,   0,      0,  0,   0.45,    0.8],
+  worried: [0.06, -1.6,  4.5,  0,     0,   1,      0,  0,   0.7,     0.8],
+  guard:   [0.025, 1.8, -2.5,  0,     0,   0,      0,  1,   0.5,     0.9],
 };
-const KEYS = ['crouch', 'lean', 'head', 'tail', 'wag', 'wagHz', 'bounce', 'lid', 'tremble', 'zz', 'bark', 'breathHz', 'breathAmp'];
+const KEYS = ['crouch', 'lean', 'head', 'bounce', 'bob', 'tremble', 'zz', 'bark', 'breathHz', 'breathAmp'];
 const pose = (name) => Object.fromEntries(KEYS.map((k, i) => [k, MOODS[name][i]]));
 const TITLES = {
   loading: 'Waking up', asleep: 'Asleep. No agents running.', happy: 'Happy. Everything looks fine.',
@@ -64,10 +60,9 @@ let last = { rank: 0, paused: false };
 const p = pose('loading');
 let target = pose('loading');
 const spring = { hop: 0, hopV: 0, squash: 0, squashV: 0, nod: 0, nodV: 0 };
-const fx = { bang: 0, squintUntil: 0, squint: 0, wagBoost: 0, bark: 0 };
-const pointer = { x: 0, y: 0, at: -1e9 };
-const blink = { next: 0, t: -1, double: false };
-const phase = { breath: 0, wag: 0, bounce: 0, z: 0 };
+const fx = { bang: 0, bark: 0 };
+const pointer = { y: 0, at: -1e9 };
+const phase = { breath: 0, bounce: 0, z: 0 };
 let barkAt = 0;
 let lastT = 0;
 let tilt = 0;
@@ -77,23 +72,12 @@ function build(host) {
   const defs = el('defs', {}, svg);
   const hc = el('clipPath', { id: 'pug-head-clip' }, defs);
   el('polygon', { points: HEAD_CLIP }, hc);
-  const tc = el('clipPath', { id: 'pug-tail-clip' }, defs);
-  el('polygon', { points: TAIL_CLIP }, tc);
-  const ec = el('clipPath', { id: 'pug-eye-clip' }, defs);
-  el('ellipse', { cx: EYE.cx, cy: EYE.cy, rx: EYE.rx, ry: EYE.ry }, ec);
 
   const shadow = el('ellipse', { cx: FEET[0], cy: FEET[1] + 6, rx: 470, ry: 30, fill: 'var(--pug-shadow)' }, svg);
   const all = el('g', {}, svg);
   el('image', { href: SRC, width: W, height: H }, all);
-  const tail = el('g', {}, all);
-  el('image', { href: SRC, width: W, height: H, 'clip-path': 'url(#pug-tail-clip)' }, tail);
   const head = el('g', {}, all);
   el('image', { href: SRC, width: W, height: H, 'clip-path': 'url(#pug-head-clip)' }, head);
-
-  // Eyelid: fawn skin that slides down over the eye, with a dark lash line on its edge.
-  const lidBox = el('g', { 'clip-path': 'url(#pug-eye-clip)' }, head);
-  const lid = el('rect', { x: EYE.cx - EYE.rx - 4, y: EYE.cy - EYE.ry - 4, width: EYE.rx * 2 + 8, height: 0, fill: FAWN }, lidBox);
-  const lash = el('path', { fill: 'none', stroke: '#16181c', 'stroke-width': 11, 'stroke-linecap': 'round', opacity: 0 }, head);
 
   // Startle mark, bark lines and sleep z's.
   const bang = el('g', { opacity: 0 }, svg);
@@ -104,12 +88,11 @@ function build(host) {
   const zs = [0, 1, 2].map(() => el('path', { d: 'M0 0 h62 l-62 62 h62', fill: 'none', stroke: 'var(--pug-z)', 'stroke-width': 18, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0 }, svg));
 
   host.appendChild(svg);
-  return { svg, shadow, all, tail, head, lid, lash, bang, barkG, zs };
+  return { svg, shadow, all, head, bang, barkG, zs };
 }
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = (cur, to, dt, rate) => cur + (to - cur) * (1 - Math.exp(-dt * rate));
-const smooth = (x) => x * x * (3 - 2 * x);
 const f = (n) => Math.round(n * 100) / 100;
 
 function stepSpring(key, vKey, to, dt, k, c) {
@@ -124,16 +107,11 @@ function frame(now) {
   const still = REDUCED.matches;
   const t = now / 1000;
 
-  for (const k of KEYS) p[k] = still ? target[k] : ease(p[k], target[k], dt, k === 'wagHz' || k === 'breathHz' ? 2 : 5);
-  fx.wagBoost = ease(fx.wagBoost, 0, dt, 1.3);
+  for (const k of KEYS) p[k] = still ? target[k] : ease(p[k], target[k], dt, k === 'breathHz' ? 2 : 5);
   fx.bang = ease(fx.bang, 0, dt, 1.5);
   fx.bark = ease(fx.bark, 0, dt, 3.5);
-  const squintOn = now < fx.squintUntil ? 1 : 0;
-  fx.squint = still ? squintOn : ease(fx.squint, squintOn, dt, 10);
 
-  // Clocks
   phase.breath += dt * Math.PI * 2 * p.breathHz;
-  phase.wag += dt * Math.PI * 2 * (p.wagHz + fx.wagBoost * 2.2);
   phase.bounce += dt * Math.PI * 2 * 0.75;
   phase.z += dt * 0.5;
   const breath = still ? 0 : Math.sin(phase.breath);
@@ -146,37 +124,22 @@ function frame(now) {
     fx.bark = 1;
   }
 
-  // Springs
   stepSpring('hop', 'hopV', 0, dt, 240, 15);
   stepSpring('squash', 'squashV', 0, dt, 380, 17);
   stepSpring('nod', 'nodV', 0, dt, 200, 13);
 
-  // A happy prance: small regular hops.
-  const prance = still ? 0 : p.bounce * Math.max(0, Math.sin(phase.bounce)) ** 2 * 26;
+  // A happy prance: small regular hops, with the head bobbing a beat behind.
+  const beat = Math.max(0, Math.sin(phase.bounce)) ** 2;
+  const prance = still ? 0 : p.bounce * beat * 26;
+  const bob = still ? 0 : p.bob * Math.sin(phase.bounce - 0.9) * 2.2;
 
   // Head follows the pointer a little: up when it's above, down when it's below.
   let want = 0;
-  if (now - pointer.at < 2600 && p.lid < 0.5) {
+  if (now - pointer.at < 2600 && p.zz < 0.5) {
     const r = parts.svg.getBoundingClientRect();
     want = clamp((pointer.y - (r.top + r.height * 0.3)) / 300, -1, 1) * 2.5;
   }
   tilt = still ? 0 : ease(tilt, want, dt, 4);
-
-  // Blinks
-  if (!still && blink.t < 0 && now > blink.next) { blink.t = 0; blink.double = Math.random() < 0.2; }
-  let blinkClose = 0;
-  if (blink.t >= 0) {
-    blink.t += dt;
-    const d = 0.16;
-    const x = blink.t / d;
-    blinkClose = x < 0.5 ? smooth(x * 2) : 1 - smooth((x - 0.5) * 2);
-    if (blink.t >= d) {
-      blinkClose = 0;
-      blink.t = -1;
-      if (blink.double) { blink.double = false; blink.next = now + 110; }
-      else blink.next = now + (mood === 'alert' ? 1500 : 2400) + Math.random() * 3600;
-    }
-  }
 
   // Whole dog: hop, squash and stretch from the feet, crouch, lean, tremble.
   const tremble = still ? 0 : p.tremble * (Math.sin(t * 59) * 4 + Math.sin(t * 37) * 3);
@@ -190,32 +153,16 @@ function frame(now) {
   parts.shadow.setAttribute('rx', f(470 * lift));
   parts.shadow.setAttribute('opacity', f(0.45 + 0.55 * lift));
 
-  // Head: mood angle, a nod spring, the breath, and a lean toward the pointer.
-  const headAng = p.head + spring.nod * 0.1 + tilt + breath * 0.5 * p.breathAmp;
+  // Head: mood angle, a nod spring, the breath, the prance bob, and a lean toward the pointer.
+  const headAng = p.head + spring.nod * 0.1 + tilt + bob + breath * 0.5 * p.breathAmp;
   parts.head.setAttribute('transform', `rotate(${f(headAng)} ${HEAD_PIVOT[0]} ${HEAD_PIVOT[1]})`);
 
-  // Tail: a wag around the curl, tucked down when worried, up when on guard.
-  const wag = still ? 0 : Math.sin(phase.wag) * (p.wag + fx.wagBoost) * 9;
-  parts.tail.setAttribute('transform', `rotate(${f(-(p.tail + wag))} ${TAIL_PIVOT[0]} ${TAIL_PIVOT[1]})`);
-
-  // Eyelid
-  const close = clamp(Math.max(p.lid, blinkClose, fx.squint * 0.62), 0, 1);
-  const h = (EYE.ry * 2 + 8) * close;
-  parts.lid.setAttribute('height', f(h));
-  const ly = EYE.cy - EYE.ry - 4 + h;
-  const sag = 10 + close * 8;
-  parts.lash.setAttribute('d', `M${EYE.cx - EYE.rx + 2} ${f(ly - 6)} Q${EYE.cx} ${f(ly + sag)} ${EYE.cx + EYE.rx - 2} ${f(ly - 6)}`);
-  parts.lash.setAttribute('opacity', close > 0.08 ? 1 : 0);
-
-  // Startle mark above the head
   parts.bang.setAttribute('opacity', f(clamp(fx.bang * 1.6, 0, 1)));
   parts.bang.setAttribute('transform', `translate(1190 ${f(40 - hop)}) scale(${f(0.7 + Math.min(fx.bang, 0.6) * 0.6)}) rotate(14)`);
 
-  // Bark lines off the muzzle
   parts.barkG.setAttribute('opacity', f(clamp(fx.bark * 1.4, 0, 1) * 0.9));
   parts.barkG.setAttribute('transform', `translate(1290 ${f(330 - hop)}) scale(${f(0.8 + (1 - fx.bark) * 0.5)})`);
 
-  // Sleep z's drift up from the nose and fade.
   parts.zs.forEach((z, i) => {
     const k = (phase.z + i / 3) % 1;
     const vis = p.zz * (still ? (i === 0 ? 1 : 0) : Math.sin(k * Math.PI));
@@ -228,7 +175,6 @@ function frame(now) {
 
 function react(kind) {
   if (REDUCED.matches) {
-    if (kind === 'pet' || kind === 'better') fx.squintUntil = performance.now() + 900;
     if (kind === 'startle') fx.bang = 1;
     return;
   }
@@ -237,10 +183,8 @@ function react(kind) {
     fx.bang = 1;
   } else if (kind === 'better') {
     spring.hopV += 600; spring.squashV -= 2;
-    fx.wagBoost = 1; fx.squintUntil = performance.now() + 900;
   } else if (kind === 'pet') {
     spring.hopV += 480; spring.squashV -= 1.6; spring.nodV += 40;
-    fx.wagBoost = 1.2; fx.squintUntil = performance.now() + 1100;
   }
 }
 
@@ -250,8 +194,7 @@ export function mountPug(host) {
   parts = build(host);
   host.title = TITLES.loading;
   host.addEventListener('click', () => react('pet'));
-  window.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.at = performance.now(); }, { passive: true });
-  blink.next = performance.now() + 1500;
+  window.addEventListener('pointermove', (e) => { pointer.y = e.clientY; pointer.at = performance.now(); }, { passive: true });
   requestAnimationFrame(frame);
 }
 
