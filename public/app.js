@@ -678,13 +678,21 @@ for (const root of ['#display-seg', '#mp-display']) {
 $('#demo').onclick = runDemo;
 $('#mp-demo').onclick = runDemo;
 async function runDemo() {
-  const b = $('#demo');
-  b.disabled = true;
-  b.textContent = 'Demo running';
+  const buttons = ['#demo', '#mp-demo'].map((sel) => $(sel)).filter(Boolean);
+  if (buttons.some((b) => b.disabled)) return;
+  for (const b of buttons) {
+    b.disabled = true;
+    b.textContent = 'Demo running';
+  }
   const r = await fetch('/api/demo/run', { method: 'POST' });
   if (!r.ok) toast((await r.json()).error ?? 'Could not start the demo');
   else toast('A pretend agent was asked to set up this project.');
-  setTimeout(() => { b.disabled = false; b.textContent = 'Run demo attack'; }, 15000);
+  setTimeout(() => {
+    for (const b of buttons) {
+      b.disabled = false;
+      b.textContent = 'Run demo attack';
+    }
+  }, 15000);
 }
 
 $('#reset').onclick = async () => {
