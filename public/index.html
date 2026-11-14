@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seatbelt</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%2316a34a'/><path d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" class="logo" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z" /><path d="m10 16 4 4 8-8" class="check" /></svg>
+      <div>
+        <h1>Seatbelt</h1>
+        <p class="tag">See what your AI agents actually do on this Mac</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="live" class="pill"><span class="dot"></span><span id="live-text">Connecting…</span></span>
+      <div class="seg" role="tablist" aria-label="View">
+        <button id="view-simple" class="on" role="tab">Simple</button>
+        <button id="view-advanced" role="tab">Advanced</button>
+      </div>
+      <button id="demo" class="btn primary">Run demo attack</button>
+      <button id="reset" class="btn ghost" title="Clear the feed and reset scores">Reset</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="alert" class="alert" hidden></section>
+
+    <section class="summary-strip" id="totals"></section>
+
+    <section>
+      <div class="section-head">
+        <h2>Your agents</h2>
+        <span class="muted" id="agent-hint">Click one to see only its activity</span>
+      </div>
+      <div id="agents" class="agents"></div>
+    </section>
+
+    <section id="explain" class="explain" hidden>
+      <div class="explain-head">
+        <h3 id="explain-title">What happened, in plain English</h3>
+        <button class="btn ghost small" id="explain-close">Close</button>
+      </div>
+      <div id="explain-body" class="explain-body"></div>
+      <div id="explain-src" class="muted small"></div>
+    </section>
+
+    <section id="simple" class="simple">
+      <div class="section-head">
+        <h2 id="feed-title">What's happening</h2>
+        <label class="muted small"><input type="checkbox" id="show-routine" /> Show routine activity</label>
+      </div>
+      <ol id="feed" class="feed"></ol>
+      <p id="feed-empty" class="empty">Nothing worth your attention yet. Ask Claude Code or Codex to do something, or press <b>Run demo attack</b>.</p>
+    </section>
+
+    <section id="advanced" class="advanced" hidden>
+      <div class="section-head">
+        <h2>Everything Seatbelt saw</h2>
+        <div class="filters">
+          <input id="q" type="search" placeholder="Filter (command, file, server…)" />
+          <select id="risk-filter">
+            <option value="0">All levels</option>
+            <option value="1">Low and up</option>
+            <option value="2">Medium and up</option>
+            <option value="3">High and up</option>
+          </select>
+          <select id="kind-filter">
+            <option value="">All kinds</option>
+            <option value="process">Programs</option>
+            <option value="network">Network</option>
+            <option value="file">Files</option>
+            <option value="tool">Agent tools</option>
+            <option value="task">Tasks</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Agent</th><th>Kind</th><th>Level</th><th>What happened</th><th>Raw detail</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot muted small">
+    Everything stays on this Mac. Decoy secrets live in <code id="bait-dir">~/.seatbelt/bait</code>. <span id="mode"></span>
+  </footer>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

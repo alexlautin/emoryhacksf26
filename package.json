@@ -1,0 +1,13 @@
+{
+  "name": "seatbelt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local sentinel that shows what AI agents (Claude Code, Codex) actually do on your Mac.",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.js",
+    "deep": "node src/server.js --eslogger",
+    "demo:reset": "node demo/reset.js"
+  }
+}
