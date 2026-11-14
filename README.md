@@ -66,6 +66,8 @@ pnpm desktop          # run it in development, straight from this folder
 pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundle
 ```
 
+The app icon, the menu bar icons, the DMG window and the Windows installer art are all made from the brand pug (`public/ui/pug.png`) by `python3 scripts/make-icons.py` (needs Pillow). Run it again after changing the pug; it overwrites the files in `src-tauri/icons`.
+
 Builds are for the platform you build on. Downloaded Mac builds use the approval steps under **First open on macOS** above. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
 
 ## Blocking actions before they run (Claude Code)
