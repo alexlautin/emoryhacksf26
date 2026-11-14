@@ -29,7 +29,7 @@ const PORT = +(process.env.PORT ?? 4100);
 fixPath();
 const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
 const demoClients = new Set();
 
 function reapplyBaselines() {

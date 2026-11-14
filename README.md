@@ -130,7 +130,7 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 `public/score.js` works out the score. Everyone starts at 100. Risky events cost points in six categories, each with a cap, and the cost halves every 12 hours. The score stays between 0 and 100. Clear, Steady, Review and Act are short labels for that number, not a separate scale.
 
-The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. Icons are from Lucide, served locally. The type is the system font. Every event is also written to `data/events.jsonl`.
+The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. Icons are from Lucide, served locally. The type is locally served Instrument Sans. The app and landing page share the brand foundations and components in `public/ui/`; open `/ui/index.html` on either server for the visual kit, or read [the usage guide](public/ui/README.md). Every event is also written to `data/events.jsonl`.
 
 Select a session and Harness draws the chain for the riskiest thing it saw: the agent, the shell, the package install, the install script, and the program that script started. Play the chain walks those boxes one at a time. If the system asks for less motion, the walk is skipped and the whole chain stays visible. Under the chain is a short account of what that session touched (commands, files, servers) and whether a decoy was opened. That account is also what you get when the session ends and you select it.
 

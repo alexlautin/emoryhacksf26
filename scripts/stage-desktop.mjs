@@ -27,6 +27,8 @@ const copy = (from, to = path.relative(ROOT, from)) =>
 
 copy(path.join(ROOT, 'src'));
 copy(path.join(ROOT, 'public'));
+// The native startup screen uses the same brand assets before the server is ready.
+fs.cpSync(path.join(ROOT, 'public', 'ui'), path.join(TAURI, 'loading', 'ui'), { recursive: true });
 copy(path.join(ROOT, 'demo'));
 copy(path.join(ROOT, 'hooks'));
 for (const name of ICONS) copy(path.join(LUCIDE_DIR, `${name}.svg`));

@@ -1,0 +1,59 @@
+/* Harness brand foundations. Canonical source for the app and landing site. */
+@font-face {
+  font-family: 'Instrument Sans'; font-style: normal; font-weight: 400 700;
+  font-display: swap; src: url('./fonts/instrument-sans-latin-wght-normal.woff2') format('woff2');
+}
+:root {
+  color-scheme: light dark;
+  --h-paper: #fbfaf7;
+  --h-ink: #0d1012;
+  --h-teal: #2fc6b1;
+  --h-teal-deep: #0b6156;
+  --h-fawn: #f8dcae;
+  --h-night: #0b0e10;
+  --h-night-2: #12171a;
+  --h-night-3: #1a2125;
+  --h-night-line: #303b41;
+  --h-night-ink: #e8eef0;
+  --h-night-dim: #a0adb3;
+  --h-night-teal: #45dcc6;
+  --h-night-red: #ff8d86;
+  --h-bg: light-dark(var(--h-paper), var(--h-night));
+  --h-surface: light-dark(#fff, var(--h-night-2));
+  --h-surface-2: light-dark(#f3f1ea, var(--h-night-3));
+  --h-text: light-dark(var(--h-ink), var(--h-night-ink));
+  --h-muted: light-dark(#485058, #b4c0c5);
+  --h-subtle: light-dark(#626d74, var(--h-night-dim));
+  --h-border: light-dark(#e6e2d9, var(--h-night-line));
+  --h-border-strong: light-dark(#b5afa2, #64747d);
+  --h-accent: light-dark(var(--h-teal-deep), var(--h-night-teal));
+  --h-action: light-dark(var(--h-teal-deep), #167c6d);
+  --h-on-action: #fff;
+  --h-success: light-dark(#146c45, #6bd6a1);
+  --h-steady: light-dark(#4f6b19, #b4d97b);
+  --h-warning: light-dark(#8a4d00, #f2bd63);
+  --h-danger: light-dark(#b82e2e, var(--h-night-red));
+  --h-danger-fill: #b82e2e;
+  --h-info: light-dark(#225e9b, #94c7ff);
+  --h-paused: light-dark(#6546a5, #c4b0f4);
+  --h-shadow: light-dark(0 1px 3px #0d10120a, 0 1px 3px #0003);
+  --h-font: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --h-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --h-type-xs: 12px; --h-type-sm: 13px; --h-type-md: 15px; --h-type-lg: 18px; --h-type-xl: 24px;
+  --h-space-1: 4px; --h-space-2: 8px; --h-space-3: 12px; --h-space-4: 16px;
+  --h-space-5: 24px; --h-space-6: 32px; --h-space-7: 48px; --h-space-8: 64px;
+  --h-radius-sm: 6px; --h-radius-control: 8px; --h-radius-card: 16px;
+  --h-radius-lg: 24px; --h-radius-pill: 999px;
+  --h-duration: 160ms; --h-ease: cubic-bezier(.22, .8, .24, 1);
+  /* Surfaces choose density, not a different component implementation. */
+  --ui-control-height: 40px; --ui-control-padding: 16px; --ui-control-font: 15px;
+}
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark'] { color-scheme: dark; }
+:root[data-contrast='high'] {
+  --h-bg: light-dark(#fff, #000); --h-surface: light-dark(#fff, #000);
+  --h-surface-2: light-dark(#eee, #171717); --h-text: light-dark(#000, #fff);
+  --h-muted: light-dark(#222, #eee); --h-subtle: var(--h-muted);
+  --h-border: var(--h-text); --h-border-strong: var(--h-text);
+  --h-accent: light-dark(#004c43, #82ffe6);
+}

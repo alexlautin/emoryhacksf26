@@ -4,10 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Harness</title>
+  <link rel="stylesheet" href="./ui/tokens.css" />
   <style>
-    :root { color-scheme: light dark; }
-    body { margin: 0; height: 100vh; display: grid; place-items: center; background: light-dark(#f7f8fa, #0f1115); color: light-dark(#5b616e, #9aa1ad); font: 14px -apple-system, "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--h-bg); color: var(--h-text); font: 15px/1.5 var(--h-font); text-align: center; }
+    img { display: block; margin: 0 auto var(--h-space-4); object-fit: contain; }
+    strong { font-size: var(--h-type-xl); letter-spacing: -.04em; }
+    p { margin: var(--h-space-2) 0 0; color: var(--h-muted); }
   </style>
 </head>
-<body>Starting Harness…</body>
+<body><div><img src="./ui/pug.png" alt="" width="64" height="64" /><strong>Harness</strong><p role="status">Starting Harness…</p></div></body>
 </html>

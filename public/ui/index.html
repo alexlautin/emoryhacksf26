@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Harness · Brand & UI</title>
+  <link rel="icon" href="./pug.png">
+  <link rel="stylesheet" href="./tokens.css"><link rel="stylesheet" href="./components.css"><link rel="stylesheet" href="./kit.css">
+  <script src="./kit.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a href="#" class="ui-brand"><img src="./pug.png" alt="" width="40" height="40">Harness <span class="edition">Brand & UI / 01</span></a>
+    <div class="tools">
+      <label class="theme-label" for="theme">Appearance</label>
+      <select class="ui-input" id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select>
+      <button class="ui-button" id="contrast" aria-pressed="false">High contrast</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside>
+      <p class="overline">The essentials</p>
+      <nav aria-label="Brand kit"><a href="#identity">01 / Identity</a><a href="#color">02 / Color</a><a href="#type">03 / Typography</a><a href="#layout">04 / Layout</a><a href="#components">05 / Components</a><a href="#patterns">06 / In context</a><a href="#develop">07 / Development</a></nav>
+      <p class="rail-note">One foundation.<br>Landing page to desktop.</p>
+      <a class="source-link" href="./README.md">Usage guide ↗</a>
+    </aside>
+    <main id="main">
+      <section class="intro" id="identity">
+        <div class="intro-copy"><p class="overline">Harness design system</p><h1>A little character.<br>A lot of clarity.</h1><p class="lead">A common visual language for Harness. Warm surfaces, precise information, and a calm signal when something needs attention.</p><div class="intro-tags"><span>Local first</span><span>Human readable</span><span>Quietly watchful</span></div></div>
+        <div class="identity-card"><img src="./pug.png" alt="Harness pug mascot" width="180" height="180"><strong>Harness</strong><span>Clarity, with character.</span><a href="./pug.png" download="harness-pug.png">Download the mark ↓</a></div>
+        <div class="principles"><p><b>01. Be clear.</b> Say what happened and what someone can do next.</p><p><b>02. Stay calm.</b> Use color for meaning. Reserve urgency for real risk.</p><p><b>03. Feel familiar.</b> Reuse the same foundations across every surface.</p></div>
+      </section>
+      <section id="color"><div class="section-heading"><div><p class="overline">02 / Color</p><h2>Paper, ink, and a signal.</h2></div><p>Semantic tokens adapt to appearance.<br>The brand palette stays recognizable.</p></div>
+        <div class="swatches">
+          <div><div class="swatch paper"></div><b>Paper</b><code>#FBFAF7</code><span>Background</span></div>
+          <div><div class="swatch ink"></div><b>Ink</b><code>#0D1012</code><span>Headlines</span></div>
+          <div><div class="swatch teal"></div><b>Teal</b><code>#2FC6B1</code><span>Brand highlight</span></div>
+          <div><div class="swatch deep"></div><b>Deep teal</b><code>#0B6156</code><span>Actions & links</span></div>
+          <div><div class="swatch fawn"></div><b>Fawn</b><code>#F8DCAE</code><span>Warm accent</span></div>
+        </div>
+        <div class="status-row"><span class="ui-badge" data-status="clear">✓ Clear</span><span class="ui-badge" data-status="steady">↗ Steady</span><span class="ui-badge" data-status="review">△ Review</span><span class="ui-badge" data-status="act">! Act</span><span class="ui-badge" data-status="paused">Ⅱ Paused</span></div>
+        <p class="caption">Always pair status color with a word. Bright teal is decoration; deep teal carries text on light surfaces.</p>
+      </section>
+      <section id="type"><div class="section-heading"><div><p class="overline">03 / Typography</p><h2>A voice with room to breathe.</h2></div><p>Instrument Sans / 400–700<br>System monospace / commands & data</p></div>
+        <div class="type-sample"><span class="type-label">Display / fluid</span><p class="display">Keep an eye on<br>what happens next.</p></div>
+        <div class="type-grid"><div><span class="type-label">Heading / 24</span><h3>Everything in view.</h3><span class="type-label">Body / 15–18</span><p>A clear view of what happened, with the details you need to decide what comes next.</p></div><div><span class="type-label">Data / monospace</span><pre><code>agent → shell → install script
+$ pnpm install</code></pre><span class="type-label">Label / 12–13</span><p class="ui-help">Last checked just now · Stored on this computer</p></div></div>
+      </section>
+      <section id="layout"><div class="section-heading"><div><p class="overline">04 / Layout</p><h2>Small rules. Fewer decisions.</h2></div><p>A four-pixel base.<br>Density follows the task.</p></div>
+        <div class="layout-grid"><div class="ui-card"><h3>Spacing</h3><div class="spacing"><div style="--size:4px"><i></i><code>4</code></div><div style="--size:8px"><i></i><code>8</code></div><div style="--size:12px"><i></i><code>12</code></div><div style="--size:16px"><i></i><code>16</code></div><div style="--size:24px"><i></i><code>24</code></div><div style="--size:32px"><i></i><code>32</code></div><div style="--size:48px"><i></i><code>48</code></div><div style="--size:64px"><i></i><code>64</code></div></div><p class="caption">4–12 inside controls. 16–24 inside cards. 32–64 between groups.</p></div><div class="ui-card"><h3>Shape</h3><div class="shapes"><div style="border-radius:var(--h-radius-control)">8<small>Controls</small></div><div style="border-radius:var(--h-radius-card)">16<small>Cards</small></div><div style="border-radius:var(--h-radius-lg)">24<small>Features</small></div></div><p class="caption">Thin borders and subtle shadows. Keep related controls close together.</p></div></div>
+      </section>
+      <section id="components"><div class="section-heading"><div><p class="overline">05 / Components</p><h2>Build once. Use everywhere.</h2></div><label class="density">Density <select id="density" class="ui-input"><option value="default">Default / 40</option><option value="compact">App / 32</option><option value="marketing">Landing / 50</option></select></label></div>
+        <div class="ui-card component-preview" id="component-preview"><div class="component-line"><span class="type-label">Actions</span><div class="button-row"><button class="ui-button" data-variant="primary" type="button">Primary action</button><button class="ui-button" type="button">Secondary</button><button class="ui-button" data-variant="ghost" type="button">Ghost</button><button class="ui-button" data-variant="danger" type="button">End session</button><button class="ui-button" disabled>Unavailable</button></div></div>
+          <div class="component-line"><span class="type-label">Inputs & feedback</span><div class="field-grid"><label class="ui-field">Project name<input class="ui-input" value="My project"><span class="ui-help">Use the name of your project folder.</span></label><label class="ui-field">Project path<input class="ui-input" aria-invalid="true" aria-describedby="path-error" value="/missing/project"><span class="ui-help error" id="path-error">This folder could not be found.</span></label></div></div>
+          <div class="ui-alert" data-status="review"><strong>Review this connection.</strong> An agent connected to an unfamiliar server. Check the activity before continuing.</div>
+        </div>
+        <div class="code-block"><code>&lt;button class="ui-button" data-variant="primary"&gt;Protect folder&lt;/button&gt;</code><button class="ui-button" data-size="small" id="copy">Copy</button></div><p id="copy-status" role="status" class="caption"></p>
+      </section>
+      <section id="patterns"><div class="section-heading"><div><p class="overline">06 / In context</p><h2>Same identity. Different jobs.</h2></div><p>Expressive on the landing page.<br>Focused inside the app.</p></div>
+        <div class="context-grid"><article class="landing-example"><span class="overline">Landing / introduce</span><h3>Stay curious.<br>Stay in the loop.</h3><p>A little more clarity. A little more peace of mind.</p><a href="/" class="ui-button" data-variant="primary">Explore Harness →</a></article><article class="ui-card app-example"><div class="mini-header"><strong>Safety score</strong><span class="ui-badge" data-status="clear">✓ Clear</span></div><div class="example-score">100 <span>/ 100</span></div><p>Nothing concerning so far.</p><div class="mini-session"><span class="session-dot"></span><div><strong>Claude Code</strong><small>Watching activity · My project</small></div><span class="ui-badge" data-status="clear">Active</span></div></article></div>
+      </section>
+      <section id="develop"><div class="section-heading"><div><p class="overline">07 / Development</p><h2>One place to make a change.</h2></div></div><div class="dev-grid"><div><h3>Foundations → components → surfaces</h3><p>Edit tokens for global changes. Edit primitives for shared behavior. Keep page layouts in their own stylesheets.</p><p>Both surfaces ship this exact kit. The website preparation step copies the canonical files; desktop staging bundles them with the app.</p><a class="source-link" href="./README.md">Read the implementation guide ↗</a></div><pre><code>public/ui/
+  tokens.css      Color, type, space, motion
+  components.css  Buttons, cards, fields, status
+  pug.png         Shared brand mark
+  fonts/          Local font + license
+  index.html      This reference</code></pre></div></section>
+      <footer>Harness / Brand & UI <span>One system. Every surface.</span></footer>
+    </main>
+  </div>
+</body>
+</html>
