@@ -74,8 +74,6 @@ main:focus { outline: none; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
 .hero h1 { margin-top: 22px; font-size: clamp(44px, min(6.6vw, 9.5vh), 92px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.98; }
 .hero h1 span { color: var(--teal-deep); }
-/* Desktop: size the headline from its column so it always breaks "Let your agent run." / "Keep it on a" / "harness." */
-@media (min-width: 901px) { .hero h1 .h1-end { display: block; } .hero h1 { font-size: min(calc((min(1180px, 100vw - 48px) - clamp(32px, 6vw, 88px)) * 0.0655), 9.5vh); } }
 .hero .lead { margin-top: 28px; max-width: 34em; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
 .hero-note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
@@ -95,7 +93,7 @@ main:focus { outline: none; }
 .seam { position: relative; height: 0; z-index: 2; pointer-events: none; transition: transform 0.8s var(--pop); }
 .seam i { position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: var(--red); transform: scaleX(0); opacity: 0; box-shadow: 0 0 14px 2px color-mix(in srgb, var(--red) 55%, transparent); transition: transform 0.5s var(--ease) 0.1s, opacity 0.3s; }
 .seam span { position: absolute; left: 50%; top: 0; font: 600 11px/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; background: var(--red); color: #fff; padding: 6px 12px; border-radius: 99px; white-space: nowrap; opacity: 0; transform: translate(-50%, -50%) scale(0.6); transition: opacity 0.3s 0.25s, transform 0.6s var(--pop) 0.25s; }
-.is-alert .panel-a { animation: rise 0.9s var(--ease) 0.1s backwards, shake 0.5s; border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent); }
+.is-alert .panel-a { animation: rise 0.9s var(--ease) 0.1s backwards, shake 0.5s; border-color: var(--red-line); box-shadow: none; }
 .is-alert .panel-b { border-color: var(--red-line); }
 .is-calm .panel-a, .is-alert .panel-a { border-bottom-color: transparent; }
 .is-split .panel-a { transform: translate(-8px, -8px) rotate(-1.5deg); border-radius: var(--h-radius-lg); border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 30px 60px -28px rgba(13,16,18,0.22); }
@@ -143,8 +141,8 @@ main:focus { outline: none; }
 .panel-sessions em::before { content: ""; }
 .panel-sessions .is-paused em { color: var(--red); font-weight: 600; }
 .panel-sessions .is-paused em::before { background: var(--red); animation: none; box-shadow: none; }
-.panel-feed { height: 78px; overflow: hidden; margin-top: 6px; padding: 8px 12px; border-radius: var(--h-radius-card); background: var(--tint); font-family: var(--mono); font-size: 12px; mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
-.panel-feed ol { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.panel-feed { height: 79px; overflow: hidden; margin-top: 6px; padding: 8px 12px; border-radius: var(--h-radius-card); background: var(--tint); font-family: var(--mono); font-size: 12px; }
+.panel-feed ol { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; overflow: hidden; }
 .panel-feed li { height: 21px; line-height: 21px; white-space: nowrap; color: var(--ink); }
 .panel-feed li.is-bad { color: var(--red); font-weight: 600; } .panel-feed li.is-bad span { color: var(--red); opacity: 0.6; }
 .panel-feed li span { color: var(--ink-3); margin-right: 10px; }
