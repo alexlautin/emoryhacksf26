@@ -4,5 +4,5 @@
   "description": "The panel and dashboard load the local Harness server. They can open the dashboard, quit, and resize the menu.",
   "windows": ["panel", "dashboard"],
   "remote": { "urls": ["http://127.0.0.1:*"] },
-  "permissions": ["core:default", "allow-open-dashboard", "allow-quit-app", "allow-resize-panel"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "allow-open-dashboard", "allow-quit-app", "allow-resize-panel"]
 }
