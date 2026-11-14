@@ -4,8 +4,14 @@
   "type": "module",
   "description": "Static site for Lookout. No dependencies.",
   "scripts": {
-    "build": "node build.mjs",
-    "start": "node serve.mjs",
-    "test": "node --test logic.test.mjs"
+    "dev": "node prepare.mjs && next dev --hostname 127.0.0.1",
+    "build": "node prepare.mjs && next build",
+    "start": "next start --hostname 127.0.0.1",
+    "test": "node --test logic.test.mjs lib/*.test.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

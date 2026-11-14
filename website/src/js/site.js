@@ -1,7 +1,8 @@
-import { RELEASES } from '/releases.js';
-import { detectOS } from '/js/os.js';
-import { downloadPlan } from '/js/downloads.js';
+import { RELEASES } from '../../releases.js';
+import { detectOS } from './os.js';
+import { downloadPlan } from './downloads.js';
 
+export function initDownloads() {
 const root = document.querySelector('#downloads');
 if (root) {
   const os = detectOS({
@@ -11,6 +12,8 @@ if (root) {
     search: location.search || '',
   });
   renderDownloads(root, downloadPlan(RELEASES, os));
+}
+
 }
 
 function renderDownloads(root, plan) {

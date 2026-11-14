@@ -4,6 +4,7 @@
       <p class="kicker">Local monitor for coding agents</p>
       <h1 id="hero-title">See what your<br>coding agent<br><em>actually runs.</em></h1>
       <p class="lead">An install can finish in the agent's window while a package script reads a key and tries to send it off. Lookout follows that chain on your machine, from the agent through the shell and npm down to the script, and writes down what it finds.</p>
+      <p><a class="btn btn-primary" href="/demo">Try the browser demo →</a></p>
       <div id="download">
         <h2 class="visually-hidden">Downloads</h2>
         <div id="downloads"></div>
@@ -217,16 +218,10 @@
 <section id="demo" class="section section-alt">
   <div class="wrap">
     <p class="section-label">Demo</p>
-    <h2>A recording will go here.</h2>
-    <figure class="demo">
-      <div class="demo-stage">
-        <p class="demo-kicker">Placeholder</p>
-        <p class="demo-title">A video or GIF of the scripted attack goes in this frame. Nothing plays yet.</p>
-      </div>
-      <figcaption>
-        What it will show: "Run demo attack" starts a stand-in agent in <code>demo/victim-project</code>. The agent runs <code>npm install</code>. The dependency <code>color-helpers</code> has an install script that reads <code>.env</code> and the fake AWS key, base64-encodes them, and POSTs them to <code>127.0.0.1:4199</code>. The secrets are fake. The server only counts bytes. With auto-protect at the default, the decoy read pauses the process tree, and the score is 19 out of 100. The README says to use this scripted demo when showing the project. A run with a real agent had not been tested when that note was written.
-      </figcaption>
-    </figure>
+    <h2>Follow the chain yourself.</h2>
+    <p class="section-intro">Generate a fictional coding session with Gemini, watch its commands unfold, and compare the outcome with Auto-protect on or off. No download is needed.</p>
+    <p><a class="btn btn-primary" href="/demo">Open the interactive demo →</a></p>
+    <p>Browser simulation only. Gemini supplies fictional activity; nothing executes or reads your files. The desktop monitor uses its own local rules.</p>
   </div>
 </section>
 
@@ -241,6 +236,7 @@
       </details>
       <details>
         <summary>Does any of this leave my computer?</summary>
+        <p>The browser demo is separate: its scenario is sent to Google Gemini to generate fictional activity. It never inspects your computer.</p>
         <p>The event log is written to disk on that machine. Summaries go to a local Ollama, or they are written from the rules with no model. The one lookup Lookout makes on its own is reverse DNS of an address a watched process already connected to. That uses your resolver.</p>
       </details>
       <details>
