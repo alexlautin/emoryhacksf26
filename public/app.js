@@ -1,5 +1,10 @@
 // Lookout dashboard. Plain JS, live updates over Server-Sent Events.
 import { alertCount, computeScore, factorsFor } from './score.js';
+import { bestChain, replayItems } from './timeline.js';
+import { sessionTouch } from './touch.js';
+import { incidentMarkdown, incidentModel } from './report.js';
+import { canBaseline } from './baseline.js';
+import { COACH_STEPS, coachCursor } from './coach.js';
 
 const $ = (s) => document.querySelector(s);
 const PANEL = document.documentElement.classList.contains('panel');
@@ -78,6 +83,10 @@ const state = {
   feedSeen: 0,
   ready: false,
   connected: false,
+  baselines: [],
+  coachOn: false,
+  playIndex: null,
+  playAgent: null,
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -146,6 +155,7 @@ function renderScore() {
   word.className = `level-word ${s.level.cls}`;
   word.textContent = s.level.name;
   $('#score-blurb').textContent = s.level.blurb;
+  $('#score-live').setAttribute('aria-label', `${s.score} out of 100, ${s.level.name}. ${s.level.blurb}`);
   fill.style.width = `${s.score}%`;
   fill.className = `meter-fill ${s.level.cls}`;
   const sessions = new Set(state.events.filter((e) => e.kind !== 'system').map((e) => e.agentId)).size;
@@ -217,19 +227,25 @@ function sessionCard(a) {
   const trigger = a.pausedEventId && state.events.find((e) => e.id === a.pausedEventId);
   const worst = sc.factors.filter((f) => f.lost).sort((x, y) => y.lost - x.lost)[0];
   const selected = state.selected === a.id;
+  const head = `
+        <header class="s-head">
+          <div class="avatar" title="${esc(a.label)}">${agentLogo(a)}</div>
+          <div class="s-id">
+            <div class="s-name">${esc(a.label)}</div>
+            <div class="s-proj" title="${esc(a.cwd || a.project)}">in ${esc(a.project)}${a.startedAt ? ` · started ${ago(a.startedAt)}` : ''}</div>
+          </div>
+          <div class="s-score ${sc.level.cls}" title="${sc.score} out of 100, ${esc(sc.level.name)}">
+            <b>${sc.score}</b><span>/ 100</span>
+          </div>
+        </header>
+        <div class="s-status"><span class="state-dot ${st.cls}"></span><b>${st.text}</b><span class="s-last">${esc(lastAction(a))}</span></div>
+        ${a.paused ? '' : a.task ? `<div class="task"><span>Request</span> ${esc(a.task)}</div>` : ''}
+        ${!a.paused && worst ? `<div class="s-worst">${icon(worst.icon)} <span>Main concern: <b>${esc(worst.name)}</b>, −${worst.lost}</span></div>` : ''}`;
   return `
-    <article class="session ${st.cls} ${selected ? 'selected' : ''}" data-id="${esc(a.id)}" tabindex="0" role="button" aria-pressed="${selected}">
-      <header class="s-head">
-        <div class="avatar" title="${esc(a.label)}">${agentLogo(a)}</div>
-        <div class="s-id">
-          <div class="s-name">${esc(a.label)}</div>
-          <div class="s-proj" title="${esc(a.cwd || a.project)}">in ${esc(a.project)}${a.startedAt ? ` · started ${ago(a.startedAt)}` : ''}</div>
-        </div>
-        <div class="s-score ${sc.level.cls}" title="${sc.score} out of 100, ${esc(sc.level.name)}">
-          <b>${sc.score}</b><span>/ 100</span>
-        </div>
-      </header>
-      <div class="s-status"><span class="state-dot ${st.cls}"></span><b>${st.text}</b><span class="s-last">${esc(lastAction(a))}</span></div>
+    <article class="session ${st.cls} ${selected ? 'selected' : ''}" data-id="${esc(a.id)}">
+      <button type="button" class="session-hit" data-select="${esc(a.id)}" aria-pressed="${selected}" aria-label="${esc(`${a.label} in ${a.project}, ${sc.score} out of 100, ${st.text}`)}">
+        ${head}
+      </button>
       ${a.paused ? `
         <div class="s-callout">
           <div class="s-callout-title">${icon('circle-pause')} ${byUs(a.pausedBy) ? 'Paused by Lookout' : 'Paused'}</div>
@@ -240,9 +256,7 @@ function sessionCard(a) {
             ${endButton(a, 'danger small', 'End session')}
             <button class="btn small" data-act="resume" data-id="${esc(a.id)}">Let it continue</button>
           </div>
-        </div>`
-      : a.task ? `<div class="task"><span>Request</span> ${esc(a.task)}</div>` : ''}
-      ${!a.paused && worst ? `<div class="s-worst">${icon(worst.icon)} <span>Main concern: <b>${esc(worst.name)}</b>, −${worst.lost}</span></div>` : ''}
+        </div>` : ''}
       <footer class="s-foot">
         <div class="counts">
           <span><b>${a.counts.commands}</b> action${a.counts.commands === 1 ? '' : 's'}</span>
@@ -267,7 +281,7 @@ function earlierRow(a) {
   const st = sessionState(a);
   const sc = computeScore(eventsOf(a.id));
   return `
-    <button class="earlier-row ${state.selected === a.id ? 'selected' : ''}" data-id="${esc(a.id)}">
+    <button class="earlier-row ${state.selected === a.id ? 'selected' : ''}" data-select="${esc(a.id)}" aria-pressed="${state.selected === a.id}">
       <span class="avatar sm">${agentLogo(a)}</span>
       <span class="e-name" title="${esc(a.cwd || a.project)}"><b>${esc(a.label)}</b> in ${esc(a.project)}</span>
       <span class="e-state ${st.cls}">${st.text}</span>
@@ -315,6 +329,8 @@ function feedItem(e) {
         ${e.command && (RANK[e.risk] >= 1 || e.agentReported) ? `<div class="cmd mono" title="${esc(e.command)}">${esc(e.command)}</div>` : ''}
         ${e.kind === 'file' && e.batch && e.detail ? `<div class="why mono">${esc(e.detail)}</div>` : ''}
         ${tags ? `<div class="ftags">${tags}</div>` : ''}
+        ${e.baseline ? `<div class="why">Marked normal for this project. It stays in the log and no longer changes the score.</div>` : ''}
+        ${canBaseline(e) ? `<div class="item-actions"><button type="button" class="link" data-base="${e.id}">Normal for this project</button></div>` : ''}
       </div>
       <div class="when">
         ${RANK[e.risk] >= 1 ? `<span class="badge ${esc(e.risk)}">${LEVEL[e.risk]}</span>` : ''}
@@ -433,6 +449,24 @@ function renderPrefs() {
   markDisplay($('#display-seg'), mode);
   const preview = $('#prefs-preview');
   if (preview) preview.textContent = `Right now the menu bar would show ${menuBarText()}.`;
+  const on = document.documentElement.dataset.contrast === 'high';
+  for (const id of ['#contrast', '#prefs-contrast']) {
+    const b = $(id);
+    if (!b) continue;
+    b.setAttribute('aria-pressed', String(on));
+    b.classList.toggle('on', on);
+  }
+  const list = $('#baseline-list');
+  if (!list) return;
+  if (!state.baselines.length) {
+    list.innerHTML = '<li class="hint">Nothing is marked as normal yet.</li>';
+    return;
+  }
+  list.innerHTML = state.baselines.map((b) => `
+    <li>
+      <span><b>${esc(b.project || 'Project')}</b> · ${esc(b.type === 'host' ? b.value : b.value)}</span>
+      <button type="button" class="link" data-unbase="${esc(b.id)}">Remove</button>
+    </li>`).join('');
 }
 
 function latestRisk() {
@@ -518,6 +552,8 @@ function render() {
     renderProtect();
     renderAgents();
     renderPrefs();
+    renderCoach();
+    renderDetail();
     if (state.view === 'simple') renderFeed();
     else renderTable();
   });
@@ -627,6 +663,124 @@ async function pauseAll() {
   toast(live.length === 1 ? `${live[0].label} is paused.` : `Paused ${live.length} agents.`);
 }
 
+function reportScope() {
+  const agents = [...state.agents.values()].filter((a) => !state.selected || a.id === state.selected);
+  const events = state.events.filter((e) => !state.selected || e.agentId === state.selected);
+  return { agents, events };
+}
+
+function stopPlay() {
+  clearInterval(state.playTimer);
+  state.playTimer = null;
+}
+
+function renderDetail() {
+  const box = $('#detail');
+  if (!box || PANEL) return;
+  const agent = state.selected && state.agents.get(state.selected);
+  if (!agent) { box.hidden = true; stopPlay(); return; }
+  box.hidden = false;
+  const mine = eventsOf(agent.id);
+  const touch = sessionTouch(agent, state.events);
+  const chain = bestChain(mine);
+  $('#detail-title').textContent = `${agent.label} in ${agent.project}`;
+  $('#detail-touch').textContent = touch.headline;
+  const playing = state.playAgent === agent.id && state.playIndex !== null;
+  if (!chain) {
+    $('#detail-chain').innerHTML = '';
+    $('#detail-chain-note').textContent = 'No process chain yet. Lookout checks about twice a second, so a program that starts and exits faster than that can be missed. File and network events still show up below.';
+    $('#detail-play').hidden = true;
+  } else {
+    $('#detail-play').hidden = false;
+    const steps = chain.steps.map((s, i) => {
+      const dim = playing && i > state.playIndex;
+      const on = playing && i === state.playIndex;
+      const shownCmd = s.cmd && s.cmd.length > 90 ? `${s.cmd.slice(0, 89)}…` : s.cmd;
+      const cmd = shownCmd ? `<span class="chain-cmd mono" title="${esc(s.cmd)}">${esc(shownCmd)}</span>` : '';
+      return `<li class="chain-step ${esc(i === chain.steps.length - 1 ? chain.risk : '')} ${dim ? 'dim' : ''} ${on ? 'on' : ''}"><span class="chain-name">${esc(s.name)}</span>${cmd}</li>`;
+    }).join('');
+    $('#detail-chain').innerHTML = `<ol class="chain" aria-label="How it happened">${steps}</ol>`;
+    $('#detail-chain-note').textContent = playing && reduceMotion
+      ? 'Animation is off because this system asked for less motion. The whole chain is shown.'
+      : 'Each box is a program the one before it started.';
+  }
+  const list = (title, items) => items.length
+    ? `<div><h3>${title}</h3><ul>${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`
+    : '';
+  $('#detail-lists').innerHTML = [
+    list('Commands', touch.commands.map((c) => c.command + (c.baseline ? ' (normal for this project)' : ''))),
+    list('Files', touch.files.map((f) => f.path + (f.bait ? ' (decoy)' : ''))),
+    list('Servers', touch.hosts.map((h) => h.host + (h.trusted ? ' (known)' : ''))),
+  ].join('');
+  const replay = replayItems(mine).slice(-12);
+  $('#detail-replay').innerHTML = replay.map((e) => `<li><time datetime="${new Date(e.ts).toISOString()}">${esc(ago(e.ts))}</time><span>${esc(e.title)}</span></li>`).join('');
+}
+
+function renderCoach() {
+  const el = $('#coach');
+  if (!el || PANEL) return;
+  if (!state.coachOn) { el.hidden = true; return; }
+  const cursor = coachCursor(state.events);
+  const step = COACH_STEPS[cursor];
+  el.hidden = false;
+  $('#coach-count').textContent = `${cursor + 1} of ${COACH_STEPS.length}`;
+  $('#coach-title').textContent = step.title;
+  $('#coach-body').textContent = step.body;
+  const note = $('#coach-note');
+  note.textContent = cursor > 0 ? 'This follows what is already on the page. Reset if you want to watch it from the start.' : '';
+  $('#coach-start').hidden = cursor > 0;
+}
+
+function openCoach() {
+  state.coachOn = true;
+  if (!state.selected) {
+    const demo = [...state.agents.values()].find((a) => a.kind === 'demo');
+    if (demo) state.selected = demo.id;
+  }
+  render();
+  $('#coach')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
+}
+
+function downloadReport() {
+  const md = incidentMarkdown(incidentModel(reportScope()));
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = state.selected ? 'lookout-session.md' : 'lookout-report.md';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function printReport() {
+  const model = incidentModel(reportScope());
+  const md = incidentMarkdown(model);
+  const html = md.split('\n').map((line) => {
+    if (line.startsWith('# ')) return `<h1>${esc(line.slice(2))}</h1>`;
+    if (line.startsWith('## ')) return `<h2>${esc(line.slice(3))}</h2>`;
+    if (line.startsWith('### ')) return `<h3>${esc(line.slice(4))}</h3>`;
+    if (line.startsWith('- ')) return `<li>${esc(line.slice(2))}</li>`;
+    if (!line.trim()) return '';
+    return `<p>${esc(line)}</p>`;
+  }).join('');
+  $('#print-root').innerHTML = html.replace(/<\/li><li>/g, '</li><li>').replace(/(<li>.*<\/li>)+/g, (m) => `<ul>${m}</ul>`);
+  document.body.classList.add('printing');
+  window.print();
+}
+
+function setContrast(on) {
+  if (on) document.documentElement.dataset.contrast = 'high';
+  else delete document.documentElement.dataset.contrast;
+  localSet('contrast', on ? '1' : '0');
+  render();
+}
+
+function announce(text) {
+  const el = $('#announce');
+  if (!el) return;
+  el.textContent = '';
+  el.textContent = text;
+}
+
 $('#view-simple').onclick = () => setView('simple');
 $('#view-advanced').onclick = () => setView('advanced');
 $('#show-routine').onchange = (e) => { state.showRoutine = e.target.checked; render(); };
@@ -636,18 +790,36 @@ $('#explain-close').onclick = () => ($('#explain').hidden = true);
 document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-act]');
   if (act) { e.stopPropagation(); agentAction(act.dataset.act, act.dataset.id, act); return; }
-  const card = e.target.closest('.session, .earlier-row');
-  if (card?.dataset.id) {
-    state.selected = state.selected === card.dataset.id ? null : card.dataset.id;
+  const base = e.target.closest('[data-base]');
+  if (base) { e.stopPropagation(); markNormal(+base.dataset.base); return; }
+  const unbase = e.target.closest('[data-unbase]');
+  if (unbase) { e.stopPropagation(); unmarkNormal(unbase.dataset.unbase); return; }
+  const sel = e.target.closest('[data-select]');
+  if (sel?.dataset.select) {
+    state.selected = state.selected === sel.dataset.select ? null : sel.dataset.select;
+    state.playIndex = null;
+    stopPlay();
     render();
   }
 });
-$('#agents').addEventListener('keydown', (e) => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('session')) {
-    e.preventDefault();
-    e.target.click();
-  }
-});
+
+async function markNormal(eventId) {
+  const r = await fetch('/api/baseline', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ eventId }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(j.error || 'Could not save that'); return; }
+  state.baselines = j.baselines || state.baselines;
+  toast('Saved. Lookout will treat that as normal in this project. It stays in the log.');
+  render();
+}
+
+async function unmarkNormal(id) {
+  const r = await fetch('/api/baseline', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'remove', id }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(j.error || 'Could not remove that'); return; }
+  state.baselines = j.baselines || [];
+  toast('Removed. Those actions count toward the score again.');
+  render();
+}
 
 $('#factors').addEventListener('click', (e) => {
   const b = e.target.closest('[data-factor]');
@@ -693,8 +865,51 @@ $('#reset').onclick = async () => {
   state.dismissedAlert = 0;
   state.factor = null;
   state.shownScore = null;
+  state.playIndex = null;
+  stopPlay();
   $('#explain').hidden = true;
   load();
+};
+
+$('#coach-open').onclick = () => openCoach();
+$('#coach-close').onclick = () => { state.coachOn = false; render(); };
+$('#coach-start').onclick = () => runDemo();
+$('#detail-play').onclick = () => {
+  const agent = state.agents.get(state.selected);
+  const chain = agent && bestChain(eventsOf(agent.id));
+  if (!chain) return;
+  stopPlay();
+  if (reduceMotion) { state.playAgent = agent.id; state.playIndex = chain.steps.length - 1; render(); return; }
+  state.playAgent = agent.id;
+  state.playIndex = 0;
+  render();
+  state.playTimer = setInterval(() => {
+    state.playIndex += 1;
+    if (state.playIndex >= chain.steps.length) {
+      state.playIndex = chain.steps.length - 1;
+      stopPlay();
+    }
+    render();
+  }, 700);
+};
+$('#detail-md').onclick = () => downloadReport();
+$('#detail-print').onclick = () => printReport();
+window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
+
+$('#contrast').onclick = () => setContrast(document.documentElement.dataset.contrast !== 'high');
+$('#prefs-contrast').onclick = () => setContrast(document.documentElement.dataset.contrast !== 'high');
+$('#prefs-notify').onclick = async () => {
+  if (!('Notification' in window)) { toast('This browser does not show system alerts.'); return; }
+  const perm = await Notification.requestPermission();
+  toast(perm === 'granted' ? 'Browser alerts are on for Dangerous events.' : 'Browser alerts stay off.');
+};
+$('#help-open').onclick = () => $('#help').showModal();
+$('#intro-skip').onclick = () => localSet('intro', '1');
+$('#intro-demo').onclick = () => {
+  localSet('intro', '1');
+  $('#intro').close();
+  openCoach();
+  runDemo();
 };
 
 $('#prefs-open').onclick = () => {
@@ -709,7 +924,27 @@ $('#mp-quit').onclick = quitApp;
 $('#mp-pause').onclick = () => pauseAll();
 $('#mp-agents').addEventListener('click', (e) => { if (e.target.closest('[data-open]')) openDashboard(); });
 
+function typingTarget(e) {
+  const t = e.target;
+  return t && (t.matches?.('input, textarea, select') || t.isContentEditable);
+}
+
 document.addEventListener('keydown', (e) => {
+  if (!PANEL && !typingTarget(e) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (e.key === '?') { e.preventDefault(); $('#help').showModal(); }
+    else if (e.key === '1') setView('simple');
+    else if (e.key === '2') setView('advanced');
+    else if (e.key === 'd' || e.key === 'D') runDemo();
+    else if (e.key === 'w' || e.key === 'W') openCoach();
+    else if (e.key === '/') { e.preventDefault(); setView('advanced'); $('#q').focus(); }
+    else if (e.key === 'Escape') {
+      if ($('#intro')?.open) $('#intro').close();
+      else if ($('#help')?.open) $('#help').close();
+      else if ($('#prefs')?.open) $('#prefs').close();
+      else if (state.coachOn) { state.coachOn = false; render(); }
+      else if (state.selected) { state.selected = null; render(); }
+    }
+  }
   if (!PANEL) return;
   const meta = e.metaKey || e.ctrlKey;
   if (meta && e.key.toLowerCase() === 'o') { e.preventDefault(); openDashboard(); }
@@ -731,6 +966,7 @@ async function load() {
     state.agents = new Map(s.agents.map((a) => [a.id, a]));
     state.events = s.events;
     if (s.settings) state.settings = { ...state.settings, ...s.settings };
+    if (s.baselines) state.baselines = s.baselines;
     state.ready = true;
     $('#conn-error').hidden = true;
     $('#bait-dir').textContent = s.baitDir;
@@ -765,11 +1001,30 @@ function connect() {
     if (state.ready) $('#conn-error').hidden = false;
     if (PANEL) render();
   };
-  es.addEventListener('agent', (m) => { const a = JSON.parse(m.data); state.agents.set(a.id, a); render(); });
+  es.addEventListener('agent', (m) => {
+    const a = JSON.parse(m.data);
+    const prev = state.agents.get(a.id);
+    state.agents.set(a.id, a);
+    if (prev?.alive && !a.alive && (state.coachOn || !state.selected || state.selected === a.id)) state.selected = a.id;
+    render();
+  });
   es.addEventListener('event', (m) => {
-    state.events.push(JSON.parse(m.data));
+    const e = JSON.parse(m.data);
+    const i = state.events.findIndex((x) => x.id === e.id);
+    if (i >= 0) state.events[i] = e;
+    else {
+      state.events.push(e);
+      if (e.risk === 'critical' && !e.baseline) announce(`Dangerous. ${e.title}`);
+    }
     if (state.events.length > 5000) state.events.splice(0, state.events.length - 4500);
     render();
+  });
+  es.addEventListener('notice', (m) => {
+    const n = JSON.parse(m.data);
+    toast(n.title, 7000);
+    if (window.Notification && Notification.permission === 'granted') {
+      try { new Notification('Lookout', { body: `${n.title}. ${n.body}` }); } catch {}
+    }
   });
   es.addEventListener('reset', () => { state.events = []; state.shownScore = null; render(); });
   es.addEventListener('settings', (m) => { state.settings = { ...state.settings, ...JSON.parse(m.data) }; render(); });
@@ -808,4 +1063,8 @@ if (PANEL) {
   const btn = $('#open-dash');
   btn.hidden = !invoke;
   btn.addEventListener('click', openDashboard);
+} else if (localGet('intro') !== '1') {
+  const intro = $('#intro');
+  intro.addEventListener('close', () => localSet('intro', '1'));
+  if (typeof intro.showModal === 'function') intro.showModal();
 }

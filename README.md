@@ -81,6 +81,8 @@ What you should see:
 
 Set Auto-protect to Off if you want to watch the attack go all the way through. The secrets are fake and the attacker server only counts bytes, so this is safe to run.
 
+The header has **Walk through the demo**. It stays on screen and moves through five notes as the demo actually happens: the request, the install script the agent did not type, the decoy read, and the pause (or the upload, if Auto-protect is off). Reset first if you want to watch a run that is already on the page from the beginning.
+
 To try it with a real agent:
 
 ```bash
@@ -109,6 +111,16 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. Icons are from Lucide, served locally. The type is the system font. Every event is also written to `data/events.jsonl`.
 
+Select a session and Lookout draws the chain for the riskiest thing it saw: the agent, the shell, the package install, the install script, and the program that script started. Play the chain walks those boxes one at a time. If the system asks for less motion, the walk is skipped and the whole chain stays visible. Under the chain is a short account of what that session touched (commands, files, servers) and whether a decoy was opened. That account is also what you get when the session ends and you select it.
+
+Download report writes a Markdown file of the selected session, or of everything if nothing is selected. Print opens the browser dialog. Choose Save as PDF there if you want a PDF. Lookout does not build a PDF file itself.
+
+A low or medium row in the activity list has **Normal for this project**. Saving that mark means the same command, or the same unknown server, no longer changes the score for that project. It stays in the log. Lookout will not do this for a decoy read, or for anything Risky or Dangerous, and it does not learn these marks on its own. They are listed in Preferences, and removing one puts the points back. The file is `data/baselines.json`.
+
+The first time you open the dashboard it explains what Lookout is for, in a few sentences. **Contrast** switches to a black and white theme and underlines the score words, so color is not the only signal. **Shortcuts** lists the keys: 1 and 2 switch views, D runs the demo, W opens the walkthrough, / filters, Esc closes. The score has a text label for screen readers, and a new Dangerous event is announced. **What this number means**, under the score, is the plain version of the scoring rules.
+
+A Dangerous event also raises a banner on the page. On a Mac, `pnpm start` posts a system notification as well. The menu bar app posts one through the system. A second Dangerous event for the same agent within 20 seconds does not add another notification. Browser alerts stay off until you allow them in Preferences.
+
 ## Known limits
 
 - Programs that start and finish in under about half a second can be missed by polling. The decoy files still catch secret reads. On macOS, `pnpm deep` uses Apple's `eslogger` to see every launch and file open, but it needs sudo and Full Disk Access, and we haven't tested it yet.
@@ -123,7 +135,7 @@ The dashboard in `public/` is plain HTML and JavaScript, updated live over Serve
 ## What's next
 
 - Collectors: finish and test `eslogger` mode, and test on Windows (including the hook script under Git Bash).
-- Rules: fewer false alarms, better prompts for the local model, and learning what's normal for each project.
-- Dashboard: a timeline view.
+- Rules: better prompts for the local model, and learning what's normal for a project without asking you to mark each command.
+- Dashboard: the chain view is in. A saved recording of a real agent is not.
 - Desktop app: a Developer ID signature and notarization, Windows builds, and builds in CI.
 - Demo: a run with a real agent, a backup video, and slides.

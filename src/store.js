@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './paths.js';
 import { computeScore } from '../public/score.js';
+import { applyBaseline } from '../public/baseline.js';
+import { listBaselines } from './baselines.js';
 
 const LOG_FILE = path.join(DATA_DIR, 'events.jsonl');
 
@@ -51,12 +53,13 @@ export function listAgents() {
 }
 
 export function addEvent(e) {
-  const event = { id: nextId++, ts: Date.now(), risk: 'info', reasons: [], ...e };
+  const agent = e.agentId ? agents.get(e.agentId) : null;
+  const adjusted = applyBaseline(e, listBaselines(), agent);
+  const event = { id: nextId++, ts: Date.now(), risk: 'info', reasons: [], ...adjusted };
   events.push(event);
   if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
   fs.appendFile(LOG_FILE, JSON.stringify(event) + '\n', () => {});
 
-  const agent = event.agentId && agents.get(event.agentId);
   if (agent) {
     agent.lastActive = event.ts;
     if (event.kind === 'process' || event.kind === 'tool') agent.counts.commands++;
@@ -81,6 +84,29 @@ export function onEvent(fn) {
 export function listEvents({ agentId, limit = 500 } = {}) {
   const list = agentId ? events.filter((e) => e.agentId === agentId) : events;
   return list.slice(-limit);
+}
+
+/** Swap events in place (after a baseline change) and send the new copies to the dashboard. */
+export function reviseEvents(changed) {
+  if (!changed?.length) return [];
+  const byId = new Map(changed.map((e) => [e.id, e]));
+  const touched = new Set();
+  const applied = [];
+  for (let i = 0; i < events.length; i++) {
+    const next = byId.get(events[i].id);
+    if (!next) continue;
+    events[i] = next;
+    applied.push(next);
+    if (next.agentId) touched.add(next.agentId);
+  }
+  for (const id of touched) {
+    const agent = agents.get(id);
+    if (!agent) continue;
+    agent.score = computeScore(events.filter((e) => e.agentId === id)).score;
+    broadcast('agent', agent);
+  }
+  for (const e of applied) broadcast('event', e);
+  return applied;
 }
 
 export function clearAll() {
