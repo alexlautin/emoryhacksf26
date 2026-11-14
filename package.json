@@ -13,6 +13,7 @@
     "demo:reset": "node demo/reset.js",
     "protect": "node src/protect.js protect",
     "unprotect": "node src/protect.js unprotect",
+    "uninstall-harness": "node src/uninstall.js",
     "desktop": "tauri dev",
     "desktop:build": "tauri build",
     "test": "node --test"

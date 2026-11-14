@@ -299,6 +299,12 @@ export default function Home() {
               </ol>
               <p>Your phone needs to be on the same Wi-Fi as your computer, on a network you trust. With <a href="https://tailscale.com">Tailscale</a> on both, it works from anywhere and the connection is encrypted. <strong>Unpair phones</strong> in Settings signs every phone out.</p>
             </section>
+            <section id="uninstall" aria-labelledby="uninstall-title">
+              <h4 id="uninstall-title">Uninstalling</h4>
+              <p>Use <strong>Uninstall Harness…</strong> in the menu bar (Mac) or system tray (Windows) menu. It stops Harness, removes its Claude Code hooks from every folder you protected, deletes its decoy files, settings, history and login item, then moves the app to the Trash (Mac) or runs its uninstaller (Windows).</p>
+              <p>Please do this instead of only dragging the app to the Trash. While Harness isn’t running, its hooks block Claude Code’s actions in protected folders, so leftover hooks would stop Claude Code working there.</p>
+              <p>Already removed the app? Run <code>pnpm uninstall-harness</code> in a copy of the Harness repository. It finds the leftover hooks and decoy files and removes them. Add <code>--dry-run</code> to see what it would change first. On Windows, uninstalling from Settings → Apps also stops Harness and cleans up the hooks.</p>
+            </section>
             <p className="install-source"><a href={RELEASE_PAGE}>Release notes and source</a> · <a href={CHECKSUMS_URL}>SHA-256 checksums</a></p>
             <details>
               <summary>How do I check the download?</summary>

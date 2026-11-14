@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DATA_DIR } from './paths.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = path.join(ROOT, 'hooks', 'harness-hook.sh');
@@ -16,6 +17,26 @@ const OURS = {
   PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: cmd('pre-tool'), timeout: 120, statusMessage: 'Harness is checking this action…' }] }],
   PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: cmd('post-tool'), timeout: 30 }] }],
 };
+
+// Folders Harness added hooks to, so an uninstall can find them again (see uninstall.js).
+// HARNESS_PROTECTED_FILE lets tests keep their folders out of the real list.
+const registry = () => process.env.HARNESS_PROTECTED_FILE || path.join(DATA_DIR, 'protected-folders.json');
+
+export function protectedFolders() {
+  try {
+    const list = JSON.parse(fs.readFileSync(registry(), 'utf8'));
+    return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(dir, on) {
+  try {
+    const rest = protectedFolders().filter((d) => d !== dir);
+    fs.writeFileSync(registry(), JSON.stringify(on ? [...rest, dir] : rest, null, 2) + '\n');
+  } catch {}
+}
 
 function isOurs(command) {
   const c = String(command ?? '');
@@ -68,6 +89,7 @@ export function protect(target) {
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
   for (const mark of MARKS.slice(1)) fs.rmSync(path.join(dir, mark), { force: true });
+  remember(dir, true);
   return dir;
 }
 
@@ -84,6 +106,7 @@ export function unprotect(target) {
     else fs.rmSync(settingsFile);
   }
   removeHookFiles(dir);
+  remember(dir, false);
   return dir;
 }
 

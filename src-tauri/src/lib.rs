@@ -14,7 +14,7 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -72,6 +72,86 @@ fn pick_folder(app: &AppHandle, title: &str, cmd: &'static str) {
             send(&app2, serde_json::json!({ "cmd": cmd, "dir": path }));
         }
     });
+}
+
+/// Ask first, then have the server take Harness's hooks and decoy files off this computer.
+/// The server answers with "uninstalled" and `finish_uninstall` does the rest.
+fn begin_uninstall(app: &AppHandle) {
+    let app2 = app.clone();
+    app.dialog()
+        .message(
+            "This removes Harness's Claude Code hooks from every folder you protected, deletes its decoy files, \
+             its settings and history, and its login item, then moves Harness to the Trash (Windows: runs its uninstaller).\n\n\
+             Without this step, Claude Code would stay blocked in protected folders once Harness is gone.",
+        )
+        .title("Uninstall Harness?")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Uninstall".into(), "Cancel".into()))
+        .show(move |confirmed| {
+            if confirmed {
+                send(&app2, serde_json::json!({ "cmd": "uninstall" }));
+            }
+        });
+}
+
+/// The server has cleaned up. Stop it, remove what the app itself left (login item, data, caches), then the app.
+/// If the hooks couldn't all be removed, stop here and say so: the app stays so you can try again.
+fn finish_uninstall(app: &AppHandle, ok: bool, summary: &str) {
+    if !ok {
+        app.dialog()
+            .message(format!("Harness could not remove everything, so it was left installed.\n\n{summary}"))
+            .title("Uninstall incomplete")
+            .kind(MessageDialogKind::Error)
+            .show(|_| {});
+        return;
+    }
+    let _ = app.autolaunch().disable();
+    stop_server(app);
+
+    let paths = app.path();
+    let mut dirs: Vec<std::path::PathBuf> = [paths.app_data_dir(), paths.app_cache_dir(), paths.app_local_data_dir(), paths.app_log_dir()]
+        .into_iter()
+        .flatten()
+        .collect();
+    if let Ok(data) = paths.app_data_dir() {
+        if let Some(parent) = data.parent() {
+            // Folders from before the Lookout and Seatbelt names became Harness.
+            dirs.extend(["dev.lookout.monitor", "dev.seatbelt.monitor"].map(|name| parent.join(name)));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    if let Ok(home) = paths.home_dir() {
+        let lib = home.join("Library");
+        dirs.extend(["WebKit", "HTTPStorages", "Saved Application State"].map(|d| lib.join(d).join("dev.harness.monitor")));
+        let _ = std::fs::remove_file(lib.join("Preferences").join("dev.harness.monitor.plist"));
+    }
+    for dir in dirs {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    remove_app_itself();
+    app.exit(0);
+}
+
+/// macOS: move the app bundle to the Trash through Finder. Windows: run the installer's uninstaller.
+/// `tauri dev` runs a loose binary, which is left alone.
+fn remove_app_itself() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else { return };
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = exe.ancestors().nth(3).filter(|p| p.extension().is_some_and(|e| e == "app")) {
+        let path = bundle.display().to_string().replace('\\', "\\\\").replace('"', "\\\"");
+        let _ = std::process::Command::new("osascript")
+            .args(["-e", &format!("tell application \"Finder\" to delete POSIX file \"{path}\"")])
+            .spawn();
+    }
+    #[cfg(windows)]
+    if let Some(uninstaller) = exe.parent().map(|dir| dir.join("uninstall.exe")).filter(|p| p.exists()) {
+        let _ = std::process::Command::new(uninstaller).spawn();
+    }
+    let _ = exe;
 }
 
 fn url(app: &AppHandle, path: &str) -> Option<WebviewUrl> {
@@ -269,6 +349,7 @@ fn handle_line(app: &AppHandle, line: &str) {
             }
         }
         Some("status") => on_status(app, &msg),
+        Some("uninstalled") => finish_uninstall(app, msg["ok"].as_bool().unwrap_or(false), msg["summary"].as_str().unwrap_or("")),
         Some("notify") => {
             let _ = app
                 .notification()
@@ -378,6 +459,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         app.autolaunch().is_enabled().unwrap_or(false),
         None::<&str>,
     )?;
+    let uninstall = MenuItem::with_id(app, "uninstall", "Uninstall Harness…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Harness", true, Some("CmdOrCtrl+Q"))?;
 
     let mut levels = Vec::new();
@@ -402,7 +484,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let sep = || PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep()?, &protect_level, &display_menu, &sep()?, &protect, &unprotect, &sep()?, &demo, &sep()?, &login, &sep()?, &quit],
+        &[&open, &sep()?, &protect_level, &display_menu, &sep()?, &protect, &unprotect, &sep()?, &demo, &sep()?, &login, &uninstall, &sep()?, &quit],
     )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
@@ -419,6 +501,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let _ = if on { auto.disable() } else { auto.enable() };
                 let _ = login.set_checked(auto.is_enabled().unwrap_or(!on));
             }
+            "uninstall" => begin_uninstall(app),
             "quit" => app.exit(0),
             "demo" => {
                 send(app, serde_json::json!({ "cmd": "demo" }));

@@ -8,7 +8,8 @@
 //   notify  { title, body }
 // In, on stdin: one JSON command per line, from the menu bar:
 //   { cmd: 'auto-protect', level }   { cmd: 'menu-bar', mode }
-//   { cmd: 'demo' }   { cmd: 'pause' }   { cmd: 'protect' | 'unprotect', dir }
+//   { cmd: 'demo' }   { cmd: 'pause' }   { cmd: 'protect' | 'unprotect', dir }   { cmd: 'uninstall' }
+// The server answers uninstall with  uninstalled  { ok, summary }.
 // When stdin closes (the app quit or crashed), the server exits.
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -16,6 +17,7 @@ import readline from 'node:readline';
 import { listAgents, listEvents, onEvent } from './store.js';
 import { getSettings, setSettings, pauseAgent } from './guard.js';
 import { protect, unprotect } from './protect.js';
+import { uninstallCleanup, describeResult } from './uninstall.js';
 import { ignoreWrites, refreshHookState } from './monitor/files.js';
 import { alertCount, computeScore, withHealth } from '../public/score.js';
 import { degradedMonitors } from './monitor/health.js';
@@ -115,5 +117,10 @@ async function command(line, port) {
     const dir = unprotect(msg.dir);
     refreshHookState(dir);
     send({ type: 'notify', title: `Stopped protecting ${path.basename(dir)}`, body: "Removed Harness's Claude Code hooks from that folder." });
+  } else if (msg.cmd === 'uninstall') {
+    // Hooks and decoys go first. The app then stops this server and removes its own files, login item and bundle.
+    const result = uninstallCleanup({ onFolder: (dir) => ignoreWrites(path.resolve(dir)) });
+    for (const dir of result.removedHooks) refreshHookState(dir);
+    send({ type: 'uninstalled', ok: !result.failed.length, summary: describeResult(result) });
   }
 }
