@@ -9,6 +9,7 @@ import os from 'node:os';
 import { addEvent, listAgents, upsertAgent } from '../store.js';
 import { analyzePath, shortPath } from '../rules.js';
 import { truncate } from '../describe.js';
+import { projectName } from './processes.js';
 
 const HOME = os.homedir();
 const CLAUDE_DIR = path.join(HOME, '.claude', 'projects');
@@ -69,9 +70,13 @@ function discover() {
 function findAgent(kind, cwd) {
   const candidates = listAgents().filter((a) => a.kind === kind && a.alive);
   const exact = candidates.filter((a) => cwd && a.cwd === cwd);
-  const pool = exact.length ? exact : [];
-  pool.sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
-  return pool[0] ?? null;
+  exact.sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
+  if (exact.length) return exact[0];
+  // Windows can't tell us a process's folder. If exactly one agent of this kind has no folder
+  // yet, this log belongs to it, and the log says where it's working.
+  const unknown = candidates.filter((a) => !a.cwd);
+  if (cwd && unknown.length === 1) return upsertAgent({ id: unknown[0].id, cwd, project: projectName(cwd) });
+  return null;
 }
 
 function readNew() {

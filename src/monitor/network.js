@@ -1,18 +1,16 @@
 // Which servers are the agent and the programs it started talking to?
-// Polls `lsof -i` for the processes we're tracking. No sudo needed.
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+// Polls open connections for the processes we're tracking (lsof on macOS, netstat on Windows).
 import dns from 'node:dns/promises';
 import { addEvent, getAgent } from '../store.js';
 import { analyzeDestination } from '../rules.js';
 import { trackedPids } from './processes.js';
 import { truncate } from '../describe.js';
+import { listConnections } from '../platform.js';
 
-const run = promisify(execFile);
 const POLL_MS = 1000;
 const seen = new Set(); // `${agentId}|${pid or root}|${ip}:${port}`
 const dnsCache = new Map();
-const IGNORE_PORTS = new Set([4100]); // Seatbelt's own dashboard
+const IGNORE_PORTS = new Set([+(process.env.PORT ?? 4100)]); // Seatbelt's own dashboard
 
 async function reverse(ip) {
   if (dnsCache.has(ip)) return dnsCache.get(ip);
@@ -24,35 +22,17 @@ async function reverse(ip) {
   return p;
 }
 
-function parseRemote(n) {
-  // n looks like 192.168.1.5:50123->140.82.112.3:443  or [::1]:50000->[::1]:4199
-  const m = n.match(/->(\[[^\]]+\]|[^:]+):(\d+)$/);
-  if (!m) return null;
-  return { ip: m[1].replace(/^\[|\]$/g, ''), port: +m[2] };
-}
-
 async function poll() {
   const tracked = trackedPids();
   if (!tracked.size) return;
-  let stdout = '';
-  try {
-    ({ stdout } = await run('lsof', ['-nP', '-i', '-a', '-p', [...tracked.keys()].join(','), '-F', 'pn'], { maxBuffer: 16 * 1024 * 1024 }));
-  } catch (err) {
-    stdout = err.stdout ?? ''; // lsof exits 1 if some pids already ended
-  }
-  let pid = null;
-  for (const line of stdout.split('\n')) {
-    if (line.startsWith('p')) pid = +line.slice(1);
-    else if (line.startsWith('n') && pid) {
-      const remote = parseRemote(line.slice(1));
-      if (!remote || IGNORE_PORTS.has(remote.port)) continue;
-      const t = tracked.get(pid);
-      if (!t) continue;
-      const k = `${t.agentId}|${t.isRoot ? 'root' : pid}|${remote.ip}:${remote.port}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      report(t, pid, remote);
-    }
+  for (const { pid, ip, port } of await listConnections([...tracked.keys()])) {
+    if (IGNORE_PORTS.has(port)) continue;
+    const t = tracked.get(pid);
+    if (!t) continue;
+    const k = `${t.agentId}|${t.isRoot ? 'root' : pid}|${ip}:${port}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    report(t, pid, { ip, port });
   }
 }
 

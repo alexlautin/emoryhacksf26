@@ -1,4 +1,4 @@
-// Plain-English session summaries from a local model (Ollama), so nothing leaves the Mac.
+// Session summaries from a local model (Ollama), so nothing leaves this computer.
 // Falls back to a rule-based summary when Ollama isn't running.
 import { listEvents, getAgent } from './store.js';
 import { riskRank } from './rules.js';
@@ -35,7 +35,7 @@ function fallback({ agent, notable, cmds, filesChanged, servers }) {
   lines.push(`${agent.label} has been working in ${agent.project}${agent.task ? ` on: “${agent.task}”` : ''}.`);
   lines.push(`So far it ran ${cmds} commands or actions, changed ${filesChanged} project files, and talked to ${servers.length} server${servers.length === 1 ? '' : 's'}.`);
   if (bad.length) {
-    lines.push(`⚠️ ${bad.length} thing${bad.length > 1 ? 's' : ''} need${bad.length > 1 ? '' : 's'} your attention:`);
+    lines.push(`${bad.length} thing${bad.length > 1 ? 's' : ''} need${bad.length > 1 ? '' : 's'} your attention:`);
     for (const e of bad.slice(-4)) lines.push(`• ${e.title}: ${e.reasons?.[0] ?? ''}`);
   } else {
     lines.push('Nothing looked dangerous.');
@@ -49,7 +49,7 @@ export async function summarize(agentId) {
   const { available } = await ollamaStatus();
   if (!available) return { text: fallback(f), source: 'rules' };
 
-  const prompt = `You are Seatbelt, a safety monitor that watches AI coding agents on a Mac.
+  const prompt = `You are Seatbelt, a safety monitor that watches AI coding agents on someone's computer.
 Explain to a NON-TECHNICAL person what this agent did, in plain friendly English.
 Rules: 3-5 short sentences, no jargon (say "your SSH keys, which let you log into servers" not "~/.ssh/id_rsa").
 If anything is risky, say clearly what it was, who did it, and whether it matched the task.

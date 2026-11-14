@@ -1,16 +1,14 @@
-// Watches every process on the Mac and follows the ones started by an AI agent,
+// Watches every process on the computer and follows the ones started by an AI agent,
 // all the way down (agent -> shell -> npm -> install script -> curl ...).
-// No sudo needed: polls `ps`. Very short-lived processes (< ~0.5 s) can be missed;
-// deep mode (eslogger) closes that gap.
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+// No admin rights needed: polls the process list (`ps` on macOS, PowerShell on Windows).
+// Very short-lived processes (under about half a second) can be missed.
 import path from 'node:path';
 import os from 'node:os';
+import { listProcesses, processCwd, exeName, isShell } from '../platform.js';
 import { addEvent, upsertAgent, getAgent } from '../store.js';
 import { analyzeCommand, maxRisk, riskRank } from '../rules.js';
 import { extractCommand, friendlyCommand, truncate, AGENT_LABELS } from '../describe.js';
 
-const run = promisify(execFile);
 const SELF = process.pid;
 const POLL_MS = 500;
 
@@ -20,40 +18,15 @@ const known = new Map();
 const agentRoots = new Map();
 
 function agentKind(comm, args) {
-  if (/demo\/fake-agent\.js/.test(args)) return 'demo';
-  const base = path.basename(comm);
-  if (base === 'claude') return 'claude';
-  if (base === 'codex') return 'codex';
+  if (/demo[\\/]fake-agent\.js/.test(args)) return 'demo';
+  const base = exeName(comm);
+  if (base === 'claude' || /@anthropic-ai[\\/]claude-code[\\/]/.test(args)) return 'claude';
+  if (base === 'codex' || /@openai[\\/]codex[\\/]/.test(args)) return 'codex';
   return null;
 }
 
-async function snapshot() {
-  const opts = { maxBuffer: 64 * 1024 * 1024 };
-  const [a, b] = await Promise.all([
-    run('ps', ['-axo', 'pid=,ppid=,comm='], opts),
-    run('ps', ['-axww', '-o', 'pid=,args='], opts),
-  ]);
-  const procs = new Map();
-  for (const line of a.stdout.split('\n')) {
-    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
-    if (m) procs.set(+m[1], { pid: +m[1], ppid: +m[2], comm: m[3], args: m[3] });
-  }
-  for (const line of b.stdout.split('\n')) {
-    const m = line.match(/^\s*(\d+)\s+(.*)$/);
-    if (m && procs.has(+m[1])) procs.get(+m[1]).args = m[2];
-  }
-  return procs;
-}
-
-async function cwdOf(pid) {
-  try {
-    const { stdout } = await run('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn']);
-    const line = stdout.split('\n').find((l) => l.startsWith('n'));
-    return line ? line.slice(1) : null;
-  } catch {
-    return null;
-  }
-}
+const snapshot = (opts) => listProcesses(opts);
+const cwdOf = processCwd;
 
 /** Walk up the tree. Returns the agent root pid, or null if not under an agent (or under Seatbelt itself). */
 function findAgentRoot(pid, procs) {
@@ -78,12 +51,20 @@ function ancestorsUntil(pid, rootPid, procs) {
   return chain; // nearest first
 }
 
+/** A friendly name for an agent's folder. */
+export function projectName(cwd) {
+  if (!cwd) return 'an unknown folder';
+  if (cwd === os.homedir()) return 'your home folder';
+  if (cwd === '/' || /^[A-Za-z]:\\?$/.test(cwd)) return 'the whole computer';
+  return path.basename(cwd);
+}
+
 async function registerAgent(root) {
   const kind = agentKind(root.comm, root.args);
   const id = `${kind}-${root.pid}`;
   agentRoots.set(id, root.pid);
   const cwd = await cwdOf(root.pid);
-  const project = !cwd ? 'an unknown folder' : cwd === os.homedir() ? 'your home folder' : cwd === '/' ? 'the whole computer' : path.basename(cwd);
+  const project = projectName(cwd);
   const agent = upsertAgent({ id, kind, label: AGENT_LABELS[kind], pid: root.pid, cwd, project, startedAt: Date.now(), lastActive: Date.now(), alive: true });
   addEvent({
     agentId: id, kind: 'system', risk: 'info',
@@ -111,7 +92,7 @@ async function poll() {
   for (const [id, pid] of agentRoots) {
     const a = getAgent(id);
     if (!procs.has(pid) && a?.alive) {
-      upsertAgent({ id, alive: false });
+      upsertAgent({ id, alive: false, paused: false });
       addEvent({ agentId: id, kind: 'system', risk: 'info', title: `${a.label} in ${a.project} stopped`, detail: `pid ${pid}` });
     }
   }
@@ -173,7 +154,7 @@ function emitProcess(entry, rootPid, procs) {
 
   const depth = chain.length;
   const verb = friendlyCommand(entry.cmd);
-  const title = depth === 0 || (depth === 1 && /(^|\/)(zsh|bash|sh)$/.test(chain[0]?.comm ?? ''))
+  const title = depth === 0 || (depth === 1 && isShell(chain[0]?.comm))
     ? `${agent.label} ${verb}`
     : viaInstall
       ? `A package's install script ${verb}`
@@ -191,6 +172,37 @@ function emitProcess(entry, rootPid, procs) {
     ppid: entry.ppid,
     depth,
   });
+}
+
+/**
+ * Every live process belonging to an agent: its root plus all descendants, from a fresh `ps`.
+ * Seatbelt's own process (and anything under it) is never included, and `hostsSeatbelt`
+ * says whether the agent is one of Seatbelt's ancestors (then it must not be stopped).
+ */
+export async function agentTree(agentId) {
+  const rootPid = agentRoots.get(agentId);
+  if (!rootPid) return null;
+  const procs = await snapshot({ fresh: true });
+  if (!procs.has(rootPid)) return { rootPid, pids: [], hostsSeatbelt: false };
+  const children = new Map();
+  for (const p of procs.values()) {
+    if (!children.has(p.ppid)) children.set(p.ppid, []);
+    children.get(p.ppid).push(p.pid);
+  }
+  const pids = [];
+  const queue = [rootPid];
+  while (queue.length) {
+    const pid = queue.shift();
+    if (pid === SELF) continue;
+    pids.push(pid);
+    queue.push(...(children.get(pid) ?? []));
+  }
+  let hostsSeatbelt = false;
+  for (let cur = procs.get(SELF), guard = 0; cur && guard++ < 64; cur = procs.get(cur.ppid)) {
+    if (cur.pid === rootPid) { hostsSeatbelt = true; break; }
+    if (cur.ppid <= 1) break;
+  }
+  return { rootPid, pids, hostsSeatbelt };
 }
 
 export function trackedPids() {

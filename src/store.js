@@ -15,9 +15,10 @@ const MAX_EVENTS = 5000;
 const events = [];
 const agents = new Map(); // agentId -> agent
 const subscribers = new Set();
+const eventListeners = new Set();
 let nextId = 1;
 
-function broadcast(type, payload) {
+export function broadcast(type, payload) {
   const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
   for (const res of subscribers) res.write(msg);
 }
@@ -69,7 +70,15 @@ export function addEvent(e) {
     broadcast('agent', agent);
   }
   broadcast('event', event);
+  for (const fn of eventListeners) {
+    try { fn(event); } catch (err) { console.error('[store listener]', err.message); }
+  }
   return event;
+}
+
+/** Run a callback for every new event (used by the guard to auto-pause flagged agents). */
+export function onEvent(fn) {
+  eventListeners.add(fn);
 }
 
 export function listEvents({ agentId, limit = 500 } = {}) {
