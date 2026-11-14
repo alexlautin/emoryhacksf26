@@ -22,12 +22,27 @@ const SKIP = new Set(['node_modules', 'Library', 'AppData', 'Applications', 'Mov
 const MAX_DEPTH = 6;
 const MAX_DIRS = 40000;
 
+/**
+ * The desktop app keeps its list of protected folders in its own data folder. The command line and the
+ * Windows uninstaller don't run with HARNESS_DATA_DIR set, so look in the app's folders (and the pre-rename ones) too.
+ */
+function desktopRegistries() {
+  const bases = process.platform === 'darwin' ? [path.join(HOME, 'Library', 'Application Support')]
+    : process.platform === 'win32' ? [process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming')]
+    : [process.env.XDG_DATA_HOME ?? path.join(HOME, '.local', 'share')];
+  return bases.flatMap((base) => ['dev.harness.monitor', 'dev.lookout.monitor', 'dev.seatbelt.monitor'].map((id) => path.join(base, id, 'protected-folders.json')));
+}
+
+function recordedFolders() {
+  return [...new Set([protectedFolders(), ...desktopRegistries().map((file) => protectedFolders(file))].flat())];
+}
+
 function hasHook(dir) {
   return HOOK_FILES.some((f) => fs.existsSync(path.join(dir, f))) || isProtected(dir);
 }
 
 /** Folders with Harness's Claude Code hooks: the ones Harness remembers, plus a look through your home folder. */
-export function findHookFolders({ roots = [HOME], extra = protectedFolders() } = {}) {
+export function findHookFolders({ roots = [HOME], extra = recordedFolders() } = {}) {
   const found = new Set();
   for (const dir of extra) if (fs.existsSync(dir) && hasHook(dir)) found.add(path.resolve(dir));
 

@@ -59,9 +59,10 @@ struct Monitor {
 }
 
 /// Send one command to the server (see src/desktop.js for the list).
-fn send(app: &AppHandle, cmd: Value) {
-    if let Some(child) = app.state::<Monitor>().child.lock().unwrap().as_mut() {
-        let _ = child.write(format!("{cmd}\n").as_bytes());
+fn send(app: &AppHandle, cmd: Value) -> bool {
+    match app.state::<Monitor>().child.lock().unwrap().as_mut() {
+        Some(child) => child.write(format!("{cmd}\n").as_bytes()).is_ok(),
+        None => false,
     }
 }
 
@@ -88,8 +89,13 @@ fn begin_uninstall(app: &AppHandle) {
         .kind(MessageDialogKind::Warning)
         .buttons(MessageDialogButtons::OkCancelCustom("Uninstall".into(), "Cancel".into()))
         .show(move |confirmed| {
-            if confirmed {
-                send(&app2, serde_json::json!({ "cmd": "uninstall" }));
+            // Without the server nothing can remove the hooks, so say so instead of doing nothing.
+            if confirmed && !send(&app2, serde_json::json!({ "cmd": "uninstall" })) {
+                app2.dialog()
+                    .message("Harness's monitor isn't running, so it can't remove its Claude Code hooks yet. Quit and reopen Harness, then try again. Nothing was uninstalled.")
+                    .title("Can't uninstall yet")
+                    .kind(MessageDialogKind::Error)
+                    .show(|_| {});
             }
         });
 }
