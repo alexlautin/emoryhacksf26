@@ -4,6 +4,7 @@ import test from 'node:test';
 import { RELEASES } from './releases.js';
 import { detectOS } from './src/js/os.js';
 import { downloadPlan } from './src/js/downloads.js';
+import { page } from './src/layout.mjs';
 import { renderMarkdown } from './src/markdown.mjs';
 
 const MAC_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15';
@@ -134,4 +135,23 @@ test('the white paper renders the sections the site links to', () => {
   assert.doesNotMatch(html, /<script/);
   assert.match(html, /0 to 100/);
   assert.match(html, /~\/\.lookout\/bait/);
+});
+
+test('a missing page does not mark the section links as the current page', () => {
+  for (const current of ['missing', '']) {
+    const html = page({ title: 'missing', description: 'missing', current, body: '<p>no</p>' });
+    assert.doesNotMatch(html, /aria-current/);
+  }
+});
+
+test('the white paper marks only its own nav item', () => {
+  const html = page({ title: 'paper', description: 'paper', current: 'paper', body: '<p>x</p>' });
+  assert.equal([...html.matchAll(/aria-current="page"/g)].length, 1);
+  assert.match(html, /href="\/whitepaper" aria-current="page"/);
+});
+
+test('fragment jumps leave room for the sticky header', () => {
+  const css = fs.readFileSync(new URL('./src/site.css', import.meta.url), 'utf8');
+  assert.match(css, /scroll-padding-top:\s*10\.5rem/);
+  assert.match(css, /scroll-padding-top:\s*5\.5rem/);
 });

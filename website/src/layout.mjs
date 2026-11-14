@@ -10,7 +10,7 @@ function esc(s) {
 
 function nav(current) {
   const item = (href, label, key) => {
-    const here = current === key ? ' aria-current="page"' : '';
+    const here = key && current === key ? ' aria-current="page"' : '';
     return `<a href="${href}"${here}>${label}</a>`;
   };
   return `<nav class="site-nav" aria-label="Primary">
