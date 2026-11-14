@@ -1,5 +1,7 @@
 # Lookout
 
+[![CI](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml/badge.svg)](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml)
+
 Lookout watches what Claude Code and Codex do on your computer, including the parts their own windows don't show, and tells you about anything risky.
 
 Say an agent runs `npm install`. Its window shows one line and a checkmark. Underneath, a package's install script could be reading your `.env` and uploading it. Lookout follows the whole chain (agent, shell, npm, install script, curl) along with the files and servers involved, and can pause the agent before it finishes.
