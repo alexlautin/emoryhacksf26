@@ -6,7 +6,7 @@ import path from 'node:path';
 
 // Keep the store's event log out of the repo's data folder.
 process.env.HARNESS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-proc-'));
-const { setProcessSource, resetProcessState, pollProcesses, collectTree, agentTree, trackedPids, recordExec } = await import('../src/monitor/processes.js');
+const { setProcessSource, resetProcessState, pollProcesses, collectTree, agentTree, trackedPids, recordExec, describeCaller } = await import('../src/monitor/processes.js');
 const { listEvents, clearAll } = await import('../src/store.js');
 
 const proc = (pid, ppid, args) => ({ pid, ppid, comm: args.split(' ')[0], args });
@@ -95,4 +95,33 @@ test('deep mode reports a process polling never saw, once', async () => {
   // The next poll sees it too, and doesn't report it a second time.
   await pollProcesses(src.set(snap(launchd, agent, shell, quick)));
   assert.equal(listEvents().filter((e) => e.pid === 700).length, 1);
+});
+
+test('describeCaller tells a command you ran apart from one an agent ran', async () => {
+  const src = setup();
+  await pollProcesses(src.set(snap(launchd, agent)));
+  const terminal = proc(600, 1, '/bin/zsh');
+  const mine = proc(610, 600, 'node src/protect.js unprotect .');
+  const theirs = proc(620, 200, 'node src/protect.js unprotect .');
+  src.set(snap(launchd, agent, shell, terminal, mine, theirs));
+  assert.deepEqual(await describeCaller(610), { args: 'node src/protect.js unprotect .', agentId: null });
+  assert.equal((await describeCaller(620)).agentId, 'claude-100');
+  assert.equal(await describeCaller(999), null);
+});
+
+test('the Claude desktop app is not an agent, but Claude Code sessions inside it are', async () => {
+  const src = setup();
+  const app = proc(700, 1, '/Applications/Claude.app/Contents/MacOS/Claude');
+  const helperPath = '/Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper';
+  const helper = { pid: 710, ppid: 700, comm: helperPath, args: `${helperPath} --type=utility` };
+  const terminal = proc(720, 710, '/bin/zsh -l');
+  const mine = proc(730, 720, 'node src/protect.js unprotect .');
+  const codePath = '/Users/me/Library/Application Support/Claude/claude-code/2.1.0/abc/claude.app/Contents/MacOS/claude';
+  const code = { pid: 740, ppid: 700, comm: codePath, args: codePath };
+  const tool = proc(750, 740, 'node src/protect.js unprotect .');
+  const win = proc(760, 1, 'C:\\Users\\me\\AppData\\Local\\AnthropicClaude\\app-1.0.0\\claude.exe');
+  await pollProcesses(src.set(snap(launchd, app, helper, terminal, mine, code, tool, win)));
+  assert.equal((await describeCaller(730)).agentId, null);
+  assert.equal((await describeCaller(750)).agentId, 'claude-740');
+  assert.equal((await describeCaller(760)).agentId, null);
 });

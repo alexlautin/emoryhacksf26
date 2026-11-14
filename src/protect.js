@@ -87,6 +87,26 @@ export function unprotect(target) {
   return dir;
 }
 
+/**
+ * protect or unprotect from the command line. A running Harness is asked to make the change, so
+ * it knows the change was yours and doesn't report Harness's hooks being removed. If Harness isn't
+ * running, or won't vouch for the caller (an agent ran the command), the change is made here.
+ */
+export async function changeHooks(action, target) {
+  const dir = path.resolve(target);
+  const port = process.env.PORT ?? 4100;
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/api/hooks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action, dir, pid: process.pid }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) return (await r.json()).dir;
+  } catch {}
+  return action === 'protect' ? protect(dir) : unprotect(dir);
+}
+
 /** Whether <dir> has Harness's hooks (or the pre-rename ones). */
 export function isProtected(target) {
   try {
@@ -101,12 +121,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [action, target = '.'] = process.argv.slice(2);
   try {
     if (action === 'protect') {
-      const dir = protect(target);
+      const dir = await changeHooks('protect', target);
       console.log(`\n  Harness now checks every Claude Code action in ${dir} before it runs.`);
       console.log('  Keep `pnpm start` running: while Harness is stopped, Claude Code actions there are blocked.');
       console.log('  Restart Claude Code in that folder (or run /hooks) to pick up the change.\n');
     } else if (action === 'unprotect') {
-      console.log(`\n  Removed Harness's hooks from ${unprotect(target)}.\n`);
+      console.log(`\n  Removed Harness's hooks from ${await changeHooks('unprotect', target)}.\n`);
     } else {
       console.error('Usage: pnpm protect <folder>   |   pnpm unprotect <folder>');
       process.exit(1);

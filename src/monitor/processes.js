@@ -44,9 +44,19 @@ export function resetProcessState() {
   firstPoll = true;
 }
 
+/**
+ * Programs of the Claude desktop app: anything inside Claude.app on macOS, AnthropicClaude\ on
+ * Windows. Case matters: Claude Code sessions the app starts live in a lowercase claude.app.
+ */
+const IS_CLAUDE_DESKTOP = /[\\/]Claude\.app[\\/]Contents[\\/]|[\\/]AnthropicClaude[\\/]/;
+
 function agentKind(comm, args) {
   if (/demo[\\/]fake-agent\.js/.test(args)) return 'demo';
   const base = exeName(comm);
+  // The Claude desktop app's own process is also named Claude. It isn't an agent (its Claude Code
+  // sessions run as separate `claude` processes), and counting it would put everything started from
+  // the app, including its terminal, under an agent.
+  if (IS_CLAUDE_DESKTOP.test(comm)) return null;
   if (base === 'claude' || /@anthropic-ai[\\/]claude-code[\\/]/.test(args)) return 'claude';
   if (base === 'codex' || /@openai[\\/]codex[\\/]/.test(args)) return 'codex';
   if (base === 'gemini' || /@google[\\/]gemini-cli[\\/]/.test(args)) return 'gemini';
@@ -315,6 +325,18 @@ export function trackedPids() {
   for (const [id, pid] of agentRoots) if (getAgent(id)?.alive) out.set(pid, { agentId: id, isRoot: true, cmd: getAgent(id).label });
   for (const p of known.values()) if (p.agentId) out.set(p.pid, { agentId: p.agentId, isRoot: false, cmd: p.cmd });
   return out;
+}
+
+/**
+ * A local program asked the server for something: is it running, and is it under an agent?
+ * Uses a fresh snapshot, so a program that started a moment ago is in it.
+ * Returns { args, agentId } (agentId null when no agent started it), or null if the pid isn't running.
+ */
+export async function describeCaller(pid) {
+  const procs = await source.list({ fresh: true });
+  const p = procs.get(pid);
+  if (!p) return null;
+  return { args: p.args, agentId: ownerOf(pid, procs)?.agentId ?? null };
 }
 
 export function agentForPid(pid) {
