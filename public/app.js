@@ -233,9 +233,9 @@ function sessionCard(a) {
 
       <footer class="s-foot">
         <div class="counts">
-          <span><b>${a.counts.commands}</b> actions</span>
-          <span><b>${a.counts.files}</b> files</span>
-          <span><b>${a.counts.network}</b> connections</span>
+          <span><b>${a.counts.commands}</b> action${a.counts.commands === 1 ? '' : 's'}</span>
+          <span><b>${a.counts.files}</b> file${a.counts.files === 1 ? '' : 's'}</span>
+          <span><b>${a.counts.network}</b> connection${a.counts.network === 1 ? '' : 's'}</span>
         </div>
         <div class="s-buttons">
           ${a.alive && !a.paused ? `<button class="btn ghost small" data-act="pause" data-id="${esc(a.id)}" title="Freeze this agent and everything it started">Pause</button>` : ''}
