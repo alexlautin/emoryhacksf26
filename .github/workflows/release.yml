@@ -60,7 +60,34 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - name: Build native installer with bundled Node
+        if: runner.os == 'Windows'
         run: pnpm desktop:build --bundles ${{ matrix.bundles }} --ci
+      - name: Build native installer with bundled Node, and lay out the DMG window
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Tauri skips the DMG's Finder layout (background, window size, icon positions) whenever
+          # CI is set, so build without it; --ci still turns off prompts. Finder can be slow to answer
+          # on a fresh runner, so try a few times.
+          for attempt in 1 2 3; do
+            if env -u CI pnpm desktop:build --bundles ${{ matrix.bundles }} --ci; then exit 0; fi
+            echo "DMG build attempt $attempt failed; retrying."
+            hdiutil info | awk '/\/Volumes\/Harness/ {print $1}' | xargs -I{} hdiutil detach {} -force || true
+            sleep 15
+          done
+          exit 1
+      - name: Check the DMG window layout
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          dmg=$(find src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)
+          mnt=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          ok=0
+          if [ -f "$mnt/.DS_Store" ] && [ -f "$mnt/.background/dmg-background.tiff" ]; then ok=1; fi
+          hdiutil detach "$mnt" -quiet
+          if [ "$ok" != 1 ]; then echo "The DMG has no Finder layout (.DS_Store) or no background image."; exit 1; fi
+          echo "The DMG has its Finder layout and background."
       - name: Collect installer
         shell: bash
         env:
