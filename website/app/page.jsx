@@ -223,6 +223,7 @@ const FAQ = [
   ['Does anything leave my computer?', 'No. The log is a file on your disk, and summaries come from a local model. The one exception is the demo on this website, which is a separate thing: it asks Google Gemini to write a fictional session and never touches your machine.'],
   ['Can it actually stop a command?', 'In Claude Code, yes: the action is refused before it starts. For other agents Harness pauses the process tree once it sees a dangerous event, which usually lands before an upload completes but is not guaranteed to.'],
   ['What can it miss?', 'A process that starts and finishes in under about half a second can slip between checks. The decoy files still record that they were read. The about page lists every limit we know about.'],
+  ['Can I check on it from my phone?', 'Yes. Turn on Phone access in Settings and scan the QR code. Your phone opens the same dashboard in its browser, where you can watch your agents and pause, resume or end one. It talks only to your own computer, over your Wi-Fi or Tailscale, and it can’t change settings.'],
   ['Does it need admin rights?', 'Harness runs as you and does not need administrator rights to monitor your agents. macOS may ask you to authenticate when approving this unnotarized preview in Privacy & Security. See the first-open steps below.'],
 ];
 
@@ -253,8 +254,15 @@ export default function Home() {
         <div className="wrap dl-wrap">
           <Pug size={168} className="dl-pug" />
           <h2>Put your agent on a harness.</h2>
-          <p className="lead">Free, with the source on GitHub. Lives in your Mac menu bar or Windows system tray.</p>
+          <p className="lead">Free, with the source on GitHub. Lives in your Mac menu bar or Windows system tray, and opens on your phone.</p>
           <div id="downloads" />
+          <aside className="dl dl-phone" aria-labelledby="dl-phone-title">
+            <div>
+              <h3 id="dl-phone-title">On your phone</h3>
+              <p className="dl-detail">Nothing to install. Turn on Phone access in Harness and scan the code to watch, pause or end your agents from your phone’s browser.</p>
+            </div>
+            <a href="#install-phone">How to pair →</a>
+          </aside>
           <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness/releases/latest">GitHub Releases</a>.</p></noscript>
           <details className="install-guide">
             <summary>Need help opening it the first time?</summary>
@@ -280,6 +288,16 @@ export default function Home() {
               <h4 id="install-windows-title">On Windows</h4>
               <p>Run the 64-bit installer. This preview is unsigned, so SmartScreen may show “Windows protected your PC.” For a build you intentionally downloaded from this project’s release, choose <strong>More info → Run anyway</strong> if available. If your organization blocks it or Windows reports malware, stop and check with your administrator or report the message.</p>
               <p>WebView2 is installed if needed. After installation, look for Harness in the <strong>system tray</strong>, including the hidden icons menu.</p>
+            </section>
+            <section id="install-phone" aria-labelledby="install-phone-title">
+              <h4 id="install-phone-title">On your phone</h4>
+              <p>The phone view is the same dashboard, served by Harness on your computer. There is no app to download and no account.</p>
+              <ol>
+                <li>On your computer, open Harness and go to <strong>Settings → Phone access → Turn on</strong>.</li>
+                <li>Scan the QR code with your phone’s camera. Harness opens in the browser and the phone is paired.</li>
+                <li>Watch the score and your agents, and pause, resume or end one. Settings can only be changed on the computer.</li>
+              </ol>
+              <p>Your phone needs to be on the same Wi-Fi as your computer, on a network you trust. With <a href="https://tailscale.com">Tailscale</a> on both, it works from anywhere and the connection is encrypted. <strong>Unpair phones</strong> in Settings signs every phone out.</p>
             </section>
             <p className="install-source"><a href={RELEASE_PAGE}>Release notes and source</a> · <a href={CHECKSUMS_URL}>SHA-256 checksums</a></p>
             <details>
