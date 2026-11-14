@@ -101,7 +101,7 @@ export function incidentMarkdown(model) {
       for (const e of s.events.items) {
         const when = new Date(e.ts).toISOString();
         const level = LEVEL[e.risk] || e.risk;
-        const why = (e.reasons || []).filter((r) => !r.startsWith('you marked this as normal')).slice(0, 2).join('; ');
+        const why = (e.reasons || []).filter((r) => !/marked as normal for this project/.test(r)).slice(0, 2).join('; ');
         lines.push(bullet(`${when} ${level}: ${e.title}${why ? `. ${why}` : ''}`));
       }
       if (s.events.more) lines.push(bullet(`and ${s.events.more} more`));
@@ -115,6 +115,34 @@ export function incidentMarkdown(model) {
   lines.push('This is a Markdown file. To get a PDF, open the dashboard report and choose Save as PDF in the print dialog.');
   lines.push('');
   return lines.join('\n');
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+/** Print view of a report. Each run of bullets is its own list, so a heading between them stays a heading. */
+export function incidentPrintHtml(markdown) {
+  const blocks = [];
+  let items = [];
+  const flush = () => {
+    if (!items.length) return;
+    blocks.push(`<ul>${items.join('')}</ul>`);
+    items = [];
+  };
+  for (const line of String(markdown ?? '').split('\n')) {
+    if (line.startsWith('- ')) {
+      items.push(`<li>${escapeHtml(line.slice(2))}</li>`);
+      continue;
+    }
+    flush();
+    if (line.startsWith('### ')) blocks.push(`<h3>${escapeHtml(line.slice(4))}</h3>`);
+    else if (line.startsWith('## ')) blocks.push(`<h2>${escapeHtml(line.slice(3))}</h2>`);
+    else if (line.startsWith('# ')) blocks.push(`<h1>${escapeHtml(line.slice(2))}</h1>`);
+    else if (line.trim()) blocks.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  flush();
+  return blocks.join('');
 }
 
 export function incidentReport(input) {
