@@ -132,11 +132,11 @@ Harness remembers the folders it protects. For ones protected by an older versio
 
 - The monitor and dashboard are served from `127.0.0.1` and nowhere else.
 - Every event is appended to a file on your disk (`data/events.jsonl`, or the app's data folder in the desktop build).
-- There is no account, license check or telemetry call in the source. The one outbound lookup Harness makes is the reverse DNS described above.
+- Harness has no account, license check, or telemetry. The monitor can use reverse DNS to name a connection it observed.
 - Summaries are optional. They come from Ollama on your computer, and any model with "cloud" in its name is skipped. With no local model, Harness builds a shorter summary straight from the rules.
 - Decoy markers are specific to your computer. They aren't credentials for anything, but seeing one in a command means a decoy was read.
 
-The demo on the website is separate. It asks Google Gemini to write a fictional session, never touches your computer, and sends only the scenario you picked.
+**Review with Gemini** can assess a **Worth a look** event when you configure an API key. Harness previews the derived observations and sends them to Google only after you choose to share them. Raw commands, file contents, hostnames, paths, and task text stay local. Gemini provides an advisory assessment, and Harness applies its rules locally. The browser demo asks Gemini to write a fictional session from the scenario you choose.
 
 ## Known limits
 

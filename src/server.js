@@ -25,10 +25,14 @@ import { applyBaseline, baselineFromEvent, revertBaseline } from '../public/base
 import { incidentReport } from '../public/report.js';
 import { takeNotice } from '../public/notice.js';
 import { deliverNotice } from './notify.js';
-import { startPhoneAccess, setPhoneAccess, phoneStatus } from './phone.js';
+import { startPhoneAccess, setPhoneAccess, phoneStatus, sameOrigin } from './phone.js';
+import { createEventReviewer } from './event-review.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
+const eventReviewer = createEventReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined, listEvents });
+// Keep the key in this process when launching the demo and other helpers.
+delete process.env.GEMINI_API_KEY;
 fixPath();
 // Commands that kill this process (or the app that started it) or write to its data folder are tampering.
 setHarnessIdentity({ pids: [process.pid, process.ppid], dataDir: DATA_DIR, demoDir: DEMO_DIR });
@@ -112,6 +116,21 @@ async function handle(req, res, { remote = false } = {}) {
     if (url.pathname === '/api/summary' && req.method === 'POST') {
       const { agentId } = await readBody(req);
       return json(res, 200, await summarize(agentId));
+    }
+    if (url.pathname === '/api/review' && !remote) {
+      res.setHeader('cache-control', 'no-store');
+      if (req.method === 'GET') {
+        const { status, body } = eventReviewer.preview(Number(url.searchParams.get('event')));
+        return json(res, status, body);
+      }
+      if (req.method === 'POST') {
+        if (!sameOrigin(req) || req.headers['content-type'] !== 'application/json') {
+          return json(res, 403, { error: 'Open Gemini review from the Harness dashboard.' });
+        }
+        const input = await readBody(req);
+        const { status, body } = await eventReviewer.review(input?.eventId, input?.revision);
+        return json(res, status, body);
+      }
     }
     if (url.pathname === '/api/settings' && req.method === 'POST') {
       return json(res, 200, setSettings(await readBody(req)));

@@ -11,7 +11,7 @@ const phone = await import('../src/phone.js');
 
 test('a phone can watch and pause, but not change settings or reach the hooks', () => {
   const ok = [['GET', '/'], ['GET', '/app.js'], ['GET', '/api/state'], ['GET', '/api/stream'], ['POST', '/api/agent'], ['POST', '/api/summary'], ['GET', '/api/report.md']];
-  const no = [['POST', '/api/settings'], ['POST', '/api/baseline'], ['POST', '/api/reset'], ['POST', '/api/demo/run'], ['POST', '/api/demo/step'],
+  const no = [['POST', '/api/settings'], ['POST', '/api/baseline'], ['POST', '/api/reset'], ['POST', '/api/demo/run'], ['POST', '/api/demo/step'], ['GET', '/api/review'], ['POST', '/api/review'],
     ['GET', '/api/phone'], ['POST', '/api/phone'], ['POST', '/hooks/pre-tool'], ['POST', '/'], ['DELETE', '/api/state']];
   for (const [m, p] of ok) assert.equal(phone.phoneAllows(m, p), true, `${m} ${p}`);
   for (const [m, p] of no) assert.equal(phone.phoneAllows(m, p), false, `${m} ${p}`);

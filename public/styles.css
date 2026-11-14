@@ -304,6 +304,16 @@ dialog .btn { height: 28px; font-size: 12px; font-weight: 500; border-radius: 6p
 dialog .btn.ghost { background: transparent; border-color: transparent; color: var(--w-text-2); }
 dialog .btn.icon { width: 28px; padding: 0; }
 dialog .btn.on { background: var(--w-sel); border-color: var(--w-sel); color: #fff; }
+.review-timeline, .review-action, #review-result { display: grid; gap: 8px; }
+.review-timeline h3 { font-size: 13px; }
+.review-timeline ol { margin: 0; padding-left: 24px; font-size: 13px; }
+.review-timeline li { padding: 3px 5px; }
+.review-timeline li:focus { outline: 2px solid var(--w-icon); border-radius: 4px; }
+.review-action .pbtn { justify-self: start; }
+#review-result:empty { display: none; }
+#review-result { padding-top: 12px; border-top: 1px solid var(--w-sep); font-size: 13px; }
+#review-result h3 { font-size: 13px; }
+.review-evidence { display: flex; gap: 12px; flex-wrap: wrap; }
 kbd { font-family: var(--w-mono); font-size: 11px; border: 1px solid var(--w-btn-border); border-radius: 4px; padding: 0 5px; background: var(--w-field); }
 
 .toast {

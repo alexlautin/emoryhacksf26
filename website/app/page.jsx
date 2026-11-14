@@ -220,7 +220,7 @@ function DemoCta() {
 
 const FAQ = [
   ['Which agents does it work with?', 'Harness recognizes Claude Code, Codex, Gemini CLI, Cursor’s agent, Copilot, opencode and Amp by their process names, and can pause any of them. It reads session logs for Claude Code and Codex. Blocking an action before it runs is available for Claude Code only, in folders you choose to protect.'],
-  ['Does anything leave my computer?', 'No. The log is a file on your disk, and summaries come from a local model. The one exception is the demo on this website, which is a separate thing: it asks Google Gemini to write a fictional session and never touches your machine.'],
+  ['Where does Harness keep my activity?', 'The log stays on your disk, and session summaries use a local model or rules. The optional Review with Gemini feature shows the derived observations it will send to Google for an event you select.'],
   ['Can it actually stop a command?', 'In Claude Code, yes: the action is refused before it starts. For other agents Harness pauses the process tree once it sees a dangerous event, which usually lands before an upload completes but is not guaranteed to.'],
   ['What can it miss?', 'A process that starts and finishes in under about half a second can slip between checks. The decoy files still record that they were read. The about page lists every limit we know about.'],
   ['Can I check on it from my phone?', 'Yes. Turn on Phone access in Settings and scan the QR code. Your phone opens the same dashboard in its browser, where you can watch your agents and pause, resume or end one. It talks only to your own computer, over your Wi-Fi or Tailscale, and it can’t change settings.'],

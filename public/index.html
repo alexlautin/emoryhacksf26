@@ -104,7 +104,7 @@
 
       <footer class="statusbar">
         <span id="status-left"></span>
-        <span class="status-right" id="foot-text">Nothing leaves this computer</span>
+        <span class="status-right" id="foot-text">Activity log stored on this computer</span>
       </footer>
     </section>
   </div>
@@ -177,6 +177,25 @@
           <button type="button" class="btn ghost" id="reset" title="Clear the activity and start the score over">Reset activity</button>
         </div>
       </fieldset>
+    </form>
+  </dialog>
+
+  <dialog id="event-review" aria-labelledby="event-review-title">
+    <form method="dialog">
+      <header class="prefs-head">
+        <h2 id="event-review-title">Review with Gemini</h2>
+        <button class="btn icon ghost" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
+      </header>
+      <section class="review-timeline" aria-label="Evidence preview">
+        <p class="hint">Local rating <strong class="t-warn">Worth a look</strong></p>
+        <h3>Observations sent to Google</h3>
+        <ol id="review-timeline"></ol>
+      </section>
+      <div class="review-action">
+        <button type="button" class="pbtn primary" id="review-run" disabled>Send for review</button>
+        <p class="hint">The assessment is advisory. Harness makes protection decisions locally.</p>
+      </div>
+      <section id="review-result" aria-live="polite" aria-label="Gemini assessment"></section>
     </form>
   </dialog>
 
