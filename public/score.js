@@ -38,7 +38,7 @@ export const FACTORS = [
   {
     id: 'commands', icon: 'square-terminal', name: 'Risky commands', impact: 'Medium impact',
     desc: 'Deleting folders, asking for admin, or controlling other apps',
-    test: /delete|administrator|AppleScript|force-pushed|screenshot|downloaded a script|Defender|encoded|safety checks/i,
+    test: /delete|administrator|AppleScript|force-pushed|screenshot|downloaded a script|Defender|encoded|safety checks|switch off Harness|Harness's (Claude Code )?(safety )?hooks/i,
     cost: { critical: 25, high: 12, medium: 5, low: 1 }, cap: 35,
   },
   {
@@ -95,6 +95,23 @@ export function computeScore(events, now = Date.now()) {
   const lost = factors.reduce((n, f) => n + f.lost, 0);
   const score = Math.max(MIN, Math.min(MAX, Math.round(MAX - lost)));
   return { score, level: levelFor(score), factors, counted, since };
+}
+
+/**
+ * A broken monitor counts against the status: while part of Harness isn't watching, the level
+ * can't read better than "Review", and the blurb says what stopped. The number itself stays
+ * the score of what was actually seen.
+ * `degraded` is a list of { label, message } from the server (empty when all is well).
+ */
+export function withHealth(score, degraded = []) {
+  if (!degraded?.length) return { ...score, degraded: [] };
+  const what = degraded.map((d) => d.message || `${d.label} isn't working`).join('. ');
+  const blurb = `${what}. Activity may be missed until it recovers.`;
+  const base = score.level;
+  const level = base.cls === 'clear' || base.cls === 'steady'
+    ? { ...LEVELS.find((l) => l.cls === 'review'), name: 'Not fully watching', blurb, unwatched: true }
+    : { ...base, blurb: `${base.blurb} ${blurb}`, unwatched: true };
+  return { ...score, level, degraded };
 }
 
 /** Paused sessions plus high and critical events from the last 15 minutes. */

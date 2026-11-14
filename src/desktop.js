@@ -4,7 +4,7 @@
 // Out, on stdout: one-line JSON messages prefixed with "@@harness ", read by the app
 // (the app also accepts the old "@@seatbelt " prefix):
 //   ready   { port }
-//   status  { score, level, active, paused, alerts, autoProtect, menuBarDisplay }
+//   status  { score, level, active, paused, alerts, autoProtect, menuBarDisplay, degraded }
 //   notify  { title, body }
 // In, on stdin: one JSON command per line, from the menu bar:
 //   { cmd: 'auto-protect', level }   { cmd: 'menu-bar', mode }
@@ -16,7 +16,9 @@ import readline from 'node:readline';
 import { listAgents, listEvents, onEvent } from './store.js';
 import { getSettings, setSettings, pauseAgent } from './guard.js';
 import { protect, unprotect } from './protect.js';
-import { alertCount, computeScore } from '../public/score.js';
+import { ignoreWrites, refreshHookState } from './monitor/files.js';
+import { alertCount, computeScore, withHealth } from '../public/score.js';
+import { degradedMonitors } from './monitor/health.js';
 
 export const IS_DESKTOP = process.env.HARNESS_DESKTOP === '1' || process.env.LOOKOUT_DESKTOP === '1' || process.env.SEATBELT_DESKTOP === '1';
 
@@ -61,7 +63,8 @@ export function startDesktopBridge(port) {
   const tick = () => {
     const agents = listAgents().filter((a) => a.alive);
     const events = listEvents({ limit: 5000 });
-    const sc = computeScore(events);
+    const degraded = degradedMonitors();
+    const sc = withHealth(computeScore(events), degraded);
     const status = {
       type: 'status',
       score: sc.score,
@@ -71,6 +74,7 @@ export function startDesktopBridge(port) {
       alerts: alertCount(events, agents),
       autoProtect: getSettings().autoProtect,
       menuBarDisplay: getSettings().menuBarDisplay,
+      degraded: degraded.map((d) => d.state === 'stalled' ? `${d.label} stalled` : d.state === 'down' ? `${d.label} stopped` : `${d.label} not working`),
     };
     const key = JSON.stringify(status);
     if (key !== last) { last = key; send(status); }
@@ -102,10 +106,14 @@ async function command(line, port) {
     const r = await fetch(`http://127.0.0.1:${port}/api/demo/run`, { method: 'POST' });
     if (!r.ok) throw new Error((await r.json()).error ?? 'Could not start the demo');
   } else if (msg.cmd === 'protect') {
+    ignoreWrites(path.resolve(msg.dir));
     const dir = protect(msg.dir);
+    refreshHookState(dir);
     send({ type: 'notify', title: `Protecting ${path.basename(dir)}`, body: 'Harness now checks every Claude Code action there before it runs. Restart Claude Code in that folder to pick it up.' });
   } else if (msg.cmd === 'unprotect') {
+    ignoreWrites(path.resolve(msg.dir));
     const dir = unprotect(msg.dir);
+    refreshHookState(dir);
     send({ type: 'notify', title: `Stopped protecting ${path.basename(dir)}`, body: "Removed Harness's Claude Code hooks from that folder." });
   }
 }

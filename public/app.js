@@ -1,7 +1,7 @@
 // Harness dashboard. Plain JS, live updates over Server-Sent Events.
 // Layout: a sidebar (overview, alerts, agents, score), a list in the middle, and a details panel.
 // "Commands" switches the list between plain language and the exact commands.
-import { computeScore } from './score.js';
+import { computeScore, withHealth } from './score.js';
 import { canBaseline } from './baseline.js';
 import { sessionTouch } from './touch.js';
 import { mountPug, setPugMood } from './pug.js';
@@ -71,6 +71,7 @@ function setList(el, items) {
 }
 
 const state = {
+  degraded: [], // monitors that stopped working: { label, message }
   agents: new Map(),
   events: [],
   settings: { autoProtect: 'dangerous', menuBarDisplay: 'score' },
@@ -421,12 +422,12 @@ function renderScore() {
     setPugMood({ level: 'loading' });
     return;
   }
-  const s = computeScore(state.events);
+  const s = scoreNow();
   num.textContent = s.score;
   fill.style.width = `${s.score}%`;
   fill.className = `ss-fill ${s.level.cls}`;
   word.className = `ss-word ${s.level.cls}`;
-  word.textContent = HEADLINE[s.level.cls] ?? s.level.name;
+  word.textContent = s.level.unwatched ? s.level.name : HEADLINE[s.level.cls] ?? s.level.name;
   $('#score-live').setAttribute('aria-label', `Safety score ${s.score} out of 100. ${s.level.blurb}`);
   const paused = liveAgents().some((a) => a.paused && byUs(a.pausedBy));
   const working = liveAgents().some((a) => !a.paused && Date.now() - (a.lastActive ?? 0) < 15000);
@@ -547,6 +548,8 @@ const commandHTML = (cmd) => {
   const block = `<div class="codeblock">${esc(cmd)}</div>`;
   return state.showCommands ? sec('Command', block) : `<section class="ins-sec"><details><summary>Show the exact command</summary>${block}</details></section>`;
 };
+const scoreNow = () => withHealth(computeScore(state.events), state.degraded);
+
 const vText = (v) => (v ? `<span class="${v.tone ? `t-${v.tone}` : ''}">${esc(v.text)}</span>` : '');
 
 function factorsHTML(events) {
@@ -708,11 +711,11 @@ function renderPrefs() {
 /* ---------------- Menu bar panel ---------------- */
 
 function renderPanel() {
-  const s = state.ready ? computeScore(state.events) : null;
+  const s = state.ready ? scoreNow() : null;
   $('#mp-score').textContent = s ? String(s.score) : '--';
   const level = $('#mp-level');
   level.className = `mp-level ${s ? s.level.cls : ''}`;
-  level.textContent = s ? (HEADLINE[s.level.cls] ?? s.level.name) : 'Loading';
+  level.textContent = s ? (s.level.unwatched ? s.level.name : HEADLINE[s.level.cls] ?? s.level.name) : 'Loading';
   let blurb = s ? s.level.blurb : 'Getting the latest activity.';
   if (s && !state.connected) blurb = 'Reconnecting. This may be a few seconds behind.';
   $('#mp-blurb').textContent = blurb;
@@ -1126,6 +1129,7 @@ async function load() {
     state.events = s.events;
     if (s.settings) state.settings = { ...state.settings, ...s.settings };
     if (s.baselines) state.baselines = s.baselines;
+    state.degraded = (s.health ?? []).filter((m) => m.state !== 'ok');
     if (s.remote && !state.remote) {
       state.remote = true;
       document.documentElement.classList.add('remote');
@@ -1187,6 +1191,7 @@ function connect() {
       try { new Notification('Harness', { body: `${n.title}. ${n.body}` }); } catch {}
     }
   });
+  es.addEventListener('health', (m) => { state.degraded = JSON.parse(m.data).filter((x) => x.state !== 'ok'); render(); });
   es.addEventListener('reset', () => { state.events = []; state.sel = null; render(); });
   es.addEventListener('settings', (m) => { state.settings = { ...state.settings, ...JSON.parse(m.data) }; render(); });
   es.addEventListener('demo', (m) => {
