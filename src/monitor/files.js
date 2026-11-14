@@ -35,6 +35,10 @@ function newMarker() {
 const DEMO_ENV = path.join(DEMO_DIR, 'victim-project', '.env');
 
 const lastAtime = new Map();
+// Right after the first arm, antivirus and indexers (Windows Defender, Search) scan the file we
+// just touched. That is not an agent, so access-time changes in this window only re-arm.
+const SETTLE_MS = 6000;
+const settleUntil = new Map();
 const quiet = new Map(); // dir -> until (ms): Harness's own writes, not the agent's
 
 export function ignoreWrites(dir, ms = 4000) {
@@ -152,7 +156,8 @@ function pollBait() {
   for (const p of baitPaths) {
     let st;
     try { st = fs.statSync(p); } catch { continue; }
-    if (!lastAtime.has(p)) { arm(p); continue; }
+    if (!lastAtime.has(p)) { arm(p); settleUntil.set(p, Date.now() + SETTLE_MS); continue; }
+    if (st.atimeMs !== lastAtime.get(p) && Date.now() < (settleUntil.get(p) ?? 0)) { arm(p); continue; }
     if (st.atimeMs !== lastAtime.get(p)) {
       const { agent, sure } = likelyAgent();
       addEvent({
