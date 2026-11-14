@@ -33,6 +33,60 @@ export const SENSITIVE = [
   { re: /Library[\\/](Messages|Mail)\b/, what: 'your messages or email' },
 ];
 
+// ---- attempts to switch Harness off ----
+export const TAMPER_REASON = 'tried to switch off Harness, the program watching it';
+export const HOOKS_REASON = "changed Claude Code's settings, where Harness's safety hooks live";
+/** Filled in by the server at startup: Harness's own pids (server and its parent) and data folder. */
+const harness = { pids: new Set(), dataDir: null, demoDir: null };
+/** demoDir: the demo project can live inside the data folder (desktop app); work there is the demo's. */
+export function setHarnessIdentity({ pids = [], dataDir = null, demoDir = null } = {}) {
+  harness.pids = new Set(pids.filter((p) => p > 1).map(Number));
+  harness.dataDir = dataDir;
+  harness.demoDir = demoDir;
+}
+
+function inDataDir(text) {
+  if (!harness.dataDir) return false;
+  const n = norm(expandHome(text));
+  const data = norm(harness.dataDir);
+  const demo = harness.demoDir ? norm(harness.demoDir) : null;
+  let i = n.indexOf(data);
+  while (i !== -1) {
+    if (!demo || !n.startsWith(demo, i)) return true;
+    i = n.indexOf(data, i + 1);
+  }
+  return false;
+}
+
+/** Harness's own files: its folder in your home (decoys), a project's hook script, its data folder. */
+export function isHarnessPath(p) {
+  const n = norm(expandHome(String(p ?? '')));
+  if (n.includes(norm(`${HOME}/.harness`)) || n.includes(norm(`${HOME}\\.harness`))) return true;
+  if (/[\\/]\.harness[\\/]harness-hook\.sh$/.test(p)) return true;
+  return inDataDir(String(p ?? ''));
+}
+
+const WRITE_VERBS = String.raw`(\b(rm|mv|unlink|shred|truncate|chmod|chflags|rmdir|del|rd|Remove-Item|Move-Item|Rename-Item|Set-Content|Add-Content|Clear-Content|Out-File|tee)\b|\bsed\s+-i|>>?)`;
+const TAMPER_RULES = [
+  { re: /\b(pkill|killall)\b[^;&|]*\bharness\b|\btaskkill(\.exe)?\b[^;&|]*\bharness|\bStop-Process\b[^;|]*\bharness\b|\blaunchctl\s+(unload|bootout|remove|disable)\b[^;&|]*harness/i, risk: 'critical', reason: TAMPER_REASON },
+  { re: new RegExp(String.raw`${WRITE_VERBS}[^;&|]*(~|\$HOME|\$env:USERPROFILE|%USERPROFILE%|[\\/]|\s)[^;&|\s]*\.harness([\\/]|\b)`, 'i'), risk: 'critical', reason: TAMPER_REASON },
+  { re: new RegExp(String.raw`${WRITE_VERBS}[^;&|]*\.claude[\\/]settings(\.local)?\.json`, 'i'), risk: 'high', reason: HOOKS_REASON },
+];
+
+/** Commands aimed at Harness's own process or data folder (needs the values set at startup). */
+function tamperHits(cmd) {
+  const hits = [];
+  for (const r of TAMPER_RULES) if (r.re.test(cmd)) hits.push(r);
+  if (harness.pids.size && /\b(kill|taskkill|Stop-Process|tskill)\b/i.test(cmd)) {
+    const nums = (cmd.match(/\b\d{2,}\b/g) ?? []).map(Number);
+    if (nums.some((n) => harness.pids.has(n))) hits.push({ risk: 'critical', reason: TAMPER_REASON });
+  }
+  if (new RegExp(WRITE_VERBS, 'i').test(cmd) && inDataDir(cmd)) {
+    hits.push({ risk: 'critical', reason: TAMPER_REASON });
+  }
+  return hits;
+}
+
 const PS_WEB = String.raw`(Invoke-WebRequest|Invoke-RestMethod|\biwr|\birm)\b`;
 
 const COMMAND_RULES = [
@@ -124,6 +178,10 @@ export function analyzeCommand(cmd) {
       risk = reasons.length > 1 ? risk : 'low';
     }
   }
+  for (const t of tamperHits(cmd)) {
+    risk = maxRisk(risk, t.risk);
+    if (!reasons.includes(t.reason)) reasons.push(t.reason);
+  }
   const hits = sensitiveHits(cmd);
   for (const h of hits) {
     risk = maxRisk(risk, h.risk);
@@ -148,9 +206,29 @@ export function analyzePath(p, { write = false, projectDir = null } = {}) {
     risk = maxRisk(risk, 'high');
     reasons.push('added something that will run automatically every time you log in');
   }
-  if (write && /[\\/](\.(zshrc|bashrc|zprofile|bash_profile|profile)|\w*profile\.ps1)$/i.test(p)) {
+  if (write && (/[\\/](\.(zshrc|bashrc|zprofile|bash_profile|profile|zshenv)|\w*profile\.ps1)$/i.test(p) || /[\\/]\.config[\\/]fish[\\/]/.test(p))) {
     risk = maxRisk(risk, 'high');
     reasons.push('changed your terminal startup file');
+  }
+  if (write && /(^|[\\/])\.git[\\/]hooks[\\/][^\\/]+$/.test(p) && !/\.sample$/.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('added a git hook, code that will run automatically the next time anyone commits in this project');
+  }
+  if (write && /[\\/]\.gitconfig$/.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('changed your global git settings, which can make a program run automatically during git commands');
+  }
+  if (write && /[\\/]\.(npmrc|pypirc)$/.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('changed where packages are installed from, so later installs could fetch something else');
+  }
+  if (write && /(^|[\\/])\.claude[\\/]settings(\.local)?\.json$/.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push(HOOKS_REASON);
+  }
+  if (write && isHarnessPath(p)) {
+    risk = maxRisk(risk, 'critical');
+    reasons.push(TAMPER_REASON);
   }
   if (write && projectDir && !norm(p).startsWith(norm(projectDir)) && risk === 'info') {
     risk = 'low';

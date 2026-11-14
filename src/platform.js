@@ -23,22 +23,41 @@ export const isShell = (comm) => SHELLS.has(exeName(comm));
 
 // ---------- processes ----------
 
-async function macProcesses() {
-  const opts = { maxBuffer: 64 * 1024 * 1024 };
-  const [a, b] = await Promise.all([
-    run('ps', ['-axo', 'pid=,ppid=,comm='], opts),
-    run('ps', ['-axww', '-o', 'pid=,args='], opts),
-  ]);
+const SNAPSHOT_TIMEOUT_MS = 5000;
+
+/**
+ * Parse `ps -o pid=,ppid=,args=` (one call, so pid, parent and command line always belong to the
+ * same process) plus `ps -o pid=,comm=`. The second call only supplies the program name, and it is
+ * used only when it matches the command line: a pid reused between the two calls can't give one
+ * process another's name.
+ */
+export function parseMacPs(argsOut, commOut) {
   const procs = new Map();
-  for (const line of a.stdout.split('\n')) {
-    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
-    if (m) procs.set(+m[1], { pid: +m[1], ppid: +m[2], comm: m[3], args: m[3] });
+  for (const line of argsOut.split('\n')) {
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s*(.*?)\s*$/);
+    if (!m) continue;
+    const args = m[3];
+    const first = args.split(/\s+/)[0] ?? '';
+    procs.set(+m[1], { pid: +m[1], ppid: +m[2], comm: first, args: args || first });
   }
-  for (const line of b.stdout.split('\n')) {
+  for (const line of (commOut ?? '').split('\n')) {
     const m = line.match(/^\s*(\d+)\s+(.*)$/);
-    if (m && procs.has(+m[1])) procs.get(+m[1]).args = m[2];
+    const p = m && procs.get(+m[1]);
+    if (!p) continue;
+    const comm = m[2].trim();
+    const base = exeName(comm);
+    if (base && p.args.toLowerCase().includes(base)) p.comm = comm;
   }
   return procs;
+}
+
+async function macProcesses() {
+  const opts = { maxBuffer: 64 * 1024 * 1024, timeout: SNAPSHOT_TIMEOUT_MS };
+  const [a, b] = await Promise.all([
+    run('ps', ['-axww', '-o', 'pid=,ppid=,args='], opts),
+    run('ps', ['-axo', 'pid=,comm='], opts).catch(() => ({ stdout: '' })),
+  ]);
+  return parseMacPs(a.stdout, b.stdout);
 }
 
 // On Windows, starting PowerShell for every poll is slow, so one PowerShell process keeps
@@ -72,23 +91,59 @@ while ($true) {
           procs.set(p.ProcessId, { pid: p.ProcessId, ppid: p.ParentProcessId, comm: p.Name ?? '', args: p.CommandLine || p.Name || '' });
         }
         winLatest = procs;
-        for (const w of winWaiters) w(procs);
+        winLatestAt = Date.now();
+        for (const w of winWaiters) w.resolve(procs);
         winWaiters = [];
       } catch {}
     }
   });
-  winPs.on('exit', () => { winPs = null; setTimeout(startWinLister, 1000); });
+  winPs.on('error', (err) => { winLastError = err.message; });
+  winPs.on('exit', (code) => {
+    winPs = null;
+    winRestarts++;
+    winLastError = `PowerShell process lister exited (code ${code})`;
+    setTimeout(startWinLister, 1000);
+  });
 }
+let winLatestAt = 0;
+let winRestarts = 0;
+let winLastError = null;
 
-async function winProcesses({ fresh = false } = {}) {
+/**
+ * The latest snapshot from the PowerShell lister. Throws when it has stopped updating, so a
+ * stuck lister shows up as a stalled monitor instead of a stale list that looks fine.
+ * `fresh` waits for the next snapshot, but never longer than 5 s, so Pause can't hang.
+ */
+async function winProcesses({ fresh = false, timeoutMs = SNAPSHOT_TIMEOUT_MS } = {}) {
   if (!winPs) startWinLister();
-  if (winLatest && !fresh) return winLatest;
-  return new Promise((resolve) => winWaiters.push(resolve));
+  if (winLatest && !fresh) {
+    if (Date.now() - winLatestAt > timeoutMs) {
+      throw new Error(`Windows process list hasn't updated for ${Math.round((Date.now() - winLatestAt) / 1000)} s${winLastError ? ` (${winLastError})` : ''}`);
+    }
+    return winLatest;
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = { resolve: (procs) => { clearTimeout(timer); resolve(procs); } };
+    const timer = setTimeout(() => {
+      winWaiters = winWaiters.filter((w) => w !== waiter);
+      reject(new Error(`Couldn't get a process list from Windows within ${Math.round(timeoutMs / 1000)} s${winLastError ? ` (${winLastError})` : ''}`));
+    }, timeoutMs);
+    winWaiters.push(waiter);
+  });
 }
 
-/** Every process: Map pid -> { pid, ppid, comm, args }. `fresh` waits for a new snapshot. */
-export function listProcesses(opts) {
-  return IS_WIN ? winProcesses(opts) : macProcesses();
+/**
+ * Every process: Map pid -> { pid, ppid, comm, args }. `fresh` waits for a new snapshot.
+ * Rejects (instead of hanging) if no snapshot arrives within a few seconds.
+ */
+export async function listProcesses(opts) {
+  if (IS_WIN) return winProcesses(opts);
+  try {
+    return await macProcesses();
+  } catch (err) {
+    if (err.killed || err.signal) throw new Error(`ps didn't answer within ${SNAPSHOT_TIMEOUT_MS / 1000} s`);
+    throw err;
+  }
 }
 
 /**
@@ -111,16 +166,28 @@ export async function processCwd(pid) {
 
 // ---------- network ----------
 
+/**
+ * lsof and netstat exit non-zero for ordinary reasons (a pid ended, nothing matched), and their
+ * output is still good then. A missing program, a timeout or a crash is a real failure: throw it,
+ * so the network monitor reports itself as broken instead of quietly finding nothing.
+ */
+export function listerOutput(err, name) {
+  if (typeof err.code === 'string') throw new Error(`${name} couldn't run (${err.code})`);
+  if (err.killed || err.signal) throw new Error(`${name} didn't finish in time`);
+  return err.stdout ?? '';
+}
+
 /** Open TCP connections owned by the given pids: [{ pid, ip, port }]. */
 export async function listConnections(pids) {
   if (!pids.length) return [];
   const want = new Set(pids);
   const out = [];
   if (IS_WIN) {
+    const opts = { maxBuffer: 16 * 1024 * 1024, windowsHide: true, timeout: 10000 };
     let stdout = '';
-    try { ({ stdout } = await run('netstat', ['-ano', '-p', 'TCP'], { maxBuffer: 16 * 1024 * 1024, windowsHide: true })); } catch (err) { stdout = err.stdout ?? ''; }
+    try { ({ stdout } = await run('netstat', ['-ano', '-p', 'TCP'], opts)); } catch (err) { stdout = listerOutput(err, 'netstat'); }
     let v6 = '';
-    try { ({ stdout: v6 } = await run('netstat', ['-ano', '-p', 'TCPv6'], { maxBuffer: 16 * 1024 * 1024, windowsHide: true })); } catch {}
+    try { ({ stdout: v6 } = await run('netstat', ['-ano', '-p', 'TCPv6'], opts)); } catch {}
     for (const line of (stdout + '\n' + v6).split(/\r?\n/)) {
       // TCP    192.168.1.5:50123    140.82.112.3:443    ESTABLISHED    1234
       const m = line.trim().match(/^TCP\s+\S+\s+(\[[^\]]+\]|[\d.]+):(\d+)\s+(ESTABLISHED|SYN_SENT|CLOSE_WAIT)\s+(\d+)$/i);
@@ -131,9 +198,9 @@ export async function listConnections(pids) {
   }
   let stdout = '';
   try {
-    ({ stdout } = await run('lsof', ['-nP', '-i', '-a', '-p', pids.join(','), '-F', 'pn'], { maxBuffer: 16 * 1024 * 1024 }));
+    ({ stdout } = await run('lsof', ['-nP', '-i', '-a', '-p', pids.join(','), '-F', 'pn'], { maxBuffer: 16 * 1024 * 1024, timeout: 10000 }));
   } catch (err) {
-    stdout = err.stdout ?? ''; // lsof exits 1 if some pids already ended
+    stdout = listerOutput(err, 'lsof'); // lsof exits 1 if some pids already ended
   }
   let pid = null;
   for (const line of stdout.split('\n')) {
@@ -153,7 +220,12 @@ const NT = `Add-Type -Namespace Harness -Name Nt -MemberDefinition '[DllImport("
 
 async function winEach(pids, call) {
   const script = `${NT}; foreach ($id in @(${pids.join(',')})) { try { $p = [Diagnostics.Process]::GetProcessById($id); [Harness.Nt]::${call}($p.Handle) | Out-Null } catch {} }`;
-  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true });
+  try {
+    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true, timeout: 15000 });
+  } catch (err) {
+    if (err.killed || err.signal) throw new Error('Windows took too long to pause or resume those programs. Try again.');
+    throw err;
+  }
 }
 
 function sendSignal(pids, sig) {
@@ -192,17 +264,31 @@ export async function terminate(pids, { force = false } = {}) {
 const HOME = os.homedir();
 const APPDATA = process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming');
 
-/** Folders where a new file means something will start on its own, plus SSH and shell startup files. */
+// Shared by both: credentials, files that redirect package installs or make git run programs,
+// and Claude Code's own settings (where Harness's hooks live).
+const COMMON_DIRS = [
+  { dir: path.join(HOME, '.ssh') },
+  { dir: path.join(HOME, '.aws') },
+  { dir: path.join(HOME, '.docker'), only: /^config\.json$/ },
+  { dir: path.join(HOME, '.claude'), only: /^settings(\.local)?\.json$/ },
+];
+
+/**
+ * Places where a change means something will start on its own, credentials are being changed,
+ * or installs and git are being redirected. `only` limits a folder to some file names;
+ * `recursive` also watches subfolders.
+ */
 export const SENSITIVE_DIRS = IS_WIN
   ? [
       { dir: path.join(APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup') },
-      { dir: path.join(HOME, '.ssh') },
       { dir: path.join(HOME, 'Documents', 'PowerShell') },
       { dir: path.join(HOME, 'Documents', 'WindowsPowerShell') },
-      { dir: HOME, only: /^\.(bashrc|bash_profile|profile)$/ },
+      { dir: HOME, only: /^\.(bashrc|bash_profile|profile|gitconfig|npmrc|pypirc)$/ },
+      ...COMMON_DIRS,
     ]
   : [
       { dir: path.join(HOME, 'Library', 'LaunchAgents') },
-      { dir: path.join(HOME, '.ssh') },
-      { dir: HOME, only: /^\.(zshrc|bashrc|zprofile|bash_profile|profile|zshenv)$/ },
+      { dir: HOME, only: /^\.(zshrc|bashrc|zprofile|bash_profile|profile|zshenv|gitconfig|npmrc|pypirc)$/ },
+      { dir: path.join(HOME, '.config', 'fish'), recursive: true },
+      ...COMMON_DIRS,
     ];

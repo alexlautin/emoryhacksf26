@@ -125,19 +125,24 @@ fn show_dashboard(app: &AppHandle) {
         return;
     }
     let Some(u) = url(app, "/") else { return };
-    let builder = WebviewWindowBuilder::new(app, DASHBOARD, u)
-        .title("Harness")
-        .inner_size(1200.0, 860.0)
-        .min_inner_size(420.0, 500.0);
-    // On macOS the sidebar runs up under the window buttons, like Finder or Mail.
-    // The page leaves room for them and marks its toolbar as the drag area.
-    // Windows keeps its standard title bar.
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true)
-        .traffic_light_position(tauri::LogicalPosition::new(18.0, 20.0));
-    let _ = builder.build();
+    // On Windows, building a window on the thread that handles tray, menu and command events
+    // deadlocks it: a white window that can't be closed. Build it from another thread.
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let builder = WebviewWindowBuilder::new(&app, DASHBOARD, u)
+            .title("Harness")
+            .inner_size(1200.0, 860.0)
+            .min_inner_size(420.0, 500.0);
+        // On macOS the sidebar runs up under the window buttons, like Finder or Mail.
+        // The page leaves room for them and marks its toolbar as the drag area.
+        // Windows keeps its standard title bar.
+        #[cfg(target_os = "macos")]
+        let builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .traffic_light_position(tauri::LogicalPosition::new(18.0, 20.0));
+        let _ = builder.build();
+    });
 }
 
 #[tauri::command]
@@ -222,7 +227,12 @@ fn on_status(app: &AppHandle, msg: &Value) {
         let _ = item.set_checked(id == mode);
     }
 
-    let alert = alerts > 0 || paused > 0;
+    // Monitors that stopped working (for example "Process watch stalled").
+    let degraded: Vec<&str> = msg["degraded"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    let alert = alerts > 0 || paused > 0 || !degraded.is_empty();
     let state = app.state::<Monitor>();
     let mut alerting = state.alerting.lock().unwrap();
     if *alerting != alert {
@@ -240,7 +250,12 @@ fn on_status(app: &AppHandle, msg: &Value) {
         n => format!("{n} agents running"),
     };
     let extra = if alerts > 0 { format!(", {alerts} alerts") } else { String::new() };
-    let _ = tray.set_tooltip(Some(format!("Harness: {score} / 100, {sessions}{extra}")));
+    let tooltip = if degraded.is_empty() {
+        format!("Harness: {score} / 100, {sessions}{extra}")
+    } else {
+        format!("Harness is not fully watching: {}. {score} / 100, {sessions}{extra}", degraded.join(", "))
+    };
+    let _ = tray.set_tooltip(Some(tooltip));
 }
 
 fn handle_line(app: &AppHandle, line: &str) {

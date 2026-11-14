@@ -1,7 +1,12 @@
 // Watches every process on the computer and follows the ones started by an AI agent,
 // all the way down (agent -> shell -> npm -> install script -> curl ...).
 // No admin rights needed: polls the process list (`ps` on macOS, PowerShell on Windows).
-// Very short-lived processes (under about half a second) can be missed.
+// Very short-lived processes (under about half a second) can be missed; deep mode
+// (eslogger.js) fills that gap on macOS through recordExec().
+//
+// Once a process has been tied to an agent, that link is kept even after its parent exits and
+// the system re-parents it to process 1 (`nohup curl … &`, self-detaching programs, an install
+// script whose npm already exited). Its children inherit the link, and Pause freezes them too.
 import path from 'node:path';
 import os from 'node:os';
 import { listProcesses, processCwd, exeName, isShell } from '../platform.js';
@@ -9,14 +14,35 @@ import { addEvent, upsertAgent, getAgent } from '../store.js';
 import { analyzeCommand, maxRisk, riskRank } from '../rules.js';
 import { extractCommand, friendlyCommand, truncate, AGENT_LABELS } from '../describe.js';
 import { chainSteps } from '../../public/timeline.js';
+import { registerMonitor, monitorOk, monitorFailed } from './health.js';
 
-const SELF = process.pid;
+let SELF = process.pid;
 const POLL_MS = 500;
+const DETACHED_REASON = 'kept running in the background after the program that started it had exited, which hides it from a normal process tree';
 
-/** pid -> { pid, ppid, comm, args, cmd, agentId, key } for processes we've seen */
+/** pid -> { pid, ppid, comm, args, cmd, agentId, key } for processes we've seen. ppid is the parent when first seen. */
 const known = new Map();
-/** agentId -> root pid */
+/** agentId -> root pid (kept after the agent exits, so detached leftovers still map to it) */
 const agentRoots = new Map();
+/** The last full snapshot, so deep mode can describe a process's parents. */
+let lastProcs = new Map();
+
+let source = { list: listProcesses, cwd: processCwd };
+
+/** Tests swap in a fake process list (and folder lookup). */
+export function setProcessSource({ list, cwd, self } = {}) {
+  if (list) source.list = list;
+  if (cwd) source.cwd = cwd;
+  if (self !== undefined) SELF = self;
+}
+
+/** Tests start from a clean slate. */
+export function resetProcessState() {
+  known.clear();
+  agentRoots.clear();
+  lastProcs = new Map();
+  firstPoll = true;
+}
 
 function agentKind(comm, args) {
   if (/demo[\\/]fake-agent\.js/.test(args)) return 'demo';
@@ -31,18 +57,31 @@ function agentKind(comm, args) {
   return null;
 }
 
-const snapshot = (opts) => listProcesses(opts);
-const cwdOf = processCwd;
+const keyOf = (p) => `${p.pid}:${p.args}`;
 
-/** Walk up the tree. Returns the agent root pid, or null if not under an agent (or under Harness itself). */
-function findAgentRoot(pid, procs) {
+/**
+ * Which agent owns this process? Walks up the live parent chain first. If that chain is broken
+ * (the parent exited and the process was re-parented to 1, or the parent is simply gone), falls
+ * back to what was learned about the process or its ancestors earlier.
+ * Returns { agentId, rootPid, detached } or null (not under an agent, or under Harness itself).
+ */
+function ownerOf(pid, procs) {
+  const chain = [];
   let cur = procs.get(pid);
   let guard = 0;
   while (cur && guard++ < 64) {
     if (cur.pid === SELF) return null; // Harness's own helpers
-    if (agentKind(cur.comm, cur.args)) return cur.pid;
-    if (cur.ppid <= 1) return null;
+    const kind = agentKind(cur.comm, cur.args);
+    if (kind) return { agentId: `${kind}-${cur.pid}`, rootPid: cur.pid, detached: false };
+    chain.push(cur);
+    if (cur.ppid <= 1 || cur.ppid === cur.pid) break;
     cur = procs.get(cur.ppid);
+  }
+  for (const c of chain) {
+    const k = known.get(c.pid);
+    if (k?.agentId && k.key === keyOf(c) && agentRoots.has(k.agentId)) {
+      return { agentId: k.agentId, rootPid: agentRoots.get(k.agentId), detached: true };
+    }
   }
   return null;
 }
@@ -59,7 +98,7 @@ async function registerAgent(root) {
   const kind = agentKind(root.comm, root.args);
   const id = `${kind}-${root.pid}`;
   agentRoots.set(id, root.pid);
-  const cwd = await cwdOf(root.pid);
+  const cwd = await source.cwd(root.pid);
   const project = projectName(cwd);
   const agent = upsertAgent({ id, kind, label: AGENT_LABELS[kind], pid: root.pid, cwd, project, startedAt: Date.now(), lastActive: Date.now(), alive: true });
   addEvent({
@@ -72,15 +111,17 @@ async function registerAgent(root) {
 
 let firstPoll = true;
 
-async function poll() {
-  const procs = await snapshot();
+/** One pass over the process list. `procs` is for tests; normally a fresh snapshot is taken. */
+export async function pollProcesses(procs) {
+  procs ??= await source.list();
+  lastProcs = procs;
 
   // 1. Discover agents.
   for (const p of procs.values()) {
-    if (!agentKind(p.comm, p.args)) continue;
     const kind = agentKind(p.comm, p.args);
+    if (!kind) continue;
     const id = `${kind}-${p.pid}`;
-    if (!agentRoots.has(id) && findAgentRoot(p.ppid, procs) === null && (kind === 'demo' || !isUnderSelf(p, procs))) {
+    if (!agentRoots.has(id) && ownerOf(p.ppid, procs) === null && (kind === 'demo' || !isUnderSelf(p, procs))) {
       await registerAgent(p);
     }
   }
@@ -93,23 +134,22 @@ async function poll() {
     }
   }
 
-  // 3. New processes under an agent.
+  // 3. New processes under an agent. A process already tied to an agent keeps that link
+  //    (same pid and command line), even if its parent has since exited.
   for (const p of procs.values()) {
-    const key = `${p.pid}:${p.args}`;
+    const key = keyOf(p);
     if (known.get(p.pid)?.key === key) continue;
-    const rootPid = findAgentRoot(p.pid, procs);
-    if (!rootPid || rootPid === p.pid) {
+    const owner = ownerOf(p.pid, procs);
+    if (!owner || owner.rootPid === p.pid) {
       known.set(p.pid, { ...p, key, agentId: null });
       continue;
     }
-    const root = procs.get(rootPid);
-    const agentId = `${agentKind(root.comm, root.args)}-${rootPid}`;
     const cmd = extractCommand(p.args);
-    const entry = { ...p, key, cmd, agentId };
+    const entry = { ...p, key, cmd, agentId: owner.agentId };
     known.set(p.pid, entry);
     // Processes that already existed when Harness started aren't news.
     if (firstPoll) continue;
-    emitProcess(entry, rootPid, procs);
+    emitProcess(entry, owner.rootPid, procs, { detached: owner.detached });
   }
   firstPoll = false;
 
@@ -129,7 +169,8 @@ function isUnderSelf(p, procs) {
 function ancestorEntries(pid, rootPid, procs) {
   const chain = [];
   let cur = procs.get(procs.get(pid)?.ppid);
-  while (cur && cur.pid !== rootPid) {
+  let guard = 0;
+  while (cur && cur.pid !== rootPid && cur.pid > 1 && guard++ < 64) {
     const seen = known.get(cur.pid);
     chain.push({
       pid: cur.pid,
@@ -138,12 +179,13 @@ function ancestorEntries(pid, rootPid, procs) {
       shell: isShell(cur.comm),
       label: exeName(cur.comm),
     });
+    if (cur.ppid === cur.pid) break;
     cur = procs.get(cur.ppid);
   }
   return chain; // nearest first
 }
 
-function emitProcess(entry, rootPid, procs) {
+function emitProcess(entry, rootPid, procs, { detached = false, deep = false } = {}) {
   const agent = getAgent(entry.agentId);
   if (!agent) return;
   const chain = ancestorEntries(entry.pid, rootPid, procs);
@@ -164,6 +206,7 @@ function emitProcess(entry, rootPid, procs) {
     risk = maxRisk(risk, 'high');
     reasons = [...reasons, `this came from a package's install script, not from ${agent.label} itself. ${agent.label}'s window only showed "${truncate(viaInstall.cmd, 40)}"`];
   }
+  if (detached && riskRank(risk) >= riskRank('medium')) reasons = [...reasons, DETACHED_REASON];
 
   const depth = chain.length;
   const steps = chainSteps({
@@ -178,11 +221,13 @@ function emitProcess(entry, rootPid, procs) {
     },
   });
   const verb = friendlyCommand(entry.cmd);
-  const title = depth === 0 || (depth === 1 && chain[0]?.shell)
-    ? `${agent.label} ${verb}`
-    : viaInstall
-      ? `A package's install script ${verb}`
-      : `A program ${agent.label} started ${verb}`;
+  const title = detached
+    ? `A background program ${agent.label} started ${verb}`
+    : depth === 0 || (depth === 1 && chain[0]?.shell)
+      ? `${agent.label} ${verb}`
+      : viaInstall
+        ? `A package's install script ${verb}`
+        : `A program ${agent.label} started ${verb}`;
 
   addEvent({
     agentId: entry.agentId,
@@ -191,43 +236,78 @@ function emitProcess(entry, rootPid, procs) {
     reasons,
     title,
     command: truncate(entry.cmd, 400),
-    detail: `pid ${entry.pid} ← ${chain.map((c) => `${c.pid} ${truncate(c.cmd, 30)}`).join(' ← ') || `${agent.label} (${rootPid})`}`,
+    detail: `pid ${entry.pid} ← ${chain.map((c) => `${c.pid} ${truncate(c.cmd, 30)}`).join(' ← ') || `${agent.label} (${rootPid})`}${detached ? ' (detached)' : ''}${deep ? ' (deep mode)' : ''}`,
     pid: entry.pid,
     ppid: entry.ppid,
     depth,
     steps,
+    ...(detached ? { detached: true } : {}),
+    ...(deep ? { deep: true } : {}),
   });
 }
 
 /**
- * Every live process belonging to an agent: its root plus all descendants, from a fresh `ps`.
+ * Deep mode saw a program start (eslogger exec event). Report it through the same path as
+ * polling, and remember it so the next poll doesn't report it again.
+ * Returns true if it was reported.
+ */
+export function recordExec({ pid, ppid, comm, args, agentId }) {
+  const rootPid = agentRoots.get(agentId);
+  if (!rootPid || pid === rootPid || !args) return false;
+  const p = { pid, ppid, comm: comm || args.split(/\s+/)[0], args };
+  const key = keyOf(p);
+  if (known.get(pid)?.key === key) return false;
+  const entry = { ...p, key, cmd: extractCommand(args), agentId };
+  known.set(pid, entry);
+  const view = new Map(lastProcs);
+  view.set(pid, p);
+  emitProcess(entry, rootPid, view, { deep: true });
+  return true;
+}
+
+/**
+ * Which processes belong to an agent in this snapshot: the root (if it's still the agent), every
+ * descendant, and every live process already tied to the agent even if it was re-parented away.
  * Harness's own process (and anything under it) is never included, and `hostsHarness`
  * says whether the agent is one of Harness's ancestors (then it must not be stopped).
  */
-export async function agentTree(agentId) {
-  const rootPid = agentRoots.get(agentId);
-  if (!rootPid) return null;
-  const procs = await snapshot({ fresh: true });
-  if (!procs.has(rootPid)) return { rootPid, pids: [], hostsHarness: false };
+export function collectTree(agentId, rootPid, procs) {
+  const root = procs.get(rootPid);
+  const rootLive = !!root && agentKind(root.comm, root.args) !== null;
   const children = new Map();
   for (const p of procs.values()) {
     if (!children.has(p.ppid)) children.set(p.ppid, []);
     children.get(p.ppid).push(p.pid);
   }
+  const selfAncestors = new Set();
+  for (let cur = procs.get(SELF), guard = 0; cur && guard++ < 64; cur = procs.get(cur.ppid)) {
+    if (cur.pid !== SELF) selfAncestors.add(cur.pid);
+    if (cur.ppid <= 1 || cur.ppid === cur.pid) break;
+  }
+  const seeds = rootLive ? [rootPid] : [];
+  for (const k of known.values()) {
+    const live = procs.get(k.pid);
+    if (k.agentId === agentId && live && keyOf(live) === k.key) seeds.push(k.pid);
+  }
   const pids = [];
-  const queue = [rootPid];
+  const visited = new Set();
+  const queue = [...seeds];
   while (queue.length) {
     const pid = queue.shift();
-    if (pid === SELF) continue;
-    pids.push(pid);
+    if (visited.has(pid) || pid <= 1 || pid === SELF) continue;
+    visited.add(pid);
+    if (!selfAncestors.has(pid) || pid === rootPid) pids.push(pid);
     queue.push(...(children.get(pid) ?? []));
   }
-  let hostsHarness = false;
-  for (let cur = procs.get(SELF), guard = 0; cur && guard++ < 64; cur = procs.get(cur.ppid)) {
-    if (cur.pid === rootPid) { hostsHarness = true; break; }
-    if (cur.ppid <= 1) break;
-  }
-  return { rootPid, pids, hostsHarness };
+  return { rootPid, pids, hostsHarness: rootLive && selfAncestors.has(rootPid) };
+}
+
+/** Every live process belonging to an agent, from a fresh snapshot (fails instead of hanging). */
+export async function agentTree(agentId) {
+  const rootPid = agentRoots.get(agentId);
+  if (!rootPid) return null;
+  const procs = await source.list({ fresh: true });
+  return collectTree(agentId, rootPid, procs);
 }
 
 export function trackedPids() {
@@ -240,7 +320,7 @@ export function trackedPids() {
 export function agentForPid(pid) {
   const p = known.get(pid);
   if (p?.agentId) return p.agentId;
-  for (const [id, rp] of agentRoots) if (rp === pid) return id;
+  for (const [id, rp] of agentRoots) if (rp === pid && getAgent(id)?.alive) return id;
   return null;
 }
 
@@ -256,10 +336,13 @@ export function activeAgentIds(withinMs = 5000) {
 }
 
 export function startProcessMonitor() {
+  registerMonitor('processes', { label: 'Process watch', stallMs: 10000 });
   const loop = async () => {
     try {
-      await poll();
+      await pollProcesses();
+      monitorOk('processes');
     } catch (err) {
+      monitorFailed('processes', err);
       console.error('[processes]', err.message);
     }
     setTimeout(loop, POLL_MS);

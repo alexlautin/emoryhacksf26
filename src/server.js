@@ -9,13 +9,14 @@ import { startNetworkMonitor } from './monitor/network.js';
 import { startFileMonitor, rearmBait, ignoreWrites, BAIT_DIR } from './monitor/files.js';
 import { startTranscriptMonitor } from './monitor/transcripts.js';
 import { startEslogger } from './monitor/eslogger.js';
+import { healthStatus } from './monitor/health.js';
 import { summarize, ollamaStatus } from './llm.js';
-import { shortPath } from './rules.js';
+import { shortPath, setHarnessIdentity } from './rules.js';
 import { resetDemo } from '../demo/reset.js';
 import { startGuard, getSettings, setSettings, pauseAgent, resumeAgent, endAgent } from './guard.js';
 import { IS_MAC, IS_WIN, OS_NAME } from './platform.js';
 import { handleHook } from './hooks.js';
-import { ROOT, DEMO_DIR, prepareDemoDir } from './paths.js';
+import { ROOT, DATA_DIR, DEMO_DIR, prepareDemoDir } from './paths.js';
 import { iconSprite, FONT_FILE } from './icons.js';
 import { IS_DESKTOP, fixPath, startDesktopBridge, pushNotice } from './desktop.js';
 import { addBaseline, listBaselines, removeBaseline } from './baselines.js';
@@ -28,6 +29,8 @@ import { startPhoneAccess, setPhoneAccess, phoneStatus } from './phone.js';
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
 fixPath();
+// Commands that kill this process (or the app that started it) or write to its data folder are tampering.
+setHarnessIdentity({ pids: [process.pid, process.ppid], dataDir: DATA_DIR, demoDir: DEMO_DIR });
 const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8' };
@@ -95,7 +98,7 @@ async function handle(req, res, { remote = false } = {}) {
       return json(res, 200, handleHook(event, await readBody(req), project));
     }
     if (url.pathname === '/api/state') {
-      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, remote, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning, baselines: listBaselines() });
+      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, health: healthStatus(), remote, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning, baselines: listBaselines() });
     }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -258,3 +261,13 @@ startTranscriptMonitor();
 startGuard();
 startPhoneAccess(handle);
 if (DEEP) startEslogger();
+
+// Tell the dashboard when a monitor stops working or recovers.
+let lastHealth = '';
+setInterval(() => {
+  const health = healthStatus();
+  const key = JSON.stringify(health.map((m) => [m.name, m.state, m.message && m.state !== 'ok' ? Math.floor((Date.now() - (m.lastOk ?? 0)) / 10000) : 0]));
+  if (key === lastHealth) return;
+  lastHealth = key;
+  broadcast('health', health);
+}, 1000).unref();

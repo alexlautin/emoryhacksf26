@@ -3,14 +3,18 @@
 //     so we can tell when something opens one without admin rights. (Windows may have
 //     access-time updates turned off; the command-line rules still catch most reads.)
 //  2. Files changed inside each agent's project folder (batched into one readable line).
-//  3. Changes to sensitive places outside the project (login items, SSH folder, shell startup files).
+//  3. Changes to sensitive places outside the project (login items, SSH folder, shell startup files,
+//     credentials and package-manager settings, the crontab).
+//  4. Attempts to switch Harness off (removing its Claude Code hooks) or to make git run code.
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { addEvent, listAgents, getAgent } from '../store.js';
 import crypto from 'node:crypto';
-import { analyzePath, baitPaths, baitMarkers, maxRisk, shortPath } from '../rules.js';
-import { SENSITIVE_DIRS } from '../platform.js';
+import { analyzePath, baitPaths, baitMarkers, maxRisk, riskRank, shortPath } from '../rules.js';
+import { SENSITIVE_DIRS, IS_WIN } from '../platform.js';
+import { registerMonitor, monitorOk, monitorFailed } from './health.js';
 import { DATA_DIR, DEMO_DIR } from '../paths.js';
 
 const HOME = os.homedir();
@@ -192,6 +196,76 @@ function pollBait() {
 const watchers = new Map(); // agentId -> { watcher, pending: Set }
 const IGNORED = /(^|[\\/])(\.git|\.DS_Store|\.next|dist|build|\.turbo|\.cache)([\\/]|$)/;
 const DEPS = /[\\/](node_modules|\.venv)[\\/]/;
+// Inside .git these two can make git run code: hooks run on commit, config can point git at programs.
+const GIT_WATCHED = /(^|[\\/])\.git[\\/](hooks[\\/][^\\/]+|config)$/;
+const GIT_CONFIG = /(^|[\\/])\.git[\\/]config$/;
+const CLAUDE_SETTINGS = /(^|[\\/])\.claude[\\/]settings(\.local)?\.json$/;
+const HOOK_MARKS = /harness-hook\.sh|lookout-hook\.sh|seatbelt-hook\.sh/;
+
+/** Watch this path inside a project? Not build output or .git, except .git/hooks and .git/config. */
+export function projectPathWatched(rel) {
+  if (GIT_WATCHED.test(rel)) return !/\.sample$/.test(rel); // `git init` writes the samples
+  return !IGNORED.test(rel);
+}
+
+/** Settings in a git config file that make git run another program. */
+export function gitConfigRisks(text) {
+  const found = [];
+  const re = /^\s*(hooksPath|fsmonitor|sshCommand|pager|editor|askPass|gitProxy|clean|smudge|process|textconv)\s*=\s*(.+)$|^\s*([\w.-]+)\s*=\s*(!.+)$/gim;
+  for (const m of String(text ?? '').matchAll(re)) {
+    if (m[1] && /^(false|true|0|1)$/i.test(m[2].trim())) continue; // fsmonitor = true is git's own
+    found.push(`${m[1] ?? m[3]} = ${(m[2] ?? m[4]).trim()}`);
+  }
+  return found;
+}
+
+/** Does this Claude Code settings text still have Harness's hooks? */
+export const hasHarnessHooks = (text) => HOOK_MARKS.test(String(text ?? ''));
+const hookState = new Map(); // settings file -> had Harness's hooks last time we looked
+
+function readText(f) {
+  try { return fs.readFileSync(f, 'utf8'); } catch { return null; }
+}
+
+function seedHookState(dir) {
+  for (const name of ['settings.json', 'settings.local.json']) {
+    const f = path.join(dir, '.claude', name);
+    if (!hookState.has(f)) hookState.set(f, hasHarnessHooks(readText(f)));
+  }
+}
+
+/** A Claude Code settings file changed. Returns an event if Harness's hooks were just removed. */
+export function hookRemovalEvent(file, agent, text = readText(file)) {
+  const before = hookState.get(file) ?? false;
+  const now = hasHarnessHooks(text);
+  hookState.set(file, now);
+  if (!before || now) return null;
+  return {
+    agentId: agent?.id ?? null,
+    kind: 'file',
+    risk: 'critical',
+    reasons: ["removed Harness's Claude Code hooks, which switches off the checks that run before each action"],
+    title: `Harness's safety hooks were removed from ${shortPath(file)}`,
+    detail: `${shortPath(file)} no longer runs harness-hook.sh`,
+    path: file,
+    tamper: true,
+  };
+}
+
+/** Harness itself just added or removed hooks in this folder: take the new state as normal. */
+export function refreshHookState(dir) {
+  for (const name of ['settings.json', 'settings.local.json']) {
+    const f = path.join(dir, '.claude', name);
+    hookState.set(f, hasHarnessHooks(readText(f)));
+  }
+}
+
+/** For tests. */
+export function rememberHookState(file, had) {
+  hookState.set(file, had);
+}
+
+const short = (list) => (list.join(', ').length > 80 ? list.join(', ').slice(0, 79) + '…' : list.join(', '));
 
 function watchProjects() {
   for (const a of listAgents()) {
@@ -202,7 +276,7 @@ function watchProjects() {
       const watcher = fs.watch(a.cwd, { recursive: true }, (_ev, rel) => {
         if (!rel) return;
         const full = path.join(a.cwd, rel.toString());
-        if (full.startsWith(DATA_DIR) || IGNORED.test(rel.toString()) || baitPaths.has(full)) return;
+        if (full.startsWith(DATA_DIR) || !projectPathWatched(rel.toString()) || baitPaths.has(full)) return;
         for (const [dir, until] of quiet) if (full.startsWith(dir) && Date.now() < until) return;
         // If another live agent works in a folder nested inside this one, the change is theirs.
         for (const [otherId, ow] of watchers) {
@@ -210,7 +284,13 @@ function watchProjects() {
         }
         pending.add(full);
       });
-      watcher.on('error', () => {});
+      watcher.on('error', (err) => {
+        monitorFailed('files', err);
+        // Drop the broken watcher; the next pass (every 2 s) makes a new one.
+        try { watcher.close(); } catch {}
+        if (watchers.get(a.id)?.watcher === watcher) watchers.delete(a.id);
+      });
+      seedHookState(a.cwd);
       watchers.set(a.id, { watcher, pending, cwd: a.cwd });
     } catch {
       watchers.set(a.id, null);
@@ -228,8 +308,26 @@ function flushProjects() {
     const files = [...w.pending].filter((f) => fs.existsSync(f) && !fs.statSync(f).isDirectory());
     const deleted = [...w.pending].filter((f) => !fs.existsSync(f));
     w.pending.clear();
+    // Removing Harness's hooks, or making git run a program, gets its own event.
+    for (const f of [...files, ...deleted].filter((x) => CLAUDE_SETTINGS.test(x))) {
+      const ev = hookRemovalEvent(f, agent);
+      if (ev) addEvent(ev);
+    }
+    for (const f of files.filter((x) => GIT_CONFIG.test(x))) {
+      const risky = gitConfigRisks(readText(f));
+      if (!risky.length) continue;
+      addEvent({
+        agentId: id, kind: 'file', risk: 'high',
+        reasons: [`changed this project's git settings so a program will run automatically during git commands (${short(risky)})`],
+        title: `Git settings in ${agent?.project ?? 'the project'} now run a program`,
+        detail: `${path.relative(w.cwd, f)}: ${short(risky)}`,
+        path: f,
+      });
+    }
     const deps = files.filter((f) => DEPS.test(f));
-    const own = files.filter((f) => !deps.includes(f));
+    // .git/config is only news when it runs something, and Claude Code's settings only when
+    // Harness's hooks go (both above): git and Claude Code rewrite them in normal use.
+    const own = files.filter((f) => !deps.includes(f) && !GIT_CONFIG.test(f) && !CLAUDE_SETTINGS.test(f));
     if (!own.length && !deps.length && !deleted.length) continue;
 
     let risk = 'info';
@@ -260,40 +358,122 @@ function flushProjects() {
 }
 
 // ---- sensitive places outside any project (SENSITIVE_DIRS comes from platform.js) ----
+// Folders that don't exist yet (a later `mkdir ~/.ssh`) are picked up on a later pass, and a
+// watcher that fails is closed and made again.
+const sensitiveWatchers = new Map(); // dir -> FSWatcher
+const lastReported = new Map(); // path -> ms, so one save (several fs events) is one entry
+const REPEAT_MS = 3000;
+
+/**
+ * The event for a change in a sensitive place. With no agent active it's still recorded, at a
+ * lower risk and marked as a guess (a background program may have done it, or the person).
+ */
+export function sensitiveChangeEvent(full, { agent, sure }) {
+  const r = analyzePath(full, { write: true, projectDir: agent?.cwd ?? null });
+  if (agent) {
+    return {
+      agentId: agent.id,
+      kind: 'file',
+      risk: maxRisk(r.risk, 'medium'),
+      reasons: r.reasons.length ? r.reasons : [`changed ${shortPath(full)} while ${agent.label} was working`],
+      title: `${shortPath(full)} changed while ${agent.label} was working`,
+      detail: `${shortPath(full)} (outside the project)`,
+      path: full,
+      attribution: sure ? 'sole' : 'guess',
+    };
+  }
+  return {
+    agentId: null,
+    kind: 'file',
+    risk: riskRank(r.risk) >= riskRank('high') ? 'medium' : 'low',
+    reasons: [...r.reasons, 'happened while no agent was active, so it may have been you, another app, or a program an agent left running'],
+    title: `${shortPath(full)} changed`,
+    detail: `${shortPath(full)} (no agent was active)`,
+    path: full,
+    attribution: 'guess',
+  };
+}
+
+function onSensitiveChange(dir, only, name) {
+  if (!name) return;
+  const rel = name.toString();
+  const base = path.basename(rel);
+  if (only && !only.test(base)) return;
+  if (/^known_hosts/.test(base)) return; // ssh updates this on every new server
+  const full = path.join(dir, rel);
+  const now = Date.now();
+  if (now - (lastReported.get(full) ?? 0) < REPEAT_MS) return;
+  lastReported.set(full, now);
+  if (lastReported.size > 500) lastReported.delete(lastReported.keys().next().value);
+  for (const [q, until] of quiet) if (full.startsWith(q) && now < until) return;
+  const who = likelyAgent(10000);
+  if (CLAUDE_SETTINGS.test(full)) {
+    const ev = hookRemovalEvent(full, who.agent);
+    if (ev) addEvent({ ...ev, attribution: who.agent && who.sure ? 'sole' : 'guess' });
+    return;
+  }
+  addEvent(sensitiveChangeEvent(full, who));
+}
+
 function watchSensitive() {
-  for (const { dir, only } of SENSITIVE_DIRS) {
-    if (!fs.existsSync(dir)) continue;
+  for (const { dir, only, recursive } of SENSITIVE_DIRS) {
+    if (sensitiveWatchers.has(dir) || !fs.existsSync(dir)) continue;
     try {
-      const w = fs.watch(dir, (_ev, name) => {
-        if (!name || (only && !only.test(name.toString()))) return;
-        if (/^known_hosts/.test(name.toString())) return; // ssh updates this on every new server
-        const { agent, sure } = likelyAgent(10000);
-        if (!agent) return; // probably the person, not an agent
-        const full = path.join(dir, name.toString());
-        const r = analyzePath(full, { write: true, projectDir: agent.cwd });
-        addEvent({
-          agentId: agent.id,
-          kind: 'file',
-          risk: maxRisk(r.risk, 'medium'),
-          reasons: r.reasons.length ? r.reasons : [`changed ${shortPath(full)} while ${agent.label} was working`],
-          title: `${shortPath(full)} changed while ${agent.label} was working`,
-          detail: `${shortPath(full)} (outside the project)`,
-          path: full,
-          attribution: sure ? 'sole' : 'guess',
-        });
+      if (only?.test('settings.json')) seedHookState(path.dirname(dir));
+      const w = fs.watch(dir, { recursive: !!recursive }, (_ev, name) => onSensitiveChange(dir, only, name));
+      w.on('error', (err) => {
+        monitorFailed('files', new Error(`watching ${shortPath(dir)}: ${err.message}`));
+        try { w.close(); } catch {}
+        if (sensitiveWatchers.get(dir) === w) sensitiveWatchers.delete(dir);
       });
-      w.on('error', () => {});
-    } catch {}
+      sensitiveWatchers.set(dir, w);
+    } catch (err) {
+      monitorFailed('files', new Error(`watching ${shortPath(dir)}: ${err.message}`));
+    }
   }
 }
 
+// ---- the crontab (no file we can watch without admin rights, so read it now and then) ----
+let lastCrontab;
+function pollCrontab() {
+  if (IS_WIN) return;
+  execFile('crontab', ['-l'], { timeout: 5000 }, (err, stdout) => {
+    // "no crontab for <user>" exits 1 with nothing on stdout: that's an empty crontab.
+    if (err && typeof err.code === 'string') return; // no crontab program
+    const now = err ? '' : stdout;
+    if (lastCrontab !== undefined && now !== lastCrontab) {
+      const who = likelyAgent(15000);
+      const ev = sensitiveChangeEvent('crontab', who);
+      addEvent({
+        ...ev,
+        risk: who.agent ? maxRisk(ev.risk, 'high') : 'medium',
+        reasons: ['set something up to run automatically in the background, even after a restart (your crontab changed)', ...(who.agent ? [] : [ev.reasons.at(-1)])],
+        title: who.agent ? `Your crontab changed while ${who.agent.label} was working` : 'Your crontab changed',
+        detail: now.trim() ? `crontab now:\n${now.trim().slice(0, 400)}` : 'crontab is now empty',
+        path: 'crontab',
+      });
+    }
+    lastCrontab = now;
+  });
+}
+
+function safely(fn) {
+  return () => {
+    try { fn(); } catch (err) { monitorFailed('files', err); console.error('[files]', err.message); }
+  };
+}
+
 export function startFileMonitor() {
+  registerMonitor('files', { label: 'File watch', stallMs: 10000 });
   prepareBait();
   refreshDemoBait();
   watchSensitive();
-  setInterval(pollBait, 700);
-  setInterval(watchProjects, 2000);
-  setInterval(flushProjects, 2500);
+  pollCrontab();
+  setInterval(safely(() => { pollBait(); monitorOk('files'); }), 700);
+  setInterval(safely(watchProjects), 2000);
+  setInterval(safely(flushProjects), 2500);
+  setInterval(safely(watchSensitive), 10000);
+  setInterval(safely(pollCrontab), 15000);
 }
 
 export function rearmBait() {

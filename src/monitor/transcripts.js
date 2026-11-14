@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { addEvent, listAgents, upsertAgent } from '../store.js';
 import { analyzePath, shortPath } from '../rules.js';
+import { registerMonitor, monitorOk, monitorFailed } from './health.js';
 import { truncate } from '../describe.js';
 import { projectName } from './processes.js';
 import { gatedToolUses } from '../hooks.js';
@@ -210,8 +211,21 @@ function handleCodex(d, s) {
   }
 }
 
+function safely(fn, ok = false) {
+  return () => {
+    try {
+      fn();
+      if (ok) monitorOk('transcripts');
+    } catch (err) {
+      monitorFailed('transcripts', err);
+      console.error('[transcripts]', err.message);
+    }
+  };
+}
+
 export function startTranscriptMonitor() {
-  discover();
-  setInterval(discover, 3000);
-  setInterval(readNew, 1000);
+  registerMonitor('transcripts', { label: 'Session log reading', stallMs: 15000 });
+  safely(discover)();
+  setInterval(safely(discover), 3000);
+  setInterval(safely(readNew, true), 1000);
 }
