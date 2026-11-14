@@ -178,13 +178,15 @@ function start(handle) {
   return new Promise((resolve) => {
     const s = http.createServer(makeHandler(handle));
     s.on('connection', (sock) => { sockets.add(sock); sock.on('close', () => sockets.delete(sock)); });
-    const listening = () => { server = s; port = s.address().port; console.log(`  Phone access on: http://${lanAddresses()[0]?.address ?? '0.0.0.0'}:${port}`); resolve(); };
+    // One 'listening' handler for both attempts: passing it to each listen() call would leave the
+    // first one registered after EADDRINUSE, so it would run twice once the fallback port opens.
+    s.once('listening', () => { server = s; port = s.address().port; console.log(`  Phone access on: http://${lanAddresses()[0]?.address ?? '0.0.0.0'}:${port}`); resolve(); });
     s.once('error', (err) => {
       if (err.code !== 'EADDRINUSE') { console.error('  Phone access could not start:', err.message); return resolve(); }
       s.once('error', (e) => { console.error('  Phone access could not start:', e.message); resolve(); });
-      s.listen(0, '0.0.0.0', listening);
+      s.listen(0, '0.0.0.0');
     });
-    s.listen(PREFERRED_PORT, '0.0.0.0', listening);
+    s.listen(PREFERRED_PORT, '0.0.0.0');
   });
 }
 
