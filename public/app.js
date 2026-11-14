@@ -313,19 +313,12 @@ function renderPrefs() {
     </li>`).join('');
 }
 
-function latestRisk() {
-  const ranked = state.events.filter((e) => e.kind !== 'system' && (RANK[e.risk] ?? 0) >= 2);
-  const recent = ranked.filter((e) => Date.now() - e.ts < 15 * 60 * 1000);
-  const pool = recent.length ? recent : ranked;
-  return [...pool].sort((a, b) => (RANK[b.risk] - RANK[a.risk]) || (b.ts - a.ts))[0] ?? null;
-}
-
 function renderPanel() {
   const s = state.ready ? computeScore(state.events) : null;
   $('#mp-score').textContent = s ? String(s.score) : '--';
   const level = $('#mp-level');
   level.className = `mp-level ${s ? s.level.cls : ''}`;
-  level.textContent = s ? s.level.name : 'Loading';
+  level.textContent = s ? (HEADLINE[s.level.cls] ?? s.level.name) : 'Loading';
   const offline = !state.ready && $('#conn-error') && !$('#conn-error').hidden;
   let blurb = s ? s.level.blurb : offline ? 'Can’t reach Harness. Trying again.' : 'Getting the latest activity.';
   if (s && !state.connected) blurb = 'Reconnecting. This may be a few seconds behind.';
@@ -346,18 +339,6 @@ function renderPanel() {
       </button>`;
       return [a.id, html];
     }), '');
-  }
-
-  const top = latestRisk();
-  const box = $('#mp-latest');
-  if (!top) {
-    box.className = 'mp-latest';
-    box.innerHTML = '<div class="mp-latest-title">Nothing risky.</div>';
-  } else {
-    const a = state.agents.get(top.agentId);
-    box.className = `mp-latest ${esc(top.risk)}`;
-    box.innerHTML = `<div class="mp-latest-title"><span class="mp-latest-k">${esc(LEVEL[top.risk] || top.risk)}</span> · ${esc(top.title)}</div>
-      <div class="mp-latest-meta">${ago(top.ts)}${a ? ` · ${esc(a.label)}` : ''}</div>`;
   }
 
   const canPause = active.some((a) => !a.paused);
@@ -523,16 +504,12 @@ $('#display-seg').addEventListener('click', (e) => {
   if (b) setDisplay(b.dataset.display);
 });
 
-$('#mp-demo').onclick = runDemo;
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-demo]')) { $('#prefs').close?.(); runDemo(); }
 });
 async function runDemo() {
   if (state.demoRunning) return;
   state.demoRunning = true;
-  const panelBtn = $('#mp-demo');
-  panelBtn.disabled = true;
-  panelBtn.textContent = 'Demo running';
   try {
     const r = await fetch('/api/demo/run', { method: 'POST' });
     if (!r.ok) toast((await r.json()).error ?? 'Could not start the demo');
@@ -540,11 +517,7 @@ async function runDemo() {
   } catch {
     toast('Could not start the demo');
   }
-  setTimeout(() => {
-    state.demoRunning = false;
-    panelBtn.disabled = false;
-    panelBtn.textContent = 'Run demo attack';
-  }, 15000);
+  setTimeout(() => { state.demoRunning = false; }, 15000);
 }
 
 $('#reset').onclick = async () => {
