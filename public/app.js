@@ -14,8 +14,57 @@ const PROTECT = {
   risky: { word: 'Strict', icon: 'shield-alert', desc: 'Pauses a session on anything risky, including uploads to unknown servers and background changes. Expect more interruptions.' },
 };
 
-/** A Lucide icon from the /icons.svg sprite. */
-const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="/icons.svg#${name}"/></svg>`;
+/** A Lucide icon from the icon sprite (inlined into the page once, see loadIcons). */
+const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#${name}"/></svg>`;
+
+/**
+ * Put /icons.svg into the page once. Every redraw then points at the same symbols instead of
+ * asking for the file again (WebKit blanks external <use> icons while it re-fetches them).
+ */
+async function loadIcons() {
+  try {
+    const box = document.createElement('div');
+    box.setAttribute('aria-hidden', 'true');
+    box.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    box.innerHTML = await (await fetch('/icons.svg')).text();
+    document.body.prepend(box);
+  } catch {}
+}
+
+/** Replace an element's HTML only when it actually changed. */
+function setHTML(el, html) {
+  if (el.__html === html) return;
+  el.__html = html;
+  el.innerHTML = html;
+}
+
+/**
+ * Keyed list update: items are [key, html]. Unchanged items keep their DOM nodes (no flicker,
+ * hover and focus survive); changed ones are swapped; order is fixed up in place.
+ */
+function setList(el, items, emptyHTML) {
+  if (!items.length) { setHTML(el, emptyHTML); return; }
+  if (el.__html !== undefined) { el.__html = undefined; el.innerHTML = ''; }
+  const old = new Map([...el.children].map((c) => [c.dataset.key, c]));
+  let prev = null;
+  for (const [key, html] of items) {
+    let node = old.get(key);
+    if (!node || node.__html !== html) {
+      const t = document.createElement('template');
+      t.innerHTML = html.trim();
+      const fresh = t.content.firstElementChild;
+      fresh.dataset.key = key;
+      fresh.__html = html;
+      if (node) node.replaceWith(fresh);
+      node = fresh;
+    }
+    old.delete(key);
+    const at = prev ? prev.nextElementSibling : el.firstElementChild;
+    if (at !== node) el.insertBefore(node, at);
+    prev = node;
+  }
+  for (const n of old.values()) n.remove();
+}
 
 const state = {
   agents: new Map(),
@@ -87,7 +136,7 @@ function renderScore() {
     ? `${s.counted} action${s.counted === 1 ? '' : 's'} from ${sessions} session${sessions === 1 ? '' : 's'} since ${new Date(s.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Points come back over about a day.`
     : 'No agent activity yet. Every score starts at 850.';
 
-  $('#factors').innerHTML = s.factors.map((f) => {
+  setHTML($('#factors'), s.factors.map((f) => {
     const bad = f.lost > 0;
     const sev = f.lost >= 100 ? 'bad' : f.lost >= 25 ? 'warn' : bad ? 'note' : 'ok';
     return `
@@ -106,7 +155,7 @@ function renderScore() {
           </span>
         </button>
       </li>`;
-  }).join('');
+  }).join(''));
   $('#factor-clear').hidden = !state.factor;
 }
 
@@ -116,7 +165,7 @@ function renderProtect() {
   const p = PROTECT[lvl];
   $('#protect').dataset.level = lvl;
   $('#protect-state').textContent = p.word;
-  $('#protect-icon').setAttribute('href', `/icons.svg#${p.icon}`);
+  $('#protect-icon').setAttribute('href', `#${p.icon}`);
   $('#protect-desc').textContent = p.desc;
   for (const b of document.querySelectorAll('#protect-seg button')) {
     b.classList.toggle('on', b.dataset.level === lvl);
@@ -143,7 +192,7 @@ const BRAND_KINDS = new Set(['claude', 'codex', 'gemini', 'cursor', 'copilot', '
 /** The agent's logo, or a generic bot icon for the demo and anything unknown. */
 function agentLogo(a) {
   return BRAND_KINDS.has(a.kind)
-    ? `<svg class="brand" aria-hidden="true"><use href="/icons.svg#brand-${a.kind}"/></svg>`
+    ? `<svg class="brand" aria-hidden="true"><use href="#brand-${a.kind}"/></svg>`
     : icon('bot');
 }
 
@@ -174,7 +223,7 @@ function sessionCard(a) {
           ${trigger?.command ? `<div class="cmd mono">${esc(trigger.command)}</div>` : ''}
           ${a.task ? `<div class="s-callout-ask">You asked it to “${esc(a.task)}”. Does this look like part of that job?</div>` : ''}
           <div class="s-actions">
-            <button class="btn danger small" data-act="end" data-id="${esc(a.id)}">End session</button>
+            ${endButton(a, 'danger small', 'End session')}
             <button class="btn small" data-act="resume" data-id="${esc(a.id)}">Let it continue</button>
           </div>
         </div>`
@@ -191,9 +240,16 @@ function sessionCard(a) {
         <div class="s-buttons">
           ${a.alive && !a.paused ? `<button class="btn ghost small" data-act="pause" data-id="${esc(a.id)}" title="Freeze this agent and everything it started">Pause</button>` : ''}
           <button class="btn ghost small" data-act="explain" data-id="${esc(a.id)}">Explain</button>
+          ${a.alive && !a.paused ? endButton(a, 'ghost small end', 'End') : ''}
         </div>
       </footer>
     </article>`;
+}
+
+/** "End" takes two clicks; the second-click state lives in state.confirmEnd so redraws keep it. */
+function endButton(a, cls, label) {
+  const on = state.confirmEnd === a.id;
+  return `<button class="btn ${cls}${on ? ' confirming' : ''}" data-act="end" data-id="${esc(a.id)}" title="Stops ${esc(a.label)} and every program it started">${on ? 'Click again to end' : label}</button>`;
 }
 
 function earlierRow(a) {
@@ -214,12 +270,11 @@ function renderAgents() {
   const active = all.filter((a) => a.alive).sort(byRecent);
   const earlier = all.filter((a) => !a.alive).sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
   $('#active-count').textContent = active.length;
-  $('#agents').innerHTML = active.length
-    ? active.map(sessionCard).join('')
-    : '<p class="empty">No AI agents running right now. Open Claude Code or Codex and Seatbelt will pick it up automatically.</p>';
+  setList($('#agents'), active.map((a) => [a.id, sessionCard(a)]),
+    '<p class="empty">No AI agents running right now. Open Claude Code, Codex or another coding agent and Seatbelt will pick it up automatically.</p>');
   $('#earlier').hidden = !earlier.length;
   $('#earlier-count').textContent = earlier.length;
-  $('#earlier-list').innerHTML = earlier.map(earlierRow).join('');
+  setList($('#earlier-list'), earlier.map((a) => [a.id, earlierRow(a)]), '');
   $('#agent-hint').textContent = state.selected ? 'Showing one session. Click it again to show all' : 'Click a session to see only its activity';
 }
 
@@ -268,7 +323,7 @@ function filtered() {
 
 function renderFeed() {
   const evs = filtered().filter(isNotable).slice(-200).reverse();
-  $('#feed').innerHTML = evs.map(feedItem).join('');
+  setList($('#feed'), evs.map((e) => [String(e.id), feedItem(e)]), '');
   state.feedSeen = Math.max(state.feedSeen, ...evs.map((e) => e.id));
   $('#feed-empty').hidden = evs.length > 0;
   const a = state.selected && state.agents.get(state.selected);
@@ -285,7 +340,7 @@ function renderTable() {
     .filter((e) => !q || JSON.stringify(e).toLowerCase().includes(q))
     .slice(-600)
     .reverse();
-  $('#rows').innerHTML = evs.map((e) => {
+  setHTML($('#rows'), evs.map((e) => {
     const a = state.agents.get(e.agentId);
     return `<tr>
       <td>${new Date(e.ts).toLocaleTimeString()}</td>
@@ -295,7 +350,7 @@ function renderTable() {
       <td>${esc(e.title)}${e.reasons?.length ? `<div class="reasons">${e.reasons.map(esc).join(' · ')}</div>` : ''}</td>
       <td class="raw">${esc(e.command ?? '')}${e.command ? '<br/>' : ''}${esc(e.detail ?? '')}</td>
     </tr>`;
-  }).join('');
+  }).join(''));
 }
 
 // ---------- Alert banner ----------
@@ -306,7 +361,7 @@ function renderAlert() {
     const a = paused[0];
     el.className = 'alert protected';
     el.hidden = false;
-    el.innerHTML = `
+    setHTML(el, `
       <span class="tile pause">${icon('shield-check')}</span>
       <div>
         <h3>Seatbelt paused ${esc(a.label)} in ${esc(a.project)}</h3>
@@ -314,9 +369,9 @@ function renderAlert() {
         ${paused.length > 1 ? `<div class="meta muted">${paused.length - 1} more session${paused.length > 2 ? 's are' : ' is'} paused. See below.</div>` : ''}
       </div>
       <div class="alert-actions">
-        <button class="btn danger small" data-act="end" data-id="${esc(a.id)}">End session</button>
+        ${endButton(a, 'danger small', 'End session')}
         <button class="btn small" data-act="resume" data-id="${esc(a.id)}">Let it continue</button>
-      </div>`;
+      </div>`);
     return;
   }
   const recent = state.events.filter((e) => RANK[e.risk] >= 3 && e.id > state.dismissedAlert && Date.now() - e.ts < 15 * 60 * 1000);
@@ -325,7 +380,7 @@ function renderAlert() {
   const a = state.agents.get(top.agentId);
   el.className = `alert ${top.risk}`;
   el.hidden = false;
-  el.innerHTML = `
+  setHTML(el, `
     <span class="tile bad">${icon(top.risk === 'critical' ? 'octagon-alert' : 'triangle-alert')}</span>
     <div>
       <h3>${esc(top.title)}</h3>
@@ -334,10 +389,10 @@ function renderAlert() {
       ${recent.length > 1 ? `<div class="meta muted">${recent.length - 1} more risky moment${recent.length > 2 ? 's' : ''} in the last 15 minutes.</div>` : ''}
     </div>
     <div class="alert-actions">
-      ${a?.alive && !a.paused ? `<button class="btn danger small" data-act="end" data-id="${esc(a.id)}">End session</button>` : ''}
+      ${a?.alive && !a.paused ? `${endButton(a, 'danger small', 'End session')}` : ''}
       ${a ? `<button class="btn small" data-act="explain" data-id="${esc(a.id)}">Explain</button>` : ''}
       <button class="btn ghost small" id="dismiss">Got it</button>
-    </div>`;
+    </div>`);
   $('#dismiss').onclick = () => { state.dismissedAlert = Math.max(...recent.map((e) => e.id)); renderAlert(); };
 }
 
@@ -379,7 +434,16 @@ async function explain(agentId) {
 async function agentAction(action, agentId, btn) {
   if (action === 'explain') return explain(agentId);
   const a = state.agents.get(agentId);
-  if (action === 'end' && !confirm(`End ${a?.label ?? 'this session'} in ${a?.project ?? ''}? It and every program it started will be stopped.`)) return;
+  // Ending can't be undone, so it takes a second click. (No confirm(): the desktop app's
+  // webview doesn't show browser dialogs.)
+  if (action === 'end' && state.confirmEnd !== agentId) {
+    state.confirmEnd = agentId;
+    clearTimeout(state.confirmTimer);
+    state.confirmTimer = setTimeout(() => { state.confirmEnd = null; render(); }, 4000);
+    render();
+    return;
+  }
+  if (action === 'end') state.confirmEnd = null;
   if (btn) btn.disabled = true;
   try {
     const r = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId, action }) });
@@ -510,7 +574,18 @@ let savedTheme = 'system';
 try { savedTheme = localStorage.getItem('seatbelt.theme') ?? 'system'; } catch {}
 setTheme(savedTheme);
 
+await loadIcons();
 drawScale();
 try { const v = localStorage.getItem('seatbelt.view'); if (v) setView(v); } catch {}
 connect();
 setInterval(render, 10000); // refresh "x seconds ago"
+
+// ---------- Desktop app ----------
+// In the menu bar panel (?view=panel), offer the full dashboard window. The app exposes an
+// `open_dashboard` command to pages served by its own Seatbelt server.
+if (document.documentElement.classList.contains('panel')) {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  const btn = $('#open-dash');
+  btn.hidden = !invoke;
+  btn.addEventListener('click', () => invoke?.('open_dashboard'));
+}

@@ -19,6 +19,35 @@ Then open http://localhost:4100. Any Claude Code or Codex session already runnin
 
 Works on macOS and Windows 10/11. On Windows, run it from PowerShell or Windows Terminal. It doesn't need admin rights on either system.
 
+## Desktop app (menu bar)
+
+Seatbelt also comes as a desktop app built with [Tauri 2](https://tauri.app): a shield in the macOS menu bar
+(or the Windows system tray) that runs the same server in the background.
+
+- Click the shield for a small panel with your score, any paused sessions, Auto-protect and each running session
+  (Pause, Explain, End). "Open dashboard" opens the full dashboard in a window.
+- The icon changes, and shows "1 paused" next to it, when Auto-protect pauses an agent. You also get a notification.
+- Its menu has the Auto-protect level, "Protect a folder for Claude Code…" (the same as `pnpm protect`),
+  "Run demo attack" and "Open at login".
+- No Dock icon unless the dashboard window is open. Closing the window keeps Seatbelt watching; "Quit Seatbelt"
+  stops it along with its server.
+
+It ships its own Node, so it works on a computer without one (the demo still needs npm). It keeps its log,
+settings and demo copy in `~/Library/Application Support/dev.seatbelt.monitor` (`%APPDATA%` on Windows).
+It runs on port 4100 so Claude Code hooks can reach it, or on a free port if 4100 is taken
+(for example by a `pnpm start` in a terminal).
+
+To build it you need Rust (`brew install rustup`, then `rustup default stable`):
+
+```bash
+pnpm desktop          # run it in development, straight from this folder
+pnpm desktop:build    # Seatbelt.app and a .dmg in src-tauri/target/release/bundle
+```
+
+Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS
+warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's
+damaged, run `xattr -cr /Applications/Seatbelt.app` once. Windows hasn't been built or tested yet.
+
 ## Blocking actions before they run (Claude Code)
 
 The monitors below see what happened. Claude Code hooks let Seatbelt check each action **before** it runs:
@@ -97,5 +126,6 @@ The dashboard in `public/` is plain HTML and JavaScript, updated live over Serve
 
 - Collectors: finish and test `eslogger` mode, and test on Windows (including the hook script under Git Bash).
 - Rules: fewer false alarms, better prompts for the local model, and learning what's normal for each project.
-- Dashboard: a timeline view, a menu bar or tray icon, and notifications.
+- Dashboard: a timeline view.
+- Desktop app: a Developer ID signature and notarization, Windows builds, and builds in CI.
 - Demo: a run with a real agent, a backup video, and slides.

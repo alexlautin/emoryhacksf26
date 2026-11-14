@@ -31,35 +31,37 @@ function readSettings(file) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
-    console.error(`Couldn't read ${file}: ${err.message}. Fix or remove it and try again.`);
-    process.exit(1);
+    throw new Error(`Couldn't read ${file}: ${err.message}. Fix or remove it and try again.`);
   }
 }
 
-const [action, target = '.'] = process.argv.slice(2);
-const dir = path.resolve(target);
-const settingsFile = path.join(dir, '.claude', 'settings.json');
-
-if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
-  console.error(`Not a folder: ${dir}`);
-  process.exit(1);
+function folder(target) {
+  const dir = path.resolve(target);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(`Not a folder: ${dir}`);
+  return dir;
 }
 
-if (action === 'protect') {
+/** Add Seatbelt's hooks to <dir>/.claude/settings.json (keeps everything else, saves a backup). */
+export function protect(target) {
+  const dir = folder(target);
+  const settingsFile = path.join(dir, '.claude', 'settings.json');
+  const settings = readSettings(settingsFile);
   fs.mkdirSync(path.join(dir, '.seatbelt'), { recursive: true });
   fs.copyFileSync(SCRIPT, path.join(dir, MARK));
   fs.chmodSync(path.join(dir, MARK), 0o755);
-  const settings = readSettings(settingsFile);
   if (fs.existsSync(settingsFile)) fs.copyFileSync(settingsFile, path.join(dir, '.seatbelt', 'settings.json.before-seatbelt'));
   const hooks = stripOurs(settings.hooks);
   for (const [event, groups] of Object.entries(OURS)) hooks[event] = [...(hooks[event] ?? []), ...groups];
   settings.hooks = hooks;
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-  console.log(`\n  Seatbelt now checks every Claude Code action in ${dir} before it runs.`);
-  console.log('  Keep `pnpm start` running: while Seatbelt is stopped, Claude Code actions there are blocked.');
-  console.log('  Restart Claude Code in that folder (or run /hooks) to pick up the change.\n');
-} else if (action === 'unprotect') {
+  return dir;
+}
+
+/** Remove only Seatbelt's hook entries from <dir>. */
+export function unprotect(target) {
+  const dir = folder(target);
+  const settingsFile = path.join(dir, '.claude', 'settings.json');
   if (fs.existsSync(settingsFile)) {
     const settings = readSettings(settingsFile);
     const hooks = stripOurs(settings.hooks);
@@ -69,8 +71,35 @@ if (action === 'protect') {
     else fs.rmSync(settingsFile);
   }
   fs.rmSync(path.join(dir, MARK), { force: true });
-  console.log(`\n  Removed Seatbelt's hooks from ${dir}.\n`);
-} else {
-  console.error('Usage: pnpm protect <folder>   |   pnpm unprotect <folder>');
-  process.exit(1);
+  return dir;
+}
+
+/** Whether <dir> has Seatbelt's hooks. */
+export function isProtected(target) {
+  try {
+    const settings = readSettings(path.join(path.resolve(target), '.claude', 'settings.json'));
+    return JSON.stringify(settings.hooks ?? {}).includes(MARK);
+  } catch {
+    return false;
+  }
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const [action, target = '.'] = process.argv.slice(2);
+  try {
+    if (action === 'protect') {
+      const dir = protect(target);
+      console.log(`\n  Seatbelt now checks every Claude Code action in ${dir} before it runs.`);
+      console.log('  Keep `pnpm start` running: while Seatbelt is stopped, Claude Code actions there are blocked.');
+      console.log('  Restart Claude Code in that folder (or run /hooks) to pick up the change.\n');
+    } else if (action === 'unprotect') {
+      console.log(`\n  Removed Seatbelt's hooks from ${unprotect(target)}.\n`);
+    } else {
+      console.error('Usage: pnpm protect <folder>   |   pnpm unprotect <folder>');
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
 }

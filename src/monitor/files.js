@@ -7,14 +7,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
 import { addEvent, listAgents, getAgent } from '../store.js';
 import { analyzePath, baitPaths, maxRisk, shortPath } from '../rules.js';
 import { SENSITIVE_DIRS } from '../platform.js';
+import { DATA_DIR, DEMO_DIR } from '../paths.js';
 
 const HOME = os.homedir();
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const SEATBELT_DATA = path.join(ROOT, 'data');
+const SEATBELT_DATA = DATA_DIR;
 export const BAIT_DIR = path.join(HOME, '.seatbelt', 'bait');
 
 const BAIT_FILES = {
@@ -22,7 +21,7 @@ const BAIT_FILES = {
   'passwords.txt': 'Seatbelt decoy file. Nothing real here.\nbank: hunter2-decoy\nemail: correct-horse-decoy\n',
   'id_ed25519_backup': '-----BEGIN OPENSSH PRIVATE KEY-----\nU2VhdGJlbHQgZGVjb3kga2V5LiBOb3QgcmVhbC4=\n-----END OPENSSH PRIVATE KEY-----\n',
 };
-const DEMO_ENV = path.join(ROOT, 'demo', 'victim-project', '.env');
+const DEMO_ENV = path.join(DEMO_DIR, 'victim-project', '.env');
 
 const lastAtime = new Map();
 const quiet = new Map(); // dir -> until (ms): Seatbelt's own writes, not the agent's
