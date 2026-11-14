@@ -69,16 +69,61 @@ function discover() {
   started = true;
 }
 
-function findAgent(kind, cwd) {
-  const candidates = listAgents().filter((a) => a.kind === kind && a.alive);
-  const exact = candidates.filter((a) => cwd && a.cwd === cwd);
-  exact.sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
-  if (exact.length) return exact[0];
-  // Windows can't tell us a process's folder. If exactly one agent of this kind has no folder
-  // yet, this log belongs to it, and the log says where it's working.
-  const unknown = candidates.filter((a) => !a.cwd);
-  if (cwd && unknown.length === 1) return upsertAgent({ id: unknown[0].id, cwd, project: projectName(cwd) });
+/**
+ * Which agent wrote this log line? Returns { agent, learn } where `learn` means the agent's folder
+ * wasn't known and this line supplies it. `agents` are the live agents of the right kind.
+ *  1. The agent started for this very session (its command line names the session id).
+ *  2. An agent already known to work in this folder (the most recently active, if several).
+ *  3. Windows can't tell us a process's folder. If exactly one agent has no folder yet and wasn't
+ *     started for some other session, this log is its.
+ */
+export function pickAgent(agents, { cwd, sessionId } = {}) {
+  const mine = sessionId ? agents.find((a) => a.sessionId === sessionId) : null;
+  if (mine) return { agent: mine, learn: !mine.cwd && !!cwd };
+  const exact = agents.filter((a) => cwd && a.cwd === cwd).sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
+  if (exact.length) return { agent: exact[0], learn: false };
+  const unknown = agents.filter((a) => !a.cwd && !(a.sessionId && sessionId));
+  if (cwd && unknown.length === 1) return { agent: unknown[0], learn: true };
   return null;
+}
+
+function findAgent(kind, cwd, sessionId) {
+  const found = pickAgent(listAgents().filter((a) => a.kind === kind && a.alive), { cwd, sessionId });
+  if (!found) return null;
+  return found.learn ? upsertAgent({ id: found.agent.id, cwd, project: projectName(cwd) }) : found.agent;
+}
+
+/** The folder a Claude Code session log was written in: the last line that says. */
+export function cwdFromLog(file) {
+  try {
+    const size = fs.statSync(file).size;
+    const len = Math.min(size, 256 * 1024);
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(len);
+    fs.readSync(fd, buf, 0, len, size - len);
+    fs.closeSync(fd);
+    const lines = buf.toString('utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"cwd"')) continue;
+      try { const cwd = JSON.parse(lines[i]).cwd; if (cwd) return cwd; } catch {}
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * A resumed session may not write to its log for a while, and until it does Harness wouldn't know
+ * its folder (so it couldn't watch its files). The log is already there: read the folder from it.
+ */
+function resolveResumed() {
+  const waiting = listAgents().filter((a) => a.alive && a.kind === 'claude' && a.sessionId && !a.cwd);
+  if (!waiting.length) return;
+  const logs = listClaude();
+  for (const a of waiting) {
+    const log = logs.find((f) => path.basename(f, '.jsonl').toLowerCase() === a.sessionId);
+    const cwd = log && cwdFromLog(log);
+    if (cwd) upsertAgent({ id: a.id, cwd, project: projectName(cwd) });
+  }
 }
 
 function readNew() {
@@ -117,7 +162,7 @@ function setTask(agent, text) {
 }
 
 function handleClaude(d) {
-  const agent = findAgent('claude', d.cwd);
+  const agent = findAgent('claude', d.cwd, typeof d.sessionId === 'string' ? d.sessionId.toLowerCase() : null);
   if (!agent) return;
   if (d.type === 'user' && !d.isMeta && !d.isSidechain) {
     const c = d.message?.content;
@@ -227,5 +272,6 @@ export function startTranscriptMonitor() {
   registerMonitor('transcripts', { label: 'Session log reading', stallMs: 15000 });
   safely(discover)();
   setInterval(safely(discover), 3000);
+  setInterval(safely(resolveResumed), 2000);
   setInterval(safely(readNew, true), 1000);
 }

@@ -117,6 +117,15 @@ function ownerOf(pid, procs) {
   return null;
 }
 
+/**
+ * The session an agent was started for, when its command line says so (`--resume=<id>` or
+ * `--session-id <id>`: the Claude desktop app starts every Claude Code session this way). The
+ * session's log has the same id, which ties the two together when several agents are running.
+ */
+export function sessionIdOf(args) {
+  return String(args ?? '').match(/--(?:resume|session-id)[= ]"?([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\b/i)?.[1].toLowerCase() ?? null;
+}
+
 /** A friendly name for an agent's folder. */
 export function projectName(cwd) {
   if (!cwd) return 'an unknown folder';
@@ -133,7 +142,8 @@ async function registerAgent(root) {
   rootIds.set(root.pid, id);
   const cwd = await source.cwd(root.pid);
   const project = projectName(cwd);
-  const agent = upsertAgent({ id, kind, label: AGENT_LABELS[kind], pid: root.pid, cwd, project, startedAt: Date.now(), lastActive: Date.now(), alive: true });
+  const sessionId = sessionIdOf(root.args);
+  const agent = upsertAgent({ id, kind, label: AGENT_LABELS[kind], pid: root.pid, cwd, project, startedAt: Date.now(), lastActive: Date.now(), alive: true, ...(sessionId ? { sessionId } : {}) });
   addEvent({
     agentId: id, kind: 'system', risk: 'info',
     title: `Started watching ${agent.label} in ${project}`,
