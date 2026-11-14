@@ -57,7 +57,15 @@
 *::before,
 *::after { box-sizing: border-box; }
 
-html { overflow-x: clip; }
+html {
+  overflow-x: clip;
+  /* The header wraps to about 151px below 720px, and sits at 65px above that. */
+  scroll-padding-top: 10.5rem;
+}
+
+@media (min-width: 720px) {
+  html { scroll-padding-top: 5.5rem; }
+}
 
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }

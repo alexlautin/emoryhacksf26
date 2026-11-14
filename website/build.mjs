@@ -37,7 +37,7 @@ export function build() {
   fs.writeFileSync(path.join(dist, '404.html'), page({
     title: 'Page not found. Lookout',
     description: 'That page is not on the Lookout site.',
-    current: '',
+    current: 'missing',
     body: `<div class="missing"><h1>That page is not here.</h1><p><a href="/">Back to the front page</a>.</p></div>`,
   }));
 
