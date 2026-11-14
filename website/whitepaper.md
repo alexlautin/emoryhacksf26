@@ -31,7 +31,7 @@ Out of scope:
 - It does not decrypt traffic. It sees a destination address and, when it can, a hostname.
 - It is not a firewall. "Cutting off the network" for a compromised Claude Code session means later tool calls that look like network access are denied by the hook. An already-running curl is a different problem, handled only if auto-protect pauses the tree in time.
 - Coverage is uneven. Process watching has a list of executable names. Session logs are parsed only for Claude Code and Codex. Blocking before a tool runs is a Claude Code hook, and only in folders where someone ran `pnpm protect`.
-- Linux is not supported. The Windows code path exists and has not been run on a real Windows machine.
+- Linux is not supported. Native Windows installers are built in GitHub Actions; broader interactive testing is still needed.
 - A process that is not under a recognized agent is invisible. Renaming the agent binary is enough to fall off the list.
 - This is not a defense against another user on the machine, or against a kernel exploit. The assumption is: code the agent chose to run, including a dependency's install script, running as the person.
 
@@ -241,8 +241,8 @@ Collected from the code and the README, not softened:
 - The blocking hook is opt-in per folder and Claude Code only. Other agents get a report and, if auto-protect is on, a pause after the fact.
 - An agent binary that does not match the name list is not watched.
 - The compromised-session flag is memory only.
-- Windows support has not been run on real Windows. Known gaps called out in the README: no easy working directory, pausing waits on PowerShell to start, and last-access times may be off. The hook script is a POSIX shell script. The README lists "the hook script under Git Bash" as unfinished testing.
-- The desktop app is signed ad hoc (`signingIdentity` is `-` in the Tauri config), not with a Developer ID, and it is not notarized. macOS warns on first open of a downloaded build. There is no published Windows app build. The bundle targets include `nsis`, and nobody has produced that installer as a tested release.
+- Windows builds and automated tests run in GitHub Actions; interactive coverage remains limited. Known gaps called out in the README: no easy working directory, pausing waits on PowerShell to start, and last-access times may be off. The hook script is a POSIX shell script. The README lists "the hook script under Git Bash" as unfinished testing.
+- The desktop app is signed ad hoc (`signingIdentity` is `-` in the Tauri config), not with a Developer ID, and it is not notarized. macOS warns on first open of a downloaded build. GitHub Actions builds a Windows x64 NSIS installer and DMGs for Apple silicon and Intel Macs. Windows installers are unsigned and may trigger SmartScreen.
 
 ## Roadmap
 
@@ -252,7 +252,7 @@ The README's "What's next" list matches what is unfinished in the tree. Restated
 - The blocking hook is the way to catch a command before it runs. Today that exists for Claude Code only. Extending that idea is future work. It is not in the code for other agents.
 - Fewer false alarms, better prompts for the local model, and some notion of what is normal for a project. None of that learning is implemented.
 - A timeline on the dashboard.
-- A Developer ID signature, notarization, Windows builds, and builds in CI.
+- A Developer ID signature, notarization, Windows code signing, and broader installation testing.
 
 No dates. The demo README is also honest about its own gap: use the scripted demo when showing the project, because a run with a real agent had not been tested.
 

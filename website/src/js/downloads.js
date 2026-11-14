@@ -3,7 +3,7 @@
 
 const NOTES = {
   macos: 'This computer is a Mac.',
-  windows: 'This computer runs Windows. The app build is not ready.',
+  windows: 'This computer runs Windows.',
   linux: 'This computer runs Linux. Harness does not support Linux.',
   ios: 'This is an iPhone. Harness is a desktop app.',
   ipad: 'This is an iPad. Harness is a desktop app.',
@@ -39,11 +39,8 @@ function item(spec) {
   };
   // comingSoon wins even if a url was filled in, so a half-edited config
   // cannot link Windows at a file that is not there.
-  if (spec.comingSoon || !href) {
+  if (spec.comingSoon || !spec.published || !href) {
     return { ...base, href: null, action: 'soon', button: 'Coming soon', status: spec.soon };
-  }
-  if (!spec.published) {
-    return { ...base, href, action: 'placeholder', button: spec.button, status: spec.placeholder };
   }
   return { ...base, href, action: 'download', button: spec.button, status: spec.ready };
 }
@@ -52,30 +49,33 @@ export function downloadPlan(releases, os) {
   const mac = item({
     id: 'mac',
     title: 'macOS',
-    detail: 'macOS 12 or later',
+    detail: 'macOS 12 or later · Apple silicon or Intel',
     yours: os.id === 'mac',
     url: releases.macos?.url,
     published: releases.macos?.published === true,
     comingSoon: releases.macos?.comingSoon === true,
-    button: 'Download for Mac',
+    button: 'Download for Apple silicon',
     soon: 'No Mac build is configured in releases.js.',
-    placeholder: 'Placeholder link: the Mac build is not published yet. Until it is, build it from the source on GitHub.',
-    ready: 'macOS 12 or later. The app is signed ad hoc, so the first open takes a right-click, then Open.',
+    ready: 'Open the DMG and drag Harness to Applications. This preview is signed ad hoc and is not notarized; macOS may require approval in Privacy & Security.',
   });
   const win = item({
     id: 'windows',
     title: 'Windows',
-    detail: 'Desktop build not ready',
+    detail: 'Windows 10 or 11 · 64-bit installer',
     yours: os.id === 'windows',
     url: releases.windows?.url,
     published: releases.windows?.published === true,
     // Missing flag stays "coming soon". Set comingSoon: false on purpose to link a file.
     comingSoon: releases.windows?.comingSoon !== false,
     button: 'Download for Windows',
-    soon: 'The monitor has a Windows code path. There is no desktop build, and it has not been run on a real Windows machine.',
-    placeholder: 'Placeholder. No Windows installer is hosted at this address yet.',
-    ready: 'Windows 10 or 11.',
+    soon: 'The Windows installer is not published yet.',
+    ready: 'Run the installer. Node is included. This preview is unsigned, so Windows SmartScreen may ask you to confirm the publisher.',
   });
+
+  if (mac.action === 'download') {
+    const href = cleanUrl(releases.macos?.intelUrl);
+    if (href) mac.alternate = { href, button: 'Download for Intel Mac' };
+  }
 
   const items = os.id === 'windows' ? [win, mac] : [mac, win];
   const yoursHasLink = items.some((entry) => entry.yours && entry.href);

@@ -8,6 +8,10 @@ Say an agent runs `npm install`. Its window shows one line and a checkmark. Unde
 
 It runs locally. Nothing is sent anywhere.
 
+## Download
+
+Get the [latest release](https://github.com/alexlautin/harness/releases/latest): a DMG for Apple silicon or Intel Macs, or a 64-bit installer for Windows 10/11. Node is included. See the release notes for first-open instructions for these unsigned preview builds.
+
 ## Running it
 
 You need Node 22 or newer and pnpm.
@@ -47,7 +51,7 @@ pnpm desktop          # run it in development, straight from this folder
 pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundle
 ```
 
-Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's damaged, run `xattr -cr /Applications/Harness.app` once. Windows hasn't been built or tested yet.
+Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's damaged, run `xattr -cr /Applications/Harness.app` once. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
 
 ## Blocking actions before they run (Claude Code)
 
@@ -128,7 +132,7 @@ A Dangerous event also raises a banner on the page. On a Mac, `pnpm start` posts
 - Programs that start and finish in under about half a second can be missed by polling. The decoy files still catch secret reads. On macOS, `pnpm deep` uses Apple's `eslogger` to see every launch and file open, but it needs sudo and Full Disk Access, and we haven't tested it yet.
 - Access times don't say which process read a file, so a decoy read is credited to the agent that was most recently active. If more than one agent is active, Harness warns you but won't pause anyone over it.
 - Auto-protect reacts to what it sees. It can't stop a command that finishes before the next poll. For Claude Code, `pnpm protect` adds a `PreToolUse` hook that blocks ahead of time; other agents only get Auto-protect.
-- The Windows support hasn't been run on real Windows yet. Some things we know about:
+- Windows builds run in GitHub Actions; broader interactive testing is still needed. Known limits:
   - Windows can't easily report a process's working folder, so an agent's project is filled in from its session log.
   - Pausing takes a second or two longer because PowerShell has to start.
   - Windows sometimes turns off last-access times, which makes decoy reads harder to catch. The command-line rules still work.
@@ -139,7 +143,11 @@ A Dangerous event also raises a banner on the page. On a Mac, `pnpm start` posts
 - Collectors: finish and test `eslogger` mode, and test on Windows (including the hook script under Git Bash).
 - Rules: better prompts for the local model, and learning what's normal for a project without asking you to mark each command.
 - Dashboard: the chain view is in. A saved recording of a real agent is not.
-- Desktop app: a Developer ID signature and notarization, Windows builds, and builds in CI.
+- Desktop app: a Developer ID signature, notarization, Windows code signing, and broader installation testing.
 - Demo: a run with a real agent, a backup video, and slides.
 
 Product site, white paper, and Gemini browser simulation: [website/](website/). The Next.js site targets Vercel; the simulation uses a server-side Gemini API key and never executes commands.
+
+## Publishing a release
+
+Keep the versions in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` aligned. Push a matching `vX.Y.Z` tag to run `.github/workflows/release.yml`. It tests and builds on native Apple silicon, Intel Mac, and Windows runners, then publishes all installers and SHA-256 checksums together after every build succeeds. A manual workflow run builds artifacts without publishing. Update `website/releases.js` only after the release assets exist.

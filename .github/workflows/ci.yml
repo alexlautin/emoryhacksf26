@@ -24,10 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Process and connection listing shell out to ps and lsof, the macOS tools
-        # (Windows uses PowerShell and netstat). Linux has the same commands, so
-        # both runners do the install, the tests, and the smoke check.
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -47,12 +44,17 @@ jobs:
         run: pnpm test
 
       - name: Smoke test
+        if: runner.os != 'Windows'
         run: bash scripts/smoke.sh
 
   desktop:
-    name: Menu bar (cargo check)
-    runs-on: macos-latest
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 

@@ -1,18 +1,15 @@
-// The only place download links live. The buttons read this file and nothing else.
-// Windows stays "coming soon" until comingSoon is false, published is true,
-// and url is a real https link to a file that exists.
+// Published asset names are kept stable by .github/workflows/release.yml.
+const base = 'https://github.com/alexlautin/harness/releases/download/v0.1.0';
 export const RELEASES = {
   macos: {
-    // Swap this for the published .dmg, then set published to true.
-    // While published is false the button still points here, and the page says
-    // the file is not actually up.
-    url: 'https://github.com/alexlautin/harness/releases/download/v0.1.0/Harness.dmg',
-    published: false,
+    url: `${base}/Harness-macos-arm64.dmg`,
+    intelUrl: `${base}/Harness-macos-x64.dmg`,
+    published: true,
     comingSoon: false,
   },
   windows: {
-    url: null,
-    published: false,
-    comingSoon: true,
+    url: `${base}/Harness-windows-x64.exe`,
+    published: true,
+    comingSoon: false,
   },
 };

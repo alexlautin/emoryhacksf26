@@ -15,7 +15,7 @@ function Hero() {
           <h1>Let your agent run.<br /><span>Keep it on a harness.</span></h1>
           <p className="lead">Harness watches everything your coding agent does on your computer, including the parts its window leaves out, and pauses it before something risky finishes.</p>
           <p className="hero-cta">
-            <a className="btn btn-ink" href="#download">Download for macOS</a>
+            <a className="btn btn-ink" href="#download">Download for macOS or Windows</a>
             <a className="btn btn-line" href="/demo">Try the live demo <span aria-hidden="true">→</span></a>
           </p>
           <p className="hero-note">Runs locally. No account. Nothing leaves your machine.</p>
@@ -219,9 +219,9 @@ export default function Home() {
         <div className="wrap dl-wrap">
           <Pug size={168} className="dl-pug" />
           <h2>Put your agent on a harness.</h2>
-          <p className="lead">Free, with the source on GitHub. Lives in your menu bar.</p>
+          <p className="lead">Free, with the source on GitHub. Lives in your Mac menu bar or Windows system tray.</p>
           <div id="downloads" />
-          <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness">GitHub</a>.</p></noscript>
+          <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness/releases/latest">GitHub Releases</a>.</p></noscript>
         </div>
       </section>
       <Downloads />

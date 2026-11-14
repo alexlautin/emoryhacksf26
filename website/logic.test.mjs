@@ -12,7 +12,7 @@ const LINUX_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.
 const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36';
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1';
 
-test('macOS is highlighted and points at the placeholder, Windows does not link', () => {
+test('macOS offers Apple silicon and Intel downloads and Windows also links', () => {
   const os = detectOS({ ua: MAC_UA, platform: 'MacIntel', touchPoints: 0 });
   assert.equal(os.id, 'mac');
   assert.equal(os.forced, false);
@@ -22,27 +22,29 @@ test('macOS is highlighted and points at the placeholder, Windows does not link'
   const mac = plan.items[0];
   const win = plan.items[1];
   assert.equal(mac.yours, true);
-  assert.equal(mac.action, 'placeholder');
+  assert.equal(mac.action, 'download');
+  assert.equal(mac.alternate.href, RELEASES.macos.intelUrl);
   assert.equal(mac.href, RELEASES.macos.url);
   assert.equal(mac.primary, true);
-  assert.match(mac.status, /Placeholder/);
+  assert.match(mac.status, /not notarized/);
   assert.equal(win.yours, false);
-  assert.equal(win.href, null);
-  assert.equal(win.action, 'soon');
-  assert.equal(win.button, 'Coming soon');
-  assert.match(win.status, /no desktop build/i);
+  assert.equal(win.href, RELEASES.windows.url);
+  assert.equal(win.action, 'download');
+  assert.equal(win.button, 'Download for Windows');
+  assert.match(win.status, /SmartScreen/);
 });
 
-test('Windows is highlighted, ordered first, and stays disabled', () => {
+test('Windows is highlighted, ordered first, and downloads the installer', () => {
   const os = detectOS({ ua: WIN_UA, platform: 'Win32', touchPoints: 0 });
   assert.equal(os.id, 'windows');
   const plan = downloadPlan(RELEASES, os);
   assert.match(plan.note, /Windows/);
   assert.deepEqual(plan.items.map((item) => item.id), ['windows', 'mac']);
   assert.equal(plan.items[0].yours, true);
-  assert.equal(plan.items[0].href, null);
+  assert.equal(plan.items[0].href, RELEASES.windows.url);
+  assert.equal(plan.items[0].primary, true);
   assert.equal(plan.items[1].yours, false);
-  assert.equal(plan.items[1].primary, true);
+  assert.equal(plan.items[1].primary, false);
   assert.equal(plan.items[1].href, RELEASES.macos.url);
 });
 
@@ -73,7 +75,7 @@ test('?os= overrides the browser, and a half-set Windows url still does not link
   assert.equal(forced.id, 'windows');
   const plan = downloadPlan(RELEASES, forced);
   assert.match(plan.note, /Preview/);
-  assert.equal(plan.items[0].href, null);
+  assert.equal(plan.items[0].href, RELEASES.windows.url);
 
   const edited = {
     macos: { url: 'http://example.com/Harness.dmg', published: true, comingSoon: false },
@@ -95,6 +97,16 @@ test('?os= overrides the browser, and a half-set Windows url still does not link
   assert.equal(ready.items[0].href, null);
   assert.equal(ready.items[1].action, 'download');
   assert.equal(ready.items[1].href, 'https://example.com/Harness.dmg');
+});
+
+test('unpublished installers never get download links', () => {
+  const unpublished = {
+    macos: { ...RELEASES.macos, published: false },
+    windows: { ...RELEASES.windows, published: false },
+  };
+  const plan = downloadPlan(unpublished, { id: 'windows', kind: 'windows' });
+  assert.ok(plan.items.every(item => item.href === null && item.action === 'soon'));
+  assert.ok(plan.items.every(item => !item.alternate));
 });
 
 test('markdown escapes html, keeps safe links, and slugs headings', () => {

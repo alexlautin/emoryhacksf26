@@ -30,7 +30,7 @@ Nothing executes, no files are inspected, and no desktop agent is contacted. Sce
 
 ## Content
 
-The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_components/scenario.jsx` and the score widget in `app/_components/scoreplay.jsx`. Styles are in `src/site.css` (`app/demo.css` for `/demo`). `whitepaper.md` is rendered at `/whitepaper`, and the build copies it to `public` for download. The pug mark is `src/assets/pug.png`; the tab icon is `app/icon.png`. `releases.js` remains the single download configuration. The Mac URL is explicitly a placeholder; Windows stays disabled. Add `?os=mac` or `?os=windows` to preview OS-specific cards.
+The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_components/scenario.jsx` and the score widget in `app/_components/scoreplay.jsx`. Styles are in `src/site.css` (`app/demo.css` for `/demo`). `whitepaper.md` is rendered at `/whitepaper`, and the build copies it to `public` for download. The pug mark is `src/assets/pug.png`; the tab icon is `app/icon.png`. `releases.js` remains the single download configuration. It points to the published Apple silicon and Intel Mac DMGs and Windows x64 installer. Unpublished entries stay disabled. Add `?os=mac` or `?os=windows` to preview OS-specific cards.
 
 ## First deployment checklist
 
@@ -43,4 +43,4 @@ The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_compone
 
 A Gemini `502` means generation failed (for example, invalid credentials, quota, timeout, or an incomplete response); `503` means the server has no API key. Check the deployment's function logs and AI Studio usage. No live Gemini request was verified as part of the repository merge.
 
-The Mac download is still a placeholder. Publish an actual `Harness.dmg` release and update `releases.js` before advertising a working download.
+The release workflow keeps asset names stable: `Harness-macos-arm64.dmg`, `Harness-macos-x64.dmg`, and `Harness-windows-x64.exe`. After a new release finishes, update the version in `releases.js` and verify all three URLs before deploying.

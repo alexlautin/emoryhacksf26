@@ -66,13 +66,21 @@ function card(entry) {
   if (entry.href) {
     control.href = entry.href;
     control.rel = 'noopener';
-    if (entry.action === 'placeholder') control.target = '_blank';
   } else {
     control.type = 'button';
     control.setAttribute('aria-disabled', 'true');
     control.addEventListener('click', (event) => event.preventDefault());
   }
 
-  art.append(control, status);
+  art.append(control);
+  if (entry.alternate) {
+    const alternate = document.createElement('a');
+    alternate.className = 'btn btn-secondary';
+    alternate.href = entry.alternate.href;
+    alternate.textContent = entry.alternate.button;
+    alternate.setAttribute('aria-describedby', status.id);
+    art.append(alternate);
+  }
+  art.append(status);
   return art;
 }
