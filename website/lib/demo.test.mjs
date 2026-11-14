@@ -83,6 +83,8 @@ test('API sends only the fixed prompt, classifies the reply with the rules, and 
     const sent = JSON.parse(options.body);
     assert.equal(sent.contents[0].parts[0].text, SCENARIOS.install.prompt);
     assert.equal(sent.generationConfig.responseMimeType, 'application/json');
+    assert.equal(sent.generationConfig.maxOutputTokens, 16384);
+    assert.equal(sent.generationConfig.thinkingConfig.thinkingBudget, 0);
     return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ events: raw.map((e) => ({ ...e, risk: 'info' })) }) }] } }] });
   };
   try {
@@ -95,6 +97,28 @@ test('API sends only the fixed prompt, classifies the reply with the rules, and 
     assert.equal((await (await POST(request())).json()).cached, true);
     assert.equal(calls, 1);
     assert.equal(JSON.stringify(data).includes('test-only-key'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
+  }
+});
+
+test('a thought-only Gemini reply is rejected and a thought plus JSON is kept', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'test-only-key';
+  globalThis.fetch = async (_url, options) => {
+    const prompt = JSON.parse(options.body).contents[0].parts[0].text;
+    if (prompt.includes('hidden login')) return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'planning the trace' }] } }] });
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'planning' }, { text: JSON.stringify({ events: raw }) }] } }] });
+  };
+  const ask = (scenario) => POST(new Request('http://localhost/api/demo', { method: 'POST', headers: { origin: 'http://127.0.0.1:4173', host: '127.0.0.1:4173' }, body: JSON.stringify({ scenario }) }));
+  try {
+    const kept = await ask('clean');
+    assert.equal(kept.status, 200);
+    assert.equal((await kept.json()).events.length, 3);
+    assert.equal((await ask('persistence')).status, 502);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
