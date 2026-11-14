@@ -38,7 +38,7 @@ export const FACTORS = [
   {
     id: 'commands', icon: 'square-terminal', name: 'Risky commands', impact: 'Medium impact',
     desc: 'Deleting folders, asking for admin, or controlling other apps',
-    test: /delete|administrator|AppleScript|force-pushed|screenshot|downloaded a script|Defender|encoded|safety checks/i,
+    test: /delete|renamed \d+ files|administrator|AppleScript|force-pushed|screenshot|downloaded a script|Defender|encoded|safety checks/i,
     cost: { critical: 25, high: 12, medium: 5, low: 1 }, cap: 35,
   },
   {

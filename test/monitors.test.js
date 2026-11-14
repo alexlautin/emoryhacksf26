@@ -137,3 +137,76 @@ test('a sensitive file that was only read is not reported as changed', async () 
   fs.rmSync(file);
   assert.equal(unchangedSince(file, seen), false); // deleted
 });
+
+test('a burst of files renamed to one new ending is flagged, and scrambled contents make it dangerous', async () => {
+  const { renamedWithNewEnding, noteRenames, renameBurstEvent, looksScrambled } = await import('../src/monitor/files.js');
+  const crypto = await import('node:crypto');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-burst-'));
+  const present = [];
+  const deleted = [];
+  for (let i = 0; i < 30; i++) {
+    const f = path.join(dir, `note${i}.txt.locked`);
+    fs.writeFileSync(f, crypto.randomBytes(2048));
+    present.push(f);
+    deleted.push(path.join(dir, `note${i}.txt`));
+  }
+  const renamed = renamedWithNewEnding(present, deleted);
+  assert.equal(renamed.get('.locked').length, 30);
+  assert.equal(looksScrambled(present[0]), true);
+
+  const memory = new Map();
+  const hit = noteRenames(memory, renamed, 1000);
+  assert.equal(hit.ending, '.locked');
+  assert.equal(hit.scrambled, true);
+  const ev = renameBurstEvent(hit, { id: 'claude-1', project: 'demo' }, dir);
+  assert.equal(ev.risk, 'critical');
+  assert.match(ev.title, /30 files in demo were renamed to \.locked/);
+  // It costs points, and one burst is one alert.
+  assert.ok(computeScore([{ id: 1, ts: Date.now(), kind: 'file', ...ev }]).score < 100);
+  assert.equal(noteRenames(memory, renamed, 2000), null);
+
+  // Readable files renamed in bulk are risky, not dangerous.
+  for (const f of present) fs.writeFileSync(f, 'plain text '.repeat(200));
+  assert.equal(noteRenames(new Map(), renamed, 1000).scrambled, false);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('ordinary bulk changes are not a rename burst', async () => {
+  const { renamedWithNewEnding, noteRenames } = await import('../src/monitor/files.js');
+  const names = Array.from({ length: 40 }, (_, i) => path.join('p', `f${i}`));
+  // gzip -r, a build writing source maps, a handful of renames, and plain new files
+  assert.equal(renamedWithNewEnding(names.map((n) => `${n}.js.gz`), names.map((n) => `${n}.js`)).size, 0);
+  assert.equal(renamedWithNewEnding(names.map((n) => `${n}.js.map`), []).size, 0);
+  assert.equal(renamedWithNewEnding(names.map((n) => `${n}.ts`), []).size, 0);
+  const few = renamedWithNewEnding(names.slice(0, 5).map((n) => `${n}.tsx`), names.slice(0, 5).map((n) => `${n}.jsx`));
+  assert.equal(few.get('.tsx').length, 5);
+  assert.equal(noteRenames(new Map(), few, 1000), null);
+});
+
+test('a session log goes to the agent started for that session', async () => {
+  const { pickAgent, cwdFromLog } = await import('../src/monitor/transcripts.js');
+  const { sessionIdOf } = await import('../src/monitor/processes.js');
+  const A = '4c701273-6fd4-4d48-a8df-4e7362e74cce';
+  const B = 'd2979674-61f2-4b06-8274-b794189ccaff';
+  assert.equal(sessionIdOf(`claude.exe --verbose --resume=${A} --allowedTools=x`), A);
+  assert.equal(sessionIdOf(`claude --session-id ${B.toUpperCase()}`), B);
+  assert.equal(sessionIdOf('claude --resume'), null);
+
+  // Two sessions from the desktop app on Windows: neither folder is known yet.
+  const one = { id: 'claude-1', sessionId: A, cwd: null };
+  const two = { id: 'claude-2', sessionId: B, cwd: null };
+  assert.deepEqual(pickAgent([one, two], { cwd: 'C:\\work\\b', sessionId: B }), { agent: two, learn: true });
+  // A log from some third session doesn't get pinned on either.
+  assert.equal(pickAgent([one, two], { cwd: 'C:\\work\\c', sessionId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }), null);
+  // Two sessions in the same folder: each log still goes to its own agent.
+  const same = [{ ...one, cwd: 'C:\\work', lastActive: 5 }, { ...two, cwd: 'C:\\work', lastActive: 9 }];
+  assert.equal(pickAgent(same, { cwd: 'C:\\work', sessionId: A }).agent.id, 'claude-1');
+  // Started from a terminal (no session id on the command line): the old rules still apply.
+  const plain = { id: 'claude-3', cwd: null };
+  assert.deepEqual(pickAgent([plain], { cwd: '/tmp/p', sessionId: B }), { agent: plain, learn: true });
+  assert.equal(pickAgent([plain, { id: 'claude-4', cwd: null }], { cwd: '/tmp/p', sessionId: B }), null);
+
+  const log = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-log-')), `${A}.jsonl`);
+  fs.writeFileSync(log, `${JSON.stringify({ type: 'user', cwd: '/old' })}\n${JSON.stringify({ type: 'assistant', cwd: '/tmp/project' })}\n${JSON.stringify({ type: 'summary' })}\n`);
+  assert.equal(cwdFromLog(log), '/tmp/project');
+});

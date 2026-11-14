@@ -301,6 +301,95 @@ function watchProjects() {
   }
 }
 
+// ---- many files renamed at once (what ransomware does after scrambling them) ----
+const BURST_MIN = 20; // renames to one new ending, within BURST_WINDOW_MS
+const BURST_WINDOW_MS = 30000;
+// Endings ordinary tools add in bulk: compressing, backing up, building.
+const BENIGN_ENDINGS = /^\.(gz|br|zst|bz2|xz|zip|map|bak|orig|tmp|old|min\.js|d\.ts)$/i;
+
+/**
+ * Files that vanished while a file with the same name plus a new ending appeared
+ * (`notes.txt` -> `notes.txt.locked`), or the same name with its ending swapped
+ * (`notes.txt` -> `notes.locked`). Returns Map ending -> [new paths], ordinary endings left out.
+ */
+export function renamedWithNewEnding(present, deleted) {
+  const out = new Map();
+  const gone = new Set(deleted);
+  const stems = new Map(); // "dir/name" without its ending -> the deleted file's ending
+  for (const d of deleted) {
+    const ext = path.extname(d);
+    if (ext) stems.set(d.slice(0, -ext.length), ext.toLowerCase());
+  }
+  for (const f of present) {
+    const ext = path.extname(f);
+    if (!ext || BENIGN_ENDINGS.test(ext)) continue;
+    const stem = f.slice(0, -ext.length);
+    const appended = gone.has(stem);
+    const swapped = stems.has(stem) && stems.get(stem) !== ext.toLowerCase();
+    if (!appended && !swapped) continue;
+    const key = ext.toLowerCase();
+    if (!out.has(key)) out.set(key, []);
+    out.get(key).push(f);
+  }
+  return out;
+}
+
+/** Do the first few KB look random (encrypted)? Text, code and most documents score far lower. */
+export function looksScrambled(file) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(4096);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    if (n < 256) return false;
+    const counts = new Array(256).fill(0);
+    for (let i = 0; i < n; i++) counts[buf[i]]++;
+    let bits = 0;
+    for (const c of counts) if (c) bits -= (c / n) * Math.log2(c / n);
+    return bits > 7.2;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Keeps a short memory of renames per ending and says when they add up to a burst.
+ * Returns { ending, count, scrambled, sample } once per burst, or null.
+ */
+export function noteRenames(memory, renamed, now = Date.now()) {
+  let hit = null;
+  for (const [ending, list] of renamed) {
+    const m = memory.get(ending) ?? { seen: [], files: [], alertedAt: -Infinity };
+    memory.set(ending, m);
+    for (const f of list) { m.seen.push(now); if (m.files.length < 200) m.files.push(f); }
+    m.seen = m.seen.filter((t) => now - t < BURST_WINDOW_MS);
+    if (m.seen.length < BURST_MIN || now - m.alertedAt < 2 * BURST_WINDOW_MS) continue;
+    m.alertedAt = now;
+    const sample = m.files.slice(-12);
+    const checked = sample.slice(0, 6);
+    const scrambled = checked.length > 0 && checked.filter(looksScrambled).length >= Math.ceil(checked.length / 2);
+    if (!hit || m.seen.length > hit.count) hit = { ending, count: m.seen.length, scrambled, sample };
+    m.files = [];
+  }
+  for (const [ending, m] of memory) if (!m.seen.some((t) => now - t < 2 * BURST_WINDOW_MS) && now - m.alertedAt > 2 * BURST_WINDOW_MS) memory.delete(ending);
+  return hit;
+}
+
+export function renameBurstEvent(hit, agent, cwd) {
+  const what = `renamed ${hit.count} files to end in ${hit.ending} within a few seconds`;
+  return {
+    agentId: agent?.id ?? null,
+    kind: 'file',
+    risk: hit.scrambled ? 'critical' : 'high',
+    reasons: [hit.scrambled
+      ? `${what}, and their contents now look scrambled. This is what ransomware does`
+      : `${what}. Ransomware does this after scrambling files; a bulk rename you asked for looks the same`],
+    title: `${hit.count} files in ${agent?.project ?? 'the project'} were renamed to ${hit.ending}`,
+    detail: hit.sample.slice(0, 8).map((f) => path.relative(cwd, f)).join(', '),
+    files: hit.sample.map((f) => path.relative(cwd, f)),
+  };
+}
+
 function flushProjects() {
   for (const [id, w] of watchers) {
     if (!w || !w.pending.size) continue;
@@ -308,6 +397,8 @@ function flushProjects() {
     const files = [...w.pending].filter((f) => fs.existsSync(f) && !fs.statSync(f).isDirectory());
     const deleted = [...w.pending].filter((f) => !fs.existsSync(f));
     w.pending.clear();
+    const burst = noteRenames((w.renames ??= new Map()), renamedWithNewEnding(files, deleted));
+    if (burst) addEvent(renameBurstEvent(burst, agent, w.cwd));
     // Removing Harness's hooks, or making git run a program, gets its own event.
     for (const f of [...files, ...deleted].filter((x) => CLAUDE_SETTINGS.test(x))) {
       const ev = hookRemovalEvent(f, agent);
