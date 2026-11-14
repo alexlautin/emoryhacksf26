@@ -68,6 +68,14 @@ pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundl
 
 Builds are for the platform you build on. Downloaded Mac builds use the approval steps under **First open on macOS** above. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
 
+## Phone access
+
+Settings → **Phone access** → **Turn on** shows a QR code. Scan it with your phone to open the dashboard there. A paired phone sees the score, your agents and what happened, and can pause, resume or stop an agent. It can't change settings, mark things as normal, reset activity or run the demo. Those stay on the computer.
+
+It's off by default. When it's on, Harness opens a second port (4101, or `HARNESS_PHONE_PORT`) on your network address. Each request has to carry the key from the QR code. **Unpair phones** makes a new key and signs every phone out, and **Turn off** closes the port. The normal dashboard on 127.0.0.1 is unchanged.
+
+Over plain Wi-Fi the traffic isn't encrypted, so use it only on a network you trust. For school or public Wi-Fi, which usually blocks devices from reaching each other, install [Tailscale](https://tailscale.com) on this computer and on your phone, signed in to the same account. When Harness sees a Tailscale address it puts that in the QR code instead. The connection is then encrypted and works on any network.
+
 ## Blocking actions before they run (Claude Code)
 
 The monitors below see what happened. Claude Code hooks let Harness check each action **before** it runs:

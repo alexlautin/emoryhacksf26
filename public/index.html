@@ -63,7 +63,7 @@
   </main>
 
   <footer class="foot">
-    <p>Nothing leaves this computer.</p>
+    <p id="foot-text">Nothing leaves this computer.</p>
   </footer>
 
   <dialog id="prefs" aria-labelledby="prefs-title">
@@ -72,7 +72,7 @@
         <h2 id="prefs-title">Settings</h2>
         <button class="btn icon" id="prefs-close" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
       </header>
-      <fieldset class="protect" id="protect" data-level="dangerous">
+      <fieldset class="protect" id="protect" data-level="dangerous" data-local-only>
         <legend>Auto-protect <span id="protect-state" class="state-word">On</span></legend>
         <p class="hint" id="protect-desc"></p>
         <svg class="i" hidden aria-hidden="true"><use id="protect-icon" href="#shield-check"/></svg>
@@ -91,7 +91,7 @@
         </div>
         <p><button type="button" class="btn" id="prefs-contrast" aria-pressed="false">Higher contrast</button></p>
       </fieldset>
-      <fieldset>
+      <fieldset data-local-only>
         <legend>Menu bar item</legend>
         <div class="choice-list" role="radiogroup" aria-label="Menu bar item" id="display-seg">
           <button type="button" data-display="score" role="radio">Score</button>
@@ -100,17 +100,33 @@
           <button type="button" data-display="alerts" role="radio">Alert count</button>
         </div>
       </fieldset>
-      <fieldset>
+      <fieldset data-local-only>
         <legend>Alerts</legend>
         <p class="hint" id="notify-hint">Dangerous events always show a banner here. Browser alerts stay off until you allow them.</p>
         <button type="button" class="btn" id="prefs-notify">Allow browser alerts</button>
       </fieldset>
-      <fieldset>
+      <fieldset data-local-only>
         <legend>Normal for a project</legend>
         <p class="hint">Actions you marked as normal. Removing one puts its points back.</p>
         <ul id="baseline-list" class="baseline-list"></ul>
       </fieldset>
-      <fieldset>
+      <fieldset id="phone" data-local-only>
+        <legend>Phone access <span id="phone-state" class="state-word">Off</span></legend>
+        <p class="hint">See this dashboard on a phone on the same Wi-Fi, and pause, resume or end agents from it. Settings can only be changed here.</p>
+        <div id="phone-on" class="phone-on" hidden>
+          <div id="phone-qr" class="phone-qr" role="img" aria-label="QR code that pairs a phone with Harness"></div>
+          <div class="phone-help">
+            <p id="phone-where" class="hint"></p>
+            <p class="hint" id="phone-trust">Only on Wi-Fi you trust. For school or public Wi-Fi, install Tailscale on this computer and your phone.</p>
+            <p class="hint">If your Mac asks whether to accept incoming connections, choose Allow.</p>
+          </div>
+        </div>
+        <div class="coach-actions">
+          <button type="button" class="btn" id="phone-toggle">Turn on</button>
+          <button type="button" class="btn ghost" id="phone-reset" hidden title="Sign out every paired phone and make a new code">Unpair phones</button>
+        </div>
+      </fieldset>
+      <fieldset data-local-only>
         <legend>Try it</legend>
         <p class="hint">Run a pretend attack to see how Harness reacts. It uses fake secrets and a server on this computer.</p>
         <div class="coach-actions">
