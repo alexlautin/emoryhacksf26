@@ -9,7 +9,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { addEvent, listAgents, getAgent } from '../store.js';
-import { analyzePath, baitPaths, maxRisk, shortPath } from '../rules.js';
+import crypto from 'node:crypto';
+import { analyzePath, baitPaths, baitMarkers, maxRisk, shortPath } from '../rules.js';
 import { SENSITIVE_DIRS } from '../platform.js';
 
 const HOME = os.homedir();
@@ -17,11 +18,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const SEATBELT_DATA = path.join(ROOT, 'data');
 export const BAIT_DIR = path.join(HOME, '.seatbelt', 'bait');
 
+// Each decoy embeds a random marker made at install time (kept in data/bait-markers.json), so the
+// values are unique to this computer and can be recognised wherever they show up later.
 const BAIT_FILES = {
-  'aws_credentials': '# Seatbelt decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIASEATBELTDECOY0001\naws_secret_access_key = sb-decoy/7Hq2xXbXk1vZ0Yl8Wm3oPqRsTuVwXyZ0abc\n',
-  'passwords.txt': 'Seatbelt decoy file. Nothing real here.\nbank: hunter2-decoy\nemail: correct-horse-decoy\n',
-  'id_ed25519_backup': '-----BEGIN OPENSSH PRIVATE KEY-----\nU2VhdGJlbHQgZGVjb3kga2V5LiBOb3QgcmVhbC4=\n-----END OPENSSH PRIVATE KEY-----\n',
+  'aws_credentials': (m) => `# Seatbelt decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${m}\naws_secret_access_key = sb-decoy/${m}${m.toLowerCase().slice(0, 12)}\n`,
+  'passwords.txt': (m) => `Seatbelt decoy file. Nothing real here.\nbank: ${m}-decoy\nemail: ${m.toLowerCase()}-decoy\n`,
+  'id_ed25519_backup': (m) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${Buffer.from(`Seatbelt decoy key. Not real. ${m}`).toString('base64')}\n${m}\n-----END OPENSSH PRIVATE KEY-----\n`,
 };
+const MARKERS_FILE = path.join(SEATBELT_DATA, 'bait-markers.json');
+// The demo's .env is rebuilt by demo/reset.js with fixed values; this string is in all of them.
+const DEMO_MARKER = 'DECOY-NOT-REAL';
+
+function newMarker() {
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  return [...crypto.randomBytes(16)].map((b) => abc[b % 32]).join('');
+}
 const DEMO_ENV = path.join(ROOT, 'demo', 'victim-project', '.env');
 
 const lastAtime = new Map();
@@ -33,16 +44,39 @@ export function ignoreWrites(dir, ms = 4000) {
 
 function setupBait() {
   fs.mkdirSync(BAIT_DIR, { recursive: true });
-  for (const [name, body] of Object.entries(BAIT_FILES)) {
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(MARKERS_FILE, 'utf8')); } catch {}
+  for (const [name, render] of Object.entries(BAIT_FILES)) {
     const p = path.join(BAIT_DIR, name);
-    if (!fs.existsSync(p)) fs.writeFileSync(p, body, { mode: 0o600 });
+    let body = null;
+    try { body = fs.readFileSync(p, 'utf8'); } catch {}
+    let marker = saved[name];
+    // Write the decoy if it's missing, or upgrade an older decoy that has no marker yet.
+    // Never overwrite a file that isn't one of ours.
+    if (body === null || (/Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body) && !(marker && body.includes(marker)))) {
+      marker = newMarker();
+      fs.writeFileSync(p, render(marker), { mode: 0o600 });
+    } else if (!(marker && body.includes(marker))) {
+      marker = null;
+    }
+    if (marker) {
+      saved[name] = marker;
+      baitMarkers.set(marker, p);
+    }
     baitPaths.add(p);
   }
+  fs.mkdirSync(SEATBELT_DATA, { recursive: true });
+  fs.writeFileSync(MARKERS_FILE, JSON.stringify(saved, null, 2), { mode: 0o600 });
 }
 
 function refreshDemoBait() {
-  if (fs.existsSync(DEMO_ENV)) baitPaths.add(DEMO_ENV);
-  else baitPaths.delete(DEMO_ENV);
+  if (fs.existsSync(DEMO_ENV)) {
+    baitPaths.add(DEMO_ENV);
+    baitMarkers.set(DEMO_MARKER, DEMO_ENV);
+  } else {
+    baitPaths.delete(DEMO_ENV);
+    baitMarkers.delete(DEMO_MARKER);
+  }
 }
 
 /** Push atime behind mtime so the next read is guaranteed to update it again. */
