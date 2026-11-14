@@ -12,14 +12,12 @@ function Hero() {
     <section className="hero">
       <div className="wrap hero-grid">
         <div className="hero-copy">
-          <p className="eyebrow">A safety harness for AI coding agents</p>
           <h1>Let your agent run.<br /><span>Keep it on a harness.</span></h1>
           <p className="lead">Harness watches everything your coding agent does on your computer, including the parts its window leaves out, and pauses it before something risky finishes.</p>
           <p className="hero-cta">
             <a className="btn btn-ink" href="#download">Download for macOS or Windows</a>
             <a className="btn btn-line" href="/demo">Try the live demo <span aria-hidden="true">→</span></a>
           </p>
-          <p className="hero-note">Runs locally. No account. Nothing leaves your machine.</p>
         </div>
 
         <div className="panel-wrap" aria-hidden="true">
@@ -223,9 +221,8 @@ export default function Home() {
           <p className="lead">Free, with the source on GitHub. Lives in your Mac menu bar or Windows system tray.</p>
           <div id="downloads" />
           <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness/releases/latest">GitHub Releases</a>.</p></noscript>
-          <section className="install-guide" aria-labelledby="install-title">
-            <p className="eyebrow">Preview installation</p>
-            <h3 id="install-title">A little help with the first open.</h3>
+          <details className="install-guide">
+            <summary>Need help opening it the first time?</summary>
             <p>Node is included. You do not need a developer account or a separate Node installation.</p>
             <section id="install-mac" aria-labelledby="install-mac-title">
               <h4 id="install-mac-title">On a Mac</h4>
@@ -255,7 +252,7 @@ export default function Home() {
               <p>Download SHA256SUMS.txt from the same release. On macOS, run <code>shasum -a 256</code> followed by a space and the downloaded DMG’s path in Terminal. On Windows, use <code>Get-FileHash</code> followed by the installer’s path in PowerShell. Quote paths containing spaces. Compare the result with the entry for that exact filename.</p>
               <p>A matching checksum confirms that your file matches the published download. It does not replace Apple notarization or a malware scan.</p>
             </details>
-          </section>
+          </details>
         </div>
       </section>
       <Downloads />
