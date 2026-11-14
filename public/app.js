@@ -1,26 +1,30 @@
-// Seatbelt dashboard: plain JS, live updates over Server-Sent Events.
-import { computeScore, factorsFor, BANDS, MIN, MAX } from './score.js';
+// Lookout dashboard. Plain JS, live updates over Server-Sent Events.
+import { alertCount, computeScore, factorsFor } from './score.js';
 
 const $ = (s) => document.querySelector(s);
+const PANEL = document.documentElement.classList.contains('panel');
 const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 const LEVEL = { info: 'Routine', low: 'Note', medium: 'Worth a look', high: 'Risky', critical: 'Dangerous' };
 const ICON = { process: 'terminal', network: 'globe', file: 'file-text', tool: 'wrench', task: 'message-square', system: 'eye' };
 const GUARD_ICON = { paused: 'circle-pause', resumed: 'play', ended: 'octagon-x' };
 const GUARD_TONE = { paused: 'pause', resumed: 'ok', ended: 'bad' };
 const RISK_TONE = { info: '', low: 'note', medium: 'warn', high: 'bad', critical: 'bad' };
+const DISPLAYS = [
+  { id: 'score', label: 'Score' },
+  { id: 'icon', label: 'Icon only' },
+  { id: 'agents', label: 'Agent count' },
+  { id: 'alerts', label: 'Alert count' },
+];
 const PROTECT = {
-  off: { word: 'Off', icon: 'shield-off', desc: 'Seatbelt only watches and warns. Agents keep running even when they do something dangerous.' },
+  off: { word: 'Off', icon: 'shield-off', desc: 'Lookout only watches and warns. Agents keep running even when they do something dangerous.' },
   dangerous: { word: 'On', icon: 'shield-check', desc: 'Pauses a session as soon as it does something dangerous, like opening your secrets or wiping files. You decide whether it continues.' },
   risky: { word: 'Strict', icon: 'shield-alert', desc: 'Pauses a session on anything risky, including uploads to unknown servers and background changes. Expect more interruptions.' },
 };
+const MOD = /Mac/.test(navigator.platform) || /Mac/.test(navigator.userAgent) ? '⌘' : 'Ctrl+';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** A Lucide icon from the icon sprite (inlined into the page once, see loadIcons). */
-const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#${name}"/></svg>`;
+const icon = (name) => `<svg class="i" aria-hidden="true"><use href="#${name}"/></svg>`;
 
-/**
- * Put /icons.svg into the page once. Every redraw then points at the same symbols instead of
- * asking for the file again (WebKit blanks external <use> icons while it re-fetches them).
- */
 async function loadIcons() {
   try {
     const box = document.createElement('div');
@@ -31,17 +35,12 @@ async function loadIcons() {
   } catch {}
 }
 
-/** Replace an element's HTML only when it actually changed. */
 function setHTML(el, html) {
-  if (el.__html === html) return;
+  if (!el || el.__html === html) return;
   el.__html = html;
   el.innerHTML = html;
 }
 
-/**
- * Keyed list update: items are [key, html]. Unchanged items keep their DOM nodes (no flicker,
- * hover and focus survive); changed ones are swapped; order is fixed up in place.
- */
 function setList(el, items, emptyHTML) {
   if (!items.length) { setHTML(el, emptyHTML); return; }
   if (el.__html !== undefined) { el.__html = undefined; el.innerHTML = ''; }
@@ -74,12 +73,22 @@ const state = {
   factor: null,
   showRoutine: false,
   dismissedAlert: 0,
-  settings: { autoProtect: 'dangerous' },
+  settings: { autoProtect: 'dangerous', menuBarDisplay: 'score' },
   shownScore: null,
-  feedSeen: 0, // highest event id already shown in the feed; only newer ones animate in
+  feedSeen: 0,
+  ready: false,
+  connected: false,
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const byUs = (who) => who === 'lookout' || who === 'seatbelt';
+
+function localGet(key) {
+  try { return localStorage.getItem(`lookout.${key}`) ?? localStorage.getItem(`seatbelt.${key}`); } catch { return null; }
+}
+function localSet(key, value) {
+  try { localStorage.setItem(`lookout.${key}`, value); } catch {}
+}
 
 function ago(ts) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -89,56 +98,65 @@ function ago(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-/** Reasons are written to follow "It …"; a few already start their own sentence. */
 const sentence = (r) => (/^(this|happened)\b/.test(r) ? r[0].toUpperCase() + r.slice(1) : `It ${r}`);
-
 const eventsOf = (id) => state.events.filter((e) => e.agentId === id);
+const liveAgents = () => [...state.agents.values()].filter((a) => a.alive);
 
-// ---------- Score ----------
-const pct = (score) => ((score - MIN) / (MAX - MIN)) * 100;
-
-function drawScale() {
-  const bands = [...BANDS].reverse(); // low to high
-  $('#scale-bar').innerHTML = bands.map((b, i) => {
-    const hi = bands[i + 1]?.min ?? MAX;
-    return `<span class="${b.cls}" style="width:${pct(hi) - pct(b.min)}%"></span>`;
-  }).join('');
-  $('#scale-labels').innerHTML = bands.map((b, i) => {
-    const hi = bands[i + 1]?.min ?? MAX;
-    return `<span style="width:${pct(hi) - pct(b.min)}%"><b>${b.min}</b></span>`;
-  }).join('');
+function menuBarText() {
+  const mode = state.settings.menuBarDisplay ?? 'score';
+  const active = liveAgents().length;
+  const alerts = alertCount(state.events, [...state.agents.values()]);
+  if (mode === 'icon') return 'icon only';
+  if (mode === 'agents') return String(active);
+  if (mode === 'alerts') return alerts ? String(alerts) : 'icon only';
+  if (!state.ready) return 'the score';
+  return String(computeScore(state.events).score);
 }
 
 function animateScore(target) {
   const from = state.shownScore ?? target;
   state.shownScore = target;
-  $('#scale-marker').style.left = `${pct(target)}%`;
   const start = performance.now();
-  const dur = from === target ? 0 : 700;
+  const dur = reduceMotion || from === target ? 0 : 500;
   const step = (now) => {
     const t = dur ? Math.min(1, (now - start) / dur) : 1;
-    $('#score-num').textContent = Math.round(from + (target - from) * (1 - (1 - t) ** 3));
+    const el = $('#score-num');
+    if (el) el.textContent = Math.round(from + (target - from) * (1 - (1 - t) ** 3));
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
 }
 
 function renderScore() {
+  const num = $('#score-num');
+  const word = $('#score-level');
+  const fill = $('#meter-fill');
+  if (!state.ready) {
+    num.textContent = '--';
+    word.className = 'level-word';
+    word.textContent = 'Loading';
+    $('#score-blurb').textContent = 'Getting the latest activity.';
+    $('#score-basis').textContent = '';
+    fill.style.width = '0%';
+    fill.className = 'meter-fill';
+    return;
+  }
   const s = computeScore(state.events);
   if (s.score !== state.shownScore) animateScore(s.score);
-  const word = $('#score-band');
-  word.className = `band-word ${s.band.cls}`;
-  word.textContent = s.band.name;
-  $('#scale-marker').className = `scale-marker ${s.band.cls}`;
-  $('#score-blurb').textContent = s.band.blurb;
+  word.className = `level-word ${s.level.cls}`;
+  word.textContent = s.level.name;
+  $('#score-blurb').textContent = s.level.blurb;
+  fill.style.width = `${s.score}%`;
+  fill.className = `meter-fill ${s.level.cls}`;
   const sessions = new Set(state.events.filter((e) => e.kind !== 'system').map((e) => e.agentId)).size;
   $('#score-basis').textContent = s.counted
-    ? `${s.counted} action${s.counted === 1 ? '' : 's'} from ${sessions} session${sessions === 1 ? '' : 's'} since ${new Date(s.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Points come back over about a day.`
-    : 'No agent activity yet. Every score starts at 850.';
+    ? `${s.counted} action${s.counted === 1 ? '' : 's'} from ${sessions} session${sessions === 1 ? '' : 's'} since ${new Date(s.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Points fade by half every 12 hours.`
+    : 'No agent activity yet. The score starts at 100.';
 
+  const sevOf = (lost) => (lost >= 20 ? 'bad' : lost >= 8 ? 'warn' : 'note');
   setHTML($('#factors'), s.factors.map((f) => {
     const bad = f.lost > 0;
-    const sev = f.lost >= 100 ? 'bad' : f.lost >= 25 ? 'warn' : bad ? 'note' : 'ok';
+    const sev = bad ? sevOf(f.lost) : 'ok';
     return `
       <li>
         <button class="factor ${sev} ${state.factor === f.id ? 'on' : ''}" data-factor="${f.id}" ${bad ? '' : 'disabled'}>
@@ -159,24 +177,23 @@ function renderScore() {
   $('#factor-clear').hidden = !state.factor;
 }
 
-// ---------- Auto-protect ----------
 function renderProtect() {
   const lvl = state.settings.autoProtect ?? 'off';
-  const p = PROTECT[lvl];
+  const p = PROTECT[lvl] ?? PROTECT.off;
   $('#protect').dataset.level = lvl;
   $('#protect-state').textContent = p.word;
   $('#protect-icon').setAttribute('href', `#${p.icon}`);
   $('#protect-desc').textContent = p.desc;
   for (const b of document.querySelectorAll('#protect-seg button')) {
-    b.classList.toggle('on', b.dataset.level === lvl);
-    b.setAttribute('aria-checked', String(b.dataset.level === lvl));
+    const on = b.dataset.level === lvl;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', String(on));
   }
 }
 
-// ---------- Sessions ----------
 function sessionState(a) {
-  if (a.alive && a.paused) return { cls: 'paused', text: a.pausedBy === 'seatbelt' ? 'Paused by Seatbelt' : 'Paused by you' };
-  if (!a.alive && a.endedBy) return { cls: 'ended', text: a.endedBy === 'seatbelt' ? 'Ended by Seatbelt' : 'Ended by you' };
+  if (a.alive && a.paused) return { cls: 'paused', text: byUs(a.pausedBy) ? 'Paused by Lookout' : 'Paused by you' };
+  if (!a.alive && a.endedBy) return { cls: 'ended', text: byUs(a.endedBy) ? 'Ended by Lookout' : 'Ended by you' };
   if (!a.alive) return { cls: 'done', text: 'Finished' };
   const recent = Date.now() - (a.lastActive ?? 0) < 15000;
   return { cls: recent ? 'working' : 'idle', text: recent ? 'Working' : 'Idle' };
@@ -188,8 +205,6 @@ function lastAction(a) {
 }
 
 const BRAND_KINDS = new Set(['claude', 'codex', 'gemini', 'cursor', 'copilot', 'opencode', 'amp']);
-
-/** The agent's logo, or a generic bot icon for the demo and anything unknown. */
 function agentLogo(a) {
   return BRAND_KINDS.has(a.kind)
     ? `<svg class="brand" aria-hidden="true"><use href="#brand-${a.kind}"/></svg>`
@@ -201,24 +216,23 @@ function sessionCard(a) {
   const sc = computeScore(eventsOf(a.id));
   const trigger = a.pausedEventId && state.events.find((e) => e.id === a.pausedEventId);
   const worst = sc.factors.filter((f) => f.lost).sort((x, y) => y.lost - x.lost)[0];
+  const selected = state.selected === a.id;
   return `
-    <article class="session ${st.cls} band-${sc.band.cls} ${state.selected === a.id ? 'selected' : ''}" data-id="${esc(a.id)}" tabindex="0">
+    <article class="session ${st.cls} ${selected ? 'selected' : ''}" data-id="${esc(a.id)}" tabindex="0" role="button" aria-pressed="${selected}">
       <header class="s-head">
         <div class="avatar" title="${esc(a.label)}">${agentLogo(a)}</div>
         <div class="s-id">
           <div class="s-name">${esc(a.label)}</div>
-          <div class="s-proj" title="${esc(a.cwd)}">in ${esc(a.project)}${a.startedAt ? ` · started ${ago(a.startedAt)}` : ''}</div>
+          <div class="s-proj" title="${esc(a.cwd || a.project)}">in ${esc(a.project)}${a.startedAt ? ` · started ${ago(a.startedAt)}` : ''}</div>
         </div>
-        <div class="s-score ${sc.band.cls}" title="This session's safety score">
-          <b>${sc.score}</b><span>${sc.band.name}</span>
+        <div class="s-score ${sc.level.cls}" title="${sc.score} out of 100, ${esc(sc.level.name)}">
+          <b>${sc.score}</b><span>/ 100</span>
         </div>
       </header>
-
       <div class="s-status"><span class="state-dot ${st.cls}"></span><b>${st.text}</b><span class="s-last">${esc(lastAction(a))}</span></div>
-
       ${a.paused ? `
         <div class="s-callout">
-          <div class="s-callout-title">${icon('circle-pause')} ${a.pausedBy === 'seatbelt' ? 'Paused by Seatbelt' : 'Paused'}</div>
+          <div class="s-callout-title">${icon('circle-pause')} ${byUs(a.pausedBy) ? 'Paused by Lookout' : 'Paused'}</div>
           ${a.pausedReason ? `<div class="s-callout-why">It ${esc(a.pausedReason)}.</div>` : ''}
           ${trigger?.command ? `<div class="cmd mono">${esc(trigger.command)}</div>` : ''}
           ${a.task ? `<div class="s-callout-ask">You asked it to “${esc(a.task)}”. Does this look like part of that job?</div>` : ''}
@@ -228,9 +242,7 @@ function sessionCard(a) {
           </div>
         </div>`
       : a.task ? `<div class="task"><span>Request</span> ${esc(a.task)}</div>` : ''}
-
       ${!a.paused && worst ? `<div class="s-worst">${icon(worst.icon)} <span>Main concern: <b>${esc(worst.name)}</b>, −${worst.lost}</span></div>` : ''}
-
       <footer class="s-foot">
         <div class="counts">
           <span><b>${a.counts.commands}</b> action${a.counts.commands === 1 ? '' : 's'}</span>
@@ -246,7 +258,6 @@ function sessionCard(a) {
     </article>`;
 }
 
-/** "End" takes two clicks; the second-click state lives in state.confirmEnd so redraws keep it. */
 function endButton(a, cls, label) {
   const on = state.confirmEnd === a.id;
   return `<button class="btn ${cls}${on ? ' confirming' : ''}" data-act="end" data-id="${esc(a.id)}" title="Stops ${esc(a.label)} and every program it started">${on ? 'Click again to end' : label}</button>`;
@@ -258,9 +269,9 @@ function earlierRow(a) {
   return `
     <button class="earlier-row ${state.selected === a.id ? 'selected' : ''}" data-id="${esc(a.id)}">
       <span class="avatar sm">${agentLogo(a)}</span>
-      <span class="e-name"><b>${esc(a.label)}</b> in ${esc(a.project)}</span>
+      <span class="e-name" title="${esc(a.cwd || a.project)}"><b>${esc(a.label)}</b> in ${esc(a.project)}</span>
       <span class="e-state ${st.cls}">${st.text}</span>
-      <span class="s-score sm ${sc.band.cls}"><b>${sc.score}</b></span>
+      <span class="s-score sm ${sc.level.cls}" title="${sc.score} out of 100"><b>${sc.score}</b></span>
     </button>`;
 }
 
@@ -271,14 +282,13 @@ function renderAgents() {
   const earlier = all.filter((a) => !a.alive).sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
   $('#active-count').textContent = active.length;
   setList($('#agents'), active.map((a) => [a.id, sessionCard(a)]),
-    '<p class="empty">No AI agents running right now. Open Claude Code, Codex or another coding agent and Seatbelt will pick it up automatically.</p>');
+    '<p class="empty"><strong>No agents running</strong>Open Claude Code or Codex, or run the demo attack. Lookout picks it up on its own.</p>');
   $('#earlier').hidden = !earlier.length;
   $('#earlier-count').textContent = earlier.length;
   setList($('#earlier-list'), earlier.map((a) => [a.id, earlierRow(a)]), '');
-  $('#agent-hint').textContent = state.selected ? 'Showing one session. Click it again to show all' : 'Click a session to see only its activity';
+  $('#agent-hint').textContent = state.selected ? 'Showing one session. Click it again to show all.' : 'Click a session to see only its activity.';
 }
 
-// ---------- Feed ----------
 function isNotable(e) {
   if (state.factor) return true;
   if (state.showRoutine) return true;
@@ -296,13 +306,13 @@ function feedItem(e) {
   const reasons = (e.reasons ?? []).filter(Boolean);
   const tags = factorsFor(e).map((f) => `<span class="ftag">${icon(f.icon)}${esc(f.name)}</span>`).join('');
   return `
-    <li class="item ${esc(e.risk)} ${e.guard ? 'guard ' + esc(e.guard) : ''} ${e.id > state.feedSeen ? 'new' : ''}">
+    <li class="item ${esc(e.risk)} ${e.guard ? 'guard ' + esc(e.guard) : ''}">
       <div class="tile ${e.guard ? GUARD_TONE[e.guard] : RISK_TONE[e.risk] ?? ''}">${icon(ic)}</div>
       <div>
         <div class="title">${esc(e.title)}</div>
         ${reasons.length ? `<div class="why">${reasons.length === 1 ? `${esc(sentence(reasons[0]))}.` : `<ul>${reasons.map((r) => `<li>${esc(sentence(r))}</li>`).join('')}</ul>`}</div>` : ''}
         ${e.guard && e.detail ? `<div class="why">${esc(e.detail)}</div>` : ''}
-        ${e.command && (RANK[e.risk] >= 1 || e.agentReported) ? `<div class="cmd mono">${esc(e.command)}</div>` : ''}
+        ${e.command && (RANK[e.risk] >= 1 || e.agentReported) ? `<div class="cmd mono" title="${esc(e.command)}">${esc(e.command)}</div>` : ''}
         ${e.kind === 'file' && e.batch && e.detail ? `<div class="why mono">${esc(e.detail)}</div>` : ''}
         ${tags ? `<div class="ftags">${tags}</div>` : ''}
       </div>
@@ -324,39 +334,52 @@ function filtered() {
 function renderFeed() {
   const evs = filtered().filter(isNotable).slice(-200).reverse();
   setList($('#feed'), evs.map((e) => [String(e.id), feedItem(e)]), '');
-  state.feedSeen = Math.max(state.feedSeen, ...evs.map((e) => e.id));
+  state.feedSeen = Math.max(state.feedSeen, ...evs.map((e) => e.id), 0);
   $('#feed-empty').hidden = evs.length > 0;
   const a = state.selected && state.agents.get(state.selected);
   const f = state.factor && computeScore([]).factors.find((x) => x.id === state.factor);
-  $('#feed-title').textContent = f ? `${f.name}` : a ? `${a.label} in ${a.project}` : 'Activity';
+  $('#feed-title').textContent = f ? f.name : a ? `${a.label} in ${a.project}` : 'Activity';
+  $('#feed-empty').textContent = !state.ready
+    ? 'Connecting…'
+    : state.factor
+      ? 'Nothing in this category.'
+      : 'Nothing needs your attention yet. Risky actions show up here. Turn on routine activity to see the rest.';
 }
 
 function renderTable() {
   const q = $('#q').value.toLowerCase();
   const minRisk = +$('#risk-filter').value;
   const kind = $('#kind-filter').value;
-  const evs = filtered()
+  const matched = filtered()
     .filter((e) => (RANK[e.risk] ?? 0) >= minRisk && (!kind || e.kind === kind))
-    .filter((e) => !q || JSON.stringify(e).toLowerCase().includes(q))
-    .slice(-600)
-    .reverse();
-  setHTML($('#rows'), evs.map((e) => {
+    .filter((e) => !q || JSON.stringify(e).toLowerCase().includes(q));
+  const evs = matched.slice(-250).reverse();
+  const note = $('#table-note');
+  if (matched.length > evs.length) {
+    note.hidden = false;
+    note.textContent = `Showing the latest ${evs.length} of ${matched.length}. Filter to narrow this down.`;
+  } else note.hidden = true;
+  if (!evs.length) {
+    setHTML($('#rows'), '<tr><td class="empty-cell" colspan="6">Nothing matches.</td></tr>');
+    return;
+  }
+    const kindName = { process: 'Program', network: 'Network', file: 'File', tool: 'Agent tool', task: 'Task', system: 'System' };
+    setHTML($('#rows'), evs.map((e) => {
     const a = state.agents.get(e.agentId);
     return `<tr>
-      <td>${new Date(e.ts).toLocaleTimeString()}</td>
+      <td class="clip">${new Date(e.ts).toLocaleTimeString()}</td>
       <td>${esc(a ? `${a.label} · ${a.project}` : '—')}</td>
-      <td>${esc(e.kind)}</td>
-      <td><span class="badge ${esc(e.risk)}">${esc(e.risk)}</span></td>
-      <td>${esc(e.title)}${e.reasons?.length ? `<div class="reasons">${e.reasons.map(esc).join(' · ')}</div>` : ''}</td>
-      <td class="raw">${esc(e.command ?? '')}${e.command ? '<br/>' : ''}${esc(e.detail ?? '')}</td>
+      <td class="clip">${esc(kindName[e.kind] || e.kind)}</td>
+      <td class="clip"><span class="badge ${esc(e.risk)}">${esc(LEVEL[e.risk] || e.risk)}</span></td>
+      <td class="wrap">${esc(e.title)}${e.reasons?.length ? `<div class="reasons">${e.reasons.map(esc).join(' · ')}</div>` : ''}</td>
+      <td class="raw wrap">${esc(e.command ?? '')}${e.command ? '<br/>' : ''}${esc(e.detail ?? '')}</td>
     </tr>`;
   }).join(''));
 }
 
-// ---------- Alert banner ----------
 function renderAlert() {
   const el = $('#alert');
-  const paused = [...state.agents.values()].filter((a) => a.alive && a.paused && a.pausedBy === 'seatbelt');
+  const paused = liveAgents().filter((a) => a.paused && byUs(a.pausedBy));
   if (paused.length) {
     const a = paused[0];
     el.className = 'alert protected';
@@ -364,9 +387,9 @@ function renderAlert() {
     setHTML(el, `
       <span class="tile pause">${icon('shield-check')}</span>
       <div>
-        <h3>Seatbelt paused ${esc(a.label)} in ${esc(a.project)}</h3>
+        <h3>Lookout paused ${esc(a.label)} in ${esc(a.project)}</h3>
         ${a.pausedReason ? `<p>It ${esc(a.pausedReason)}. The agent and everything it started are frozen until you choose what happens next.</p>` : ''}
-        ${paused.length > 1 ? `<div class="meta muted">${paused.length - 1} more session${paused.length > 2 ? 's are' : ' is'} paused. See below.</div>` : ''}
+        ${paused.length > 1 ? `<div class="meta">${paused.length - 1} more session${paused.length > 2 ? 's are' : ' is'} paused.</div>` : ''}
       </div>
       <div class="alert-actions">
         ${endButton(a, 'danger small', 'End session')}
@@ -386,14 +409,101 @@ function renderAlert() {
       <h3>${esc(top.title)}</h3>
       ${top.reasons?.length ? `<ul>${top.reasons.map((r) => `<li>${esc(sentence(r))}.</li>`).join('')}</ul>` : ''}
       ${a?.task ? `<div class="meta">You asked it to “${esc(a.task)}”. Does this look like part of that job?</div>` : ''}
-      ${recent.length > 1 ? `<div class="meta muted">${recent.length - 1} more risky moment${recent.length > 2 ? 's' : ''} in the last 15 minutes.</div>` : ''}
+      ${recent.length > 1 ? `<div class="meta">${recent.length - 1} more risky moment${recent.length > 2 ? 's' : ''} in the last 15 minutes.</div>` : ''}
     </div>
     <div class="alert-actions">
-      ${a?.alive && !a.paused ? `${endButton(a, 'danger small', 'End session')}` : ''}
+      ${a?.alive && !a.paused ? endButton(a, 'danger small', 'End session') : ''}
       ${a ? `<button class="btn small" data-act="explain" data-id="${esc(a.id)}">Explain</button>` : ''}
       <button class="btn ghost small" id="dismiss">Got it</button>
     </div>`);
   $('#dismiss').onclick = () => { state.dismissedAlert = Math.max(...recent.map((e) => e.id)); renderAlert(); };
+}
+
+function markDisplay(root, mode) {
+  if (!root) return;
+  for (const b of root.querySelectorAll('[data-display]')) {
+    const on = b.dataset.display === mode;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+  }
+}
+
+function renderPrefs() {
+  const mode = state.settings.menuBarDisplay ?? 'score';
+  markDisplay($('#display-seg'), mode);
+  const preview = $('#prefs-preview');
+  if (preview) preview.textContent = `Right now the menu bar would show ${menuBarText()}.`;
+}
+
+function latestRisk() {
+  const ranked = state.events.filter((e) => e.kind !== 'system' && (RANK[e.risk] ?? 0) >= 2);
+  const recent = ranked.filter((e) => Date.now() - e.ts < 15 * 60 * 1000);
+  const pool = recent.length ? recent : ranked;
+  return [...pool].sort((a, b) => (RANK[b.risk] - RANK[a.risk]) || (b.ts - a.ts))[0] ?? null;
+}
+
+function renderPanel() {
+  const s = state.ready ? computeScore(state.events) : null;
+  $('#mp-score').textContent = s ? String(s.score) : '--';
+  const level = $('#mp-level');
+  level.className = `mp-level ${s ? s.level.cls : ''}`;
+  level.textContent = s ? s.level.name : 'Loading';
+  const offline = !state.ready && $('#conn-error') && !$('#conn-error').hidden;
+  let blurb = s ? s.level.blurb : offline ? 'Can’t reach Lookout. Trying again.' : 'Getting the latest activity.';
+  if (s && !state.connected) blurb = 'Reconnecting. This may be a few seconds behind.';
+  $('#mp-blurb').textContent = blurb;
+
+  const active = liveAgents().sort((a, b) => (b.paused - a.paused) || ((b.lastActive ?? 0) - (a.lastActive ?? 0)));
+  $('#mp-agent-count').textContent = String(active.length);
+  if (!active.length) {
+    setHTML($('#mp-agents'), '<div class="mp-empty">No agents running</div>');
+  } else {
+    setList($('#mp-agents'), active.map((a) => {
+      const st = sessionState(a);
+      const html = `<button type="button" class="mp-agent" role="menuitem" data-open title="${esc(a.cwd || a.project)}">
+        <span class="mp-dot ${st.cls}"></span>
+        <span class="mp-agent-name">${esc(a.label)}</span>
+        <span class="mp-agent-proj">${esc(a.project)}</span>
+        <span class="mp-agent-state">${esc(st.text.replace('Paused by Lookout', 'Paused').replace('Paused by you', 'Paused'))}</span>
+      </button>`;
+      return [a.id, html];
+    }), '');
+  }
+
+  const top = latestRisk();
+  const box = $('#mp-latest');
+  if (!top) {
+    box.className = 'mp-latest';
+    box.innerHTML = '<div class="mp-latest-title">Nothing risky.</div>';
+  } else {
+    const a = state.agents.get(top.agentId);
+    box.className = `mp-latest ${esc(top.risk)}`;
+    box.innerHTML = `<div class="mp-latest-title"><span class="mp-latest-k">${esc(LEVEL[top.risk] || top.risk)}</span> · ${esc(top.title)}</div>
+      <div class="mp-latest-meta">${ago(top.ts)}${a ? ` · ${esc(a.label)}` : ''}</div>`;
+  }
+
+  const canPause = active.some((a) => !a.paused);
+  const pause = $('#mp-pause');
+  pause.disabled = !canPause;
+  pause.textContent = active.filter((a) => !a.paused).length > 1 ? 'Pause agents' : 'Pause';
+  $('#mp-open-key').textContent = `${MOD}O`;
+  $('#mp-quit-key').textContent = `${MOD}Q`;
+  const shown = menuBarText();
+  $('#mp-preview').textContent = shown === 'icon only' ? '' : shown;
+  markDisplay($('#mp-display'), state.settings.menuBarDisplay ?? 'score');
+  fitPanel();
+}
+
+let panelFitQueued = false;
+function fitPanel() {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  if (!PANEL || !invoke || panelFitQueued) return;
+  panelFitQueued = true;
+  requestAnimationFrame(() => {
+    panelFitQueued = false;
+    const h = Math.ceil($('#menu-panel').offsetHeight);
+    invoke('resize_panel', { height: h }).catch(() => {});
+  });
 }
 
 let scheduled = false;
@@ -402,24 +512,26 @@ function render() {
   scheduled = true;
   requestAnimationFrame(() => {
     scheduled = false;
+    if (PANEL) { renderPanel(); return; }
     renderAlert();
     renderScore();
     renderProtect();
     renderAgents();
+    renderPrefs();
     if (state.view === 'simple') renderFeed();
     else renderTable();
   });
 }
 
-// ---------- Actions ----------
 async function explain(agentId) {
   const a = state.agents.get(agentId);
-  $('#explain').hidden = false;
+  const box = $('#explain');
+  box.hidden = false;
   $('#explain-title').textContent = `Summary: ${a?.label ?? 'agent'} in ${a?.project ?? ''}`;
   $('#explain-body').className = 'explain-body loading';
   $('#explain-body').textContent = 'Writing a summary…';
   $('#explain-src').textContent = '';
-  $('#explain').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  box.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
   try {
     const r = await fetch('/api/summary', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId }) });
     const j = await r.json();
@@ -427,15 +539,14 @@ async function explain(agentId) {
     $('#explain-body').textContent = j.text;
     $('#explain-src').textContent = `Written by ${j.source}. Nothing left this computer.`;
   } catch (err) {
-    $('#explain-body').textContent = `Couldn't write a summary: ${err.message}`;
+    $('#explain-body').className = 'explain-body';
+    $('#explain-body').textContent = `Couldn’t write a summary: ${err.message}`;
   }
 }
 
 async function agentAction(action, agentId, btn) {
   if (action === 'explain') return explain(agentId);
   const a = state.agents.get(agentId);
-  // Ending can't be undone, so it takes a second click. (No confirm(): the desktop app's
-  // webview doesn't show browser dialogs.)
   if (action === 'end' && state.confirmEnd !== agentId) {
     state.confirmEnd = agentId;
     clearTimeout(state.confirmTimer);
@@ -449,7 +560,7 @@ async function agentAction(action, agentId, btn) {
     const r = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId, action }) });
     const j = await r.json();
     if (!r.ok) toast(j.error ?? 'That didn’t work');
-    else toast({ pause: `${a.label} is paused.`, resume: `${a.label} is running again.`, end: `${a.label} was ended.` }[action]);
+    else toast({ pause: `${a?.label ?? 'Session'} is paused.`, resume: `${a?.label ?? 'Session'} is running again.`, end: `${a?.label ?? 'Session'} was ended.` }[action]);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -467,13 +578,55 @@ function setView(v) {
   state.view = v;
   $('#view-simple').classList.toggle('on', v === 'simple');
   $('#view-advanced').classList.toggle('on', v === 'advanced');
+  $('#view-simple').setAttribute('aria-selected', String(v === 'simple'));
+  $('#view-advanced').setAttribute('aria-selected', String(v === 'advanced'));
   $('#simple').hidden = v !== 'simple';
   $('#advanced').hidden = v !== 'advanced';
-  try { localStorage.setItem('seatbelt.view', v); } catch {}
+  localSet('view', v);
   render();
 }
 
-// ---------- Wiring ----------
+async function setDisplay(mode) {
+  if (!DISPLAYS.some((d) => d.id === mode)) return;
+  const prev = state.settings.menuBarDisplay;
+  state.settings = { ...state.settings, menuBarDisplay: mode };
+  render();
+  try {
+    const r = await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ menuBarDisplay: mode }) });
+    if (!r.ok) throw new Error('save failed');
+  } catch {
+    state.settings = { ...state.settings, menuBarDisplay: prev };
+    render();
+    toast('Couldn’t save the menu bar setting');
+  }
+}
+
+function openDashboard() {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  if (invoke) invoke('open_dashboard').catch(() => {});
+  else location.href = '/';
+}
+
+function quitApp() {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  if (invoke) invoke('quit_app').catch(() => {});
+  else toast('Quit from the Lookout menu bar app.');
+}
+
+async function pauseAll() {
+  const live = liveAgents().filter((a) => !a.paused);
+  if (!live.length) { toast('No agents to pause'); return; }
+  for (const a of live) {
+    const r = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agentId: a.id, action: 'pause' }) });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      toast(j.error ?? 'Could not pause');
+      return;
+    }
+  }
+  toast(live.length === 1 ? `${live[0].label} is paused.` : `Paused ${live.length} agents.`);
+}
+
 $('#view-simple').onclick = () => setView('simple');
 $('#view-advanced').onclick = () => setView('advanced');
 $('#show-routine').onchange = (e) => { state.showRoutine = e.target.checked; render(); };
@@ -484,13 +637,16 @@ document.addEventListener('click', (e) => {
   const act = e.target.closest('[data-act]');
   if (act) { e.stopPropagation(); agentAction(act.dataset.act, act.dataset.id, act); return; }
   const card = e.target.closest('.session, .earlier-row');
-  if (card) {
+  if (card?.dataset.id) {
     state.selected = state.selected === card.dataset.id ? null : card.dataset.id;
     render();
   }
 });
 $('#agents').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.classList.contains('session')) e.target.click();
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('session')) {
+    e.preventDefault();
+    e.target.click();
+  }
 });
 
 $('#factors').addEventListener('click', (e) => {
@@ -498,7 +654,7 @@ $('#factors').addEventListener('click', (e) => {
   if (!b || b.disabled) return;
   state.factor = state.factor === b.dataset.factor ? null : b.dataset.factor;
   render();
-  if (state.factor) $(state.view === 'simple' ? '#simple' : '#advanced').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (state.factor) $(state.view === 'simple' ? '#simple' : '#advanced').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
 });
 $('#factor-clear').onclick = () => { state.factor = null; render(); };
 
@@ -506,86 +662,158 @@ $('#protect-seg').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-level]');
   if (!b) return;
   const prev = state.settings.autoProtect;
-  state.settings.autoProtect = b.dataset.level;
+  state.settings = { ...state.settings, autoProtect: b.dataset.level };
   renderProtect();
   const r = await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ autoProtect: b.dataset.level }) });
-  if (!r.ok) { state.settings.autoProtect = prev; renderProtect(); toast('Couldn’t change auto-protect'); }
+  if (!r.ok) { state.settings = { ...state.settings, autoProtect: prev }; renderProtect(); toast('Couldn’t change auto-protect'); }
 });
 
-$('#demo').onclick = async () => {
-  const b = $('#demo');
-  b.disabled = true;
-  b.textContent = 'Demo running';
+for (const root of ['#display-seg', '#mp-display']) {
+  $(root).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-display]');
+    if (b) setDisplay(b.dataset.display);
+  });
+}
+
+$('#demo').onclick = runDemo;
+$('#mp-demo').onclick = runDemo;
+async function runDemo() {
+  const buttons = ['#demo', '#mp-demo'].map((sel) => $(sel)).filter(Boolean);
+  if (buttons.some((b) => b.disabled)) return;
+  for (const b of buttons) {
+    b.disabled = true;
+    b.textContent = 'Demo running';
+  }
   const r = await fetch('/api/demo/run', { method: 'POST' });
   if (!r.ok) toast((await r.json()).error ?? 'Could not start the demo');
-  else toast('A pretend agent was asked to “set up this project”.');
-  setTimeout(() => { b.disabled = false; b.textContent = 'Run demo attack'; }, 15000);
-};
+  else toast('A pretend agent was asked to set up this project.');
+  setTimeout(() => {
+    for (const b of buttons) {
+      b.disabled = false;
+      b.textContent = 'Run demo attack';
+    }
+  }, 15000);
+}
+
 $('#reset').onclick = async () => {
   await fetch('/api/reset', { method: 'POST' });
   state.events = [];
   state.dismissedAlert = 0;
   state.factor = null;
+  state.shownScore = null;
   $('#explain').hidden = true;
   load();
 };
 
+$('#prefs-open').onclick = () => {
+  const d = $('#prefs');
+  if (typeof d.showModal === 'function') d.showModal();
+  d.querySelector('[aria-checked="true"]')?.focus();
+};
+$('#prefs').addEventListener('click', (e) => { if (e.target === $('#prefs')) $('#prefs').close(); });
+
+$('#mp-open').onclick = openDashboard;
+$('#mp-quit').onclick = quitApp;
+$('#mp-pause').onclick = () => pauseAll();
+$('#mp-agents').addEventListener('click', (e) => { if (e.target.closest('[data-open]')) openDashboard(); });
+
+document.addEventListener('keydown', (e) => {
+  if (!PANEL) return;
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta && e.key.toLowerCase() === 'o') { e.preventDefault(); openDashboard(); }
+  if (meta && e.key.toLowerCase() === 'q') { e.preventDefault(); quitApp(); }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const items = [...document.querySelectorAll('#menu-panel [role="menuitem"], #menu-panel [role="menuitemradio"]')].filter((el) => !el.disabled);
+  if (!items.length) return;
+  e.preventDefault();
+  const i = items.indexOf(document.activeElement);
+  const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+  items[i === -1 ? 0 : next].focus();
+});
+
 async function load() {
-  const s = await (await fetch('/api/state')).json();
-  state.agents = new Map(s.agents.map((a) => [a.id, a]));
-  state.events = s.events;
-  if (s.settings) state.settings = s.settings;
-  $('#bait-dir').textContent = s.baitDir;
-  $('#mode').textContent = `${s.os === 'Mac' ? 'Running on macOS. ' : s.os === 'Windows' ? 'Running on Windows. ' : ''}${s.deep ? 'Deep mode (eslogger).' : 'Standard mode (no admin access needed).'} ${s.ollama.available ? `Summaries by a local AI model (${s.ollama.model}).` : 'Local AI not running; summaries use built-in rules.'}`;
-  render();
+  try {
+    const r = await fetch('/api/state');
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    const s = await r.json();
+    state.agents = new Map(s.agents.map((a) => [a.id, a]));
+    state.events = s.events;
+    if (s.settings) state.settings = { ...state.settings, ...s.settings };
+    state.ready = true;
+    $('#conn-error').hidden = true;
+    $('#bait-dir').textContent = s.baitDir;
+    const place = s.os === 'Mac' ? 'Running on macOS. ' : s.os === 'Windows' ? 'Running on Windows. ' : '';
+    const mode = s.deep ? 'Deep mode (eslogger).' : 'Standard mode.';
+    const model = s.ollama?.available
+      ? `Summaries use a local model (${s.ollama.model}).`
+      : 'No local model is running, so summaries use the built-in rules.';
+    $('#mode').textContent = `${place}${mode} ${model}`;
+    render();
+  } catch {
+    $('#conn-error').hidden = false;
+    $('#live').classList.remove('on');
+    $('#live-text').textContent = 'Reconnecting';
+    render();
+  }
 }
 
 function connect() {
   const es = new EventSource('/api/stream');
-  es.onopen = () => { $('#live').classList.add('on'); $('#live-text').textContent = 'Live'; load(); };
-  es.onerror = () => { $('#live').classList.remove('on'); $('#live-text').textContent = 'Reconnecting'; };
+  es.onopen = () => {
+    state.connected = true;
+    $('#live').classList.add('on');
+    $('#live-text').textContent = 'Live';
+    $('#conn-error').hidden = true;
+    load();
+  };
+  es.onerror = () => {
+    state.connected = false;
+    $('#live').classList.remove('on');
+    $('#live-text').textContent = 'Reconnecting';
+    if (state.ready) $('#conn-error').hidden = false;
+    if (PANEL) render();
+  };
   es.addEventListener('agent', (m) => { const a = JSON.parse(m.data); state.agents.set(a.id, a); render(); });
-  es.addEventListener('event', (m) => { state.events.push(JSON.parse(m.data)); if (state.events.length > 3000) state.events.splice(0, 500); render(); });
-  es.addEventListener('reset', () => { state.events = []; render(); });
-  es.addEventListener('settings', (m) => { state.settings = JSON.parse(m.data); render(); });
+  es.addEventListener('event', (m) => {
+    state.events.push(JSON.parse(m.data));
+    if (state.events.length > 5000) state.events.splice(0, state.events.length - 4500);
+    render();
+  });
+  es.addEventListener('reset', () => { state.events = []; state.shownScore = null; render(); });
+  es.addEventListener('settings', (m) => { state.settings = { ...state.settings, ...JSON.parse(m.data) }; render(); });
   es.addEventListener('demo', (m) => {
     const d = JSON.parse(m.data);
     toast(d.cutOff
-      ? `Seatbelt cut the upload off. The pretend attacker only got ${d.bytes} bytes.`
-      : `The pretend attacker server just received ${d.bytes} bytes of your data.`, 7000);
+      ? `Lookout cut the upload off. The pretend attacker only got ${d.bytes} bytes.`
+      : `The pretend attacker received ${d.bytes} bytes.`, 7000);
   });
 }
 
-// ---------- Theme ----------
 function setTheme(t) {
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
   else delete document.documentElement.dataset.theme;
   for (const b of document.querySelectorAll('#theme-seg button')) {
-    b.classList.toggle('on', b.dataset.theme === t);
-    b.setAttribute('aria-checked', String(b.dataset.theme === t));
+    const on = b.dataset.theme === t;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-checked', String(on));
   }
-  try { localStorage.setItem('seatbelt.theme', t); } catch {}
+  localSet('theme', t);
 }
 $('#theme-seg').addEventListener('click', (e) => {
   const b = e.target.closest('[data-theme]');
   if (b) setTheme(b.dataset.theme);
 });
-let savedTheme = 'system';
-try { savedTheme = localStorage.getItem('seatbelt.theme') ?? 'system'; } catch {}
-setTheme(savedTheme);
 
 await loadIcons();
-drawScale();
-try { const v = localStorage.getItem('seatbelt.view'); if (v) setView(v); } catch {}
+setTheme(localGet('theme') || 'system');
+const savedView = localGet('view');
+if (savedView === 'simple' || savedView === 'advanced') setView(savedView);
 connect();
-setInterval(render, 10000); // refresh "x seconds ago"
+setInterval(render, 10000);
 
-// ---------- Desktop app ----------
-// In the menu bar panel (?view=panel), offer the full dashboard window. The app exposes an
-// `open_dashboard` command to pages served by its own Seatbelt server.
-if (document.documentElement.classList.contains('panel')) {
+if (PANEL) {
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   const btn = $('#open-dash');
   btn.hidden = !invoke;
-  btn.addEventListener('click', () => invoke?.('open_dashboard'));
+  btn.addEventListener('click', openDashboard);
 }

@@ -1,5 +1,5 @@
 {
-  "name": "seatbelt",
+  "name": "lookout",
   "version": "0.1.0",
   "private": true,
   "description": "Watches what AI coding agents (Claude Code, Codex, Gemini CLI, Cursor and more) do on your computer.",
@@ -14,7 +14,8 @@
     "protect": "node src/protect.js protect",
     "unprotect": "node src/protect.js unprotect",
     "desktop": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "test": "node --test"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.3.0",

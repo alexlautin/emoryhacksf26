@@ -1,4 +1,4 @@
-// Seatbelt desktop app: a menu bar (macOS) / system tray (Windows) app around the Seatbelt server.
+// Lookout desktop app: a menu bar (macOS) / system tray (Windows) app around the Lookout server.
 //
 // The server is the same Node program as `pnpm start`. The app ships its own Node binary
 // (a Tauri "sidecar"), starts the server on a free port, and reads one-line JSON messages it
@@ -21,14 +21,15 @@ use tauri_plugin_positioner::{Position, WindowExt};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-const TRAY_ID: &str = "seatbelt";
+const TRAY_ID: &str = "lookout";
 const PANEL: &str = "panel";
 const DASHBOARD: &str = "dashboard";
 const MAX_RESTARTS: u32 = 3;
-/// Claude Code hooks (`pnpm protect`) look for Seatbelt here. The server falls back to a free
+/// Claude Code hooks (`pnpm protect`) look for Lookout here. The server falls back to a free
 /// port if something else is using it.
 const PREFERRED_PORT: &str = "4100";
 const LEVELS: [(&str, &str); 3] = [("off", "Off"), ("dangerous", "Dangerous only"), ("risky", "Anything risky")];
+const DISPLAYS: [(&str, &str); 4] = [("score", "Score"), ("icon", "Icon only"), ("agents", "Agent count"), ("alerts", "Alert count")];
 
 // macOS menu bar icons are "template" images: black shapes the system tints for light/dark.
 // Windows trays have no such thing, so they get colored ones.
@@ -53,6 +54,8 @@ struct Monitor {
     quitting: Mutex<bool>,
     /// The Auto-protect menu's check items, by level, so status updates can tick the right one.
     levels: Mutex<Vec<(String, CheckMenuItem<Wry>)>>,
+    /// What the menu bar item itself shows: score, icon, agents, or alerts.
+    displays: Mutex<Vec<(String, CheckMenuItem<Wry>)>>,
 }
 
 /// Send one command to the server (see src/desktop.js for the list).
@@ -123,7 +126,7 @@ fn show_dashboard(app: &AppHandle) {
     }
     let Some(u) = url(app, "/") else { return };
     let _ = WebviewWindowBuilder::new(app, DASHBOARD, u)
-        .title("Seatbelt")
+        .title("Lookout")
         .inner_size(1200.0, 860.0)
         .min_inner_size(420.0, 500.0)
         .build();
@@ -132,6 +135,25 @@ fn show_dashboard(app: &AppHandle) {
 #[tauri::command]
 fn open_dashboard(app: AppHandle) {
     show_dashboard(&app);
+}
+
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+/// The panel asks for this after it lays out, so the window matches the menu instead of leaving a gap.
+#[tauri::command]
+fn resize_panel(app: AppHandle, height: f64) {
+    let Some(panel) = app.get_webview_window(PANEL) else { return };
+    let h = height.clamp(180.0, 640.0);
+    let _ = panel.set_size(tauri::Size::Logical(tauri::LogicalSize::new(280.0, h)));
+    if panel.is_visible().unwrap_or(false) {
+        #[cfg(target_os = "macos")]
+        let _ = panel.move_window(Position::TrayBottomCenter);
+        #[cfg(not(target_os = "macos"))]
+        let _ = panel.move_window(Position::TrayCenter);
+    }
 }
 
 /// The server is up: create the panel (hidden until the tray icon is clicked).
@@ -148,8 +170,8 @@ fn on_ready(app: &AppHandle, port: u16) {
     }
     let Some(u) = url(app, "/?view=panel") else { return };
     let _ = WebviewWindowBuilder::new(app, PANEL, u)
-        .title("Seatbelt")
-        .inner_size(400.0, 600.0)
+        .title("Lookout")
+        .inner_size(280.0, 480.0)
         .resizable(false)
         .decorations(false)
         .always_on_top(true)
@@ -157,7 +179,22 @@ fn on_ready(app: &AppHandle, port: u16) {
         .visible(false)
         .build();
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some("Seatbelt is watching"));
+        let _ = tray.set_tooltip(Some("Lookout is watching"));
+    }
+}
+
+fn menu_bar_title(mode: &str, score: u64, active: u64, alerts: u64) -> Option<String> {
+    match mode {
+        "icon" => None,
+        "agents" => Some(active.to_string()),
+        "alerts" => {
+            if alerts == 0 {
+                None
+            } else {
+                Some(alerts.to_string())
+            }
+        }
+        _ => Some(score.to_string()),
     }
 }
 
@@ -165,15 +202,19 @@ fn on_status(app: &AppHandle, msg: &Value) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else { return };
     let paused = msg["paused"].as_array().map(|a| a.len()).unwrap_or(0);
     let active = msg["active"].as_u64().unwrap_or(0);
-    let score = msg["score"].as_u64().unwrap_or(0);
-    let band = msg["band"].as_str().unwrap_or("");
+    let score = msg["score"].as_u64().unwrap_or(100);
+    let alerts = msg["alerts"].as_u64().unwrap_or(paused as u64);
+    let mode = msg["menuBarDisplay"].as_str().unwrap_or("score");
     if let Some(level) = msg["autoProtect"].as_str() {
         for (id, item) in app.state::<Monitor>().levels.lock().unwrap().iter() {
             let _ = item.set_checked(id == level);
         }
     }
+    for (id, item) in app.state::<Monitor>().displays.lock().unwrap().iter() {
+        let _ = item.set_checked(id == mode);
+    }
 
-    let alert = paused > 0;
+    let alert = alerts > 0 || paused > 0;
     let state = app.state::<Monitor>();
     let mut alerting = state.alerting.lock().unwrap();
     if *alerting != alert {
@@ -184,23 +225,19 @@ fn on_status(app: &AppHandle, msg: &Value) {
             let _ = tray.set_icon_as_template(true);
         }
     }
-    // macOS shows the title next to the icon; keep it empty unless something needs attention.
-    let _ = tray.set_title(if alert { Some(format!("{paused} paused")) } else { None::<String> });
+    let _ = tray.set_title(menu_bar_title(mode, score, active, alerts));
     let sessions = match active {
         0 => "no agents running".to_string(),
         1 => "1 agent running".to_string(),
         n => format!("{n} agents running"),
     };
-    let tip = if alert {
-        format!("Seatbelt: {paused} paused, {sessions}")
-    } else {
-        format!("Seatbelt: score {score} ({band}), {sessions}")
-    };
-    let _ = tray.set_tooltip(Some(tip));
+    let extra = if alerts > 0 { format!(", {alerts} alerts") } else { String::new() };
+    let _ = tray.set_tooltip(Some(format!("Lookout: {score} / 100, {sessions}{extra}")));
 }
 
 fn handle_line(app: &AppHandle, line: &str) {
-    let Some(json) = line.trim().strip_prefix("@@seatbelt ") else { return };
+    let trimmed = line.trim();
+    let Some(json) = trimmed.strip_prefix("@@lookout ").or_else(|| trimmed.strip_prefix("@@seatbelt ")) else { return };
     let Ok(msg) = serde_json::from_str::<Value>(json) else { return };
     match msg["type"].as_str() {
         Some("ready") => {
@@ -213,7 +250,7 @@ fn handle_line(app: &AppHandle, line: &str) {
             let _ = app
                 .notification()
                 .builder()
-                .title(msg["title"].as_str().unwrap_or("Seatbelt"))
+                .title(msg["title"].as_str().unwrap_or("Lookout"))
                 .body(msg["body"].as_str().unwrap_or(""))
                 .show();
         }
@@ -221,7 +258,7 @@ fn handle_line(app: &AppHandle, line: &str) {
     }
 }
 
-/// Start the Seatbelt server with the bundled Node, and restart it a few times if it dies.
+/// Start the Lookout server with the bundled Node, and restart it a few times if it dies.
 fn start_server(app: &AppHandle) -> tauri::Result<()> {
     let (script, data_dir) = if cfg!(debug_assertions) {
         // `tauri dev`: run straight from the repo, like `pnpm start`.
@@ -237,10 +274,10 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
         .sidecar("node")
         .map_err(|e| tauri::Error::Anyhow(e.into()))?
         .arg(script)
-        .env("SEATBELT_DESKTOP", "1")
+        .env("LOOKOUT_DESKTOP", "1")
         .env("PORT", PREFERRED_PORT);
     if let Some(dir) = data_dir {
-        cmd = cmd.env("SEATBELT_DATA_DIR", dir);
+        cmd = cmd.env("LOOKOUT_DATA_DIR", dir);
     }
     let (mut rx, child) = cmd.spawn().map_err(|e| tauri::Error::Anyhow(e.into()))?;
     *app.state::<Monitor>().child.lock().unwrap() = Some(child);
@@ -264,14 +301,14 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
                     if *state.quitting.lock().unwrap() {
                         return;
                     }
-                    eprintln!("Seatbelt server stopped ({:?})", status.code);
+                    eprintln!("Lookout server stopped ({:?})", status.code);
                     let tries = {
                         let mut r = state.restarts.lock().unwrap();
                         *r += 1;
                         *r
                     };
                     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-                        let _ = tray.set_tooltip(Some("Seatbelt stopped watching"));
+                        let _ = tray.set_tooltip(Some("Lookout stopped watching"));
                     }
                     if tries <= MAX_RESTARTS {
                         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -280,8 +317,8 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
                         let _ = app
                             .notification()
                             .builder()
-                            .title("Seatbelt stopped watching")
-                            .body("Its monitor keeps crashing. Quit and reopen Seatbelt.")
+                            .title("Lookout stopped watching")
+                            .body("Its monitor keeps crashing. Quit and reopen Lookout.")
                             .show();
                     }
                     return;
@@ -294,7 +331,7 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open dashboard", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Open Dashboard", true, Some("CmdOrCtrl+O"))?;
     let login = CheckMenuItem::with_id(
         app,
         "login",
@@ -303,7 +340,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         app.autolaunch().is_enabled().unwrap_or(false),
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Seatbelt", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Lookout", true, Some("CmdOrCtrl+Q"))?;
 
     let mut levels = Vec::new();
     for (id, label) in LEVELS {
@@ -313,19 +350,27 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let protect_level = Submenu::with_items(app, "Auto-protect", true, &level_refs)?;
     *app.state::<Monitor>().levels.lock().unwrap() = levels;
 
+    let mut displays = Vec::new();
+    for (id, label) in DISPLAYS {
+        displays.push((id.to_string(), CheckMenuItem::with_id(app, format!("display:{id}"), label, true, id == "score", None::<&str>)?));
+    }
+    let display_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = displays.iter().map(|(_, i)| i as _).collect();
+    let display_menu = Submenu::with_items(app, "Menu bar shows", true, &display_refs)?;
+    *app.state::<Monitor>().displays.lock().unwrap() = displays;
+
     let protect = MenuItem::with_id(app, "protect", "Protect a folder for Claude Code…", true, None::<&str>)?;
     let unprotect = MenuItem::with_id(app, "unprotect", "Stop protecting a folder…", true, None::<&str>)?;
     let demo = MenuItem::with_id(app, "demo", "Run demo attack", true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &sep()?, &protect_level, &protect, &unprotect, &sep()?, &demo, &sep()?, &login, &sep()?, &quit],
+        &[&open, &sep()?, &protect_level, &display_menu, &sep()?, &protect, &unprotect, &sep()?, &demo, &sep()?, &login, &sep()?, &quit],
     )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON_OK)?)
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("Seatbelt is starting…")
+        .tooltip("Lookout is starting…")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -346,6 +391,8 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             id => {
                 if let Some(level) = id.strip_prefix("level:") {
                     send(app, serde_json::json!({ "cmd": "auto-protect", "level": level }));
+                } else if let Some(mode) = id.strip_prefix("display:") {
+                    send(app, serde_json::json!({ "cmd": "menu-bar", "mode": mode }));
                 }
             }
         })
@@ -377,7 +424,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Monitor::default())
-        .invoke_handler(tauri::generate_handler![open_dashboard])
+        .invoke_handler(tauri::generate_handler![open_dashboard, quit_app, resize_panel])
         .setup(|app| {
             // A menu bar app: no Dock icon until the dashboard window is open.
             #[cfg(target_os = "macos")]
@@ -402,9 +449,9 @@ pub fn run() {
             _ => {}
         })
         .build(tauri::generate_context!())
-        .expect("error while building Seatbelt")
+        .expect("error while building Lookout")
         .run(|app, event| match event {
-            // Closing windows never quits a tray app; only "Quit Seatbelt" does.
+            // Closing windows never quits a tray app; only "Quit Lookout" does.
             RunEvent::ExitRequested { code: None, api, .. } => api.prevent_exit(),
             RunEvent::Exit => stop_server(app),
             _ => {}

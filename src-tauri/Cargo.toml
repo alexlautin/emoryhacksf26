@@ -1,11 +1,11 @@
 [package]
-name = "seatbelt"
+name = "lookout"
 version = "0.1.0"
-description = "Seatbelt: watches what AI coding agents do on your computer"
+description = "Lookout: watches what AI coding agents do on your computer"
 edition = "2021"
 
 [lib]
-name = "seatbelt_lib"
+name = "lookout_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

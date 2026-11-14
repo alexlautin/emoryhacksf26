@@ -13,22 +13,34 @@ import { DATA_DIR } from './paths.js';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 /** autoProtect: 'off' | 'dangerous' (critical only) | 'risky' (high and critical) */
-const DEFAULTS = { autoProtect: 'dangerous' };
+const DEFAULTS = { autoProtect: 'dangerous', menuBarDisplay: 'score' };
 const THRESHOLD = { dangerous: 'critical', risky: 'high' };
+const DISPLAYS = new Set(['score', 'icon', 'agents', 'alerts']);
 
 let settings = { ...DEFAULTS };
 try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; } catch {}
+if (!DISPLAYS.has(settings.menuBarDisplay)) settings.menuBarDisplay = DEFAULTS.menuBarDisplay;
 
 export function getSettings() {
   return { ...settings };
 }
 
 export function setSettings(patch) {
-  if (patch.autoProtect && !(patch.autoProtect in THRESHOLD) && patch.autoProtect !== 'off') {
-    throw new Error(`autoProtect must be off, dangerous or risky`);
+  const next = { ...settings };
+  if (patch.autoProtect !== undefined) {
+    if (!(patch.autoProtect in THRESHOLD) && patch.autoProtect !== 'off') {
+      throw new Error('autoProtect must be off, dangerous or risky');
+    }
+    next.autoProtect = patch.autoProtect;
   }
-  settings = { ...settings, ...patch };
-  fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), () => {});
+  if (patch.menuBarDisplay !== undefined) {
+    if (!DISPLAYS.has(patch.menuBarDisplay)) {
+      throw new Error('menuBarDisplay must be score, icon, agents or alerts');
+    }
+    next.menuBarDisplay = patch.menuBarDisplay;
+  }
+  settings = next;
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
   broadcast('settings', settings);
   return getSettings();
 }
@@ -38,7 +50,7 @@ const busy = new Set();
 async function treeFor(agentId) {
   const tree = await agentTree(agentId);
   if (!tree || !tree.pids.length) throw new Error('That session is no longer running');
-  if (tree.hostsSeatbelt) throw new Error('Seatbelt itself was started from this session, so it can’t stop it');
+  if (tree.hostsLookout) throw new Error('Lookout itself was started from this session, so it can’t stop it');
   return tree;
 }
 
@@ -56,10 +68,10 @@ export async function pauseAgent(agentId, { reason = null, auto = false, trigger
     const again = await agentTree(agentId);
     const missed = again ? again.pids.filter((p) => !tree.pids.includes(p)) : [];
     if (missed.length) await suspend(missed);
-    upsertAgent({ id: agentId, paused: true, pausedAt: Date.now(), pausedBy: auto ? 'seatbelt' : 'you', pausedReason: reason, pausedEventId: trigger?.id ?? null });
+    upsertAgent({ id: agentId, paused: true, pausedAt: Date.now(), pausedBy: auto ? 'lookout' : 'you', pausedReason: reason, pausedEventId: trigger?.id ?? null });
     addEvent({
       agentId, kind: 'system', risk: 'info', guard: 'paused',
-      title: auto ? `Seatbelt paused ${a.label}` : `You paused ${a.label}`,
+      title: auto ? `Lookout paused ${a.label}` : `You paused ${a.label}`,
       detail: auto && trigger ? `Because: ${trigger.title}` : `${(again ?? tree).pids.length} programs frozen`,
     });
     return getAgent(agentId);
@@ -86,9 +98,9 @@ export async function endAgent(agentId, { auto = false, quiet = false } = {}) {
   if (!a?.alive) throw new Error('That session is no longer running');
   const tree = await treeFor(agentId);
   await terminate(tree.pids);
-  upsertAgent({ id: agentId, endedBy: auto ? 'seatbelt' : 'you', endedAt: Date.now() });
+  upsertAgent({ id: agentId, endedBy: auto ? 'lookout' : 'you', endedAt: Date.now() });
   if (!quiet) {
-    addEvent({ agentId, kind: 'system', risk: 'info', guard: 'ended', title: auto ? `Seatbelt ended ${a.label}` : `You ended ${a.label}`, detail: `${tree.pids.length} programs stopped` });
+    addEvent({ agentId, kind: 'system', risk: 'info', guard: 'ended', title: auto ? `Lookout ended ${a.label}` : `You ended ${a.label}`, detail: `${tree.pids.length} programs stopped` });
   }
   await new Promise((r) => setTimeout(r, 1500));
   await terminate(tree.pids, { force: true });
@@ -111,7 +123,7 @@ export function startGuard() {
     pauseAgent(e.agentId, { reason, auto: true, trigger: e }).catch((err) => {
       if (warned.has(e.agentId)) return;
       warned.add(e.agentId);
-      addEvent({ agentId: e.agentId, kind: 'system', risk: 'info', title: `Seatbelt couldn’t pause ${a.label}`, detail: err.message });
+      addEvent({ agentId: e.agentId, kind: 'system', risk: 'info', title: `Lookout couldn’t pause ${a.label}`, detail: err.message });
     });
   });
 }
