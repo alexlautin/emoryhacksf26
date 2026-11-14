@@ -128,7 +128,7 @@ test('markdown escapes html, keeps safe links, and slugs headings', () => {
 test('the white paper renders the sections the site links to', () => {
   const md = fs.readFileSync(new URL('./whitepaper.md', import.meta.url), 'utf8');
   const html = renderMarkdown(md);
-  for (const id of ['the-problem', 'threat-model', 'how-lookout-observes', 'rules', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'roadmap']) {
+  for (const id of ['the-problem', 'threat-model', 'how-harness-observes', 'rules', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'roadmap']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /<script/);
@@ -138,6 +138,6 @@ test('the white paper renders the sections the site links to', () => {
 
 test('fragment jumps leave room for the sticky header', () => {
   const css = fs.readFileSync(new URL('./src/site.css', import.meta.url), 'utf8');
-  assert.match(css, /scroll-padding-top:\s*10\.5rem/);
-  assert.match(css, /scroll-padding-top:\s*5\.5rem/);
+  assert.match(css, /scroll-padding-top:\s*calc\(var\(--nav-h\) \+ 16px\)/);
+  assert.match(css, /--nav-h:\s*68px/);
 });

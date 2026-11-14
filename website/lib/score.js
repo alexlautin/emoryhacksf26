@@ -1,4 +1,4 @@
-// Lookout's safety score: a plain number from 0 to 100.
+// Harness's safety score: a plain number from 0 to 100.
 // Everyone starts at 100. Worrying actions cost points in a few categories,
 // each with a cap, and a cost halves every 12 hours. The number is clamped to 0-100.
 
@@ -19,7 +19,7 @@ export const LEVELS = [
 export const FACTORS = [
   {
     id: 'secrets', icon: 'key-round', name: 'Passwords and secrets', impact: 'High impact',
-    desc: 'Opening keys, passwords, or the decoy files Lookout planted',
+    desc: 'Opening keys, passwords, or the decoy files Harness planted',
     test: /decoy secret|SSH keys|AWS cloud|\.env file|Keychain|Windows passwords|saved logins|access tokens|terminal history|messages or email|scrambled secret/i,
     cost: { critical: 45, high: 20, medium: 10, low: 2 }, cap: 70,
   },
@@ -43,8 +43,8 @@ export const FACTORS = [
   },
   {
     id: 'servers', icon: 'globe', name: 'Unknown servers', impact: 'Medium impact',
-    desc: 'Connecting to a server Lookout doesn’t recognize',
-    test: /server Lookout doesn't recognize/i,
+    desc: 'Connecting to a server Harness doesn’t recognize',
+    test: /server (Harness|Lookout|Seatbelt) doesn't recognize/i,
     cost: { critical: 10, high: 7, medium: 3, low: 1 }, cap: 15,
   },
   {
