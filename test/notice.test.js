@@ -10,7 +10,7 @@ test('only a critical event becomes a Dangerous notice', () => {
   assert.equal(noticeFor({ risk: 'critical', kind: 'file', title: 'opened a key', baseline: true }, agent), null);
   const n = noticeFor({
     id: 3, risk: 'critical', kind: 'file', agentId: 'demo-1', title: 'Something opened a decoy secret: aws_credentials',
-    reasons: ['opened a decoy secret Lookout planted on purpose'],
+    reasons: ['opened a decoy secret Harness planted on purpose'],
   }, agent);
   assert.match(n.title, /^Dangerous:/);
   assert.match(n.body, /Demo agent in victim-project/);

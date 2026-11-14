@@ -2,7 +2,7 @@
 
 A local monitor for what AI coding agents run on your computer. Written against the code in this repository, November 2026.
 
-The product is called Harness. Paths and settings still use its earlier name, Lookout (`~/.lookout`, `LOOKOUT_PORT`). A few older Seatbelt names also work if they were already set, and those are named where they matter.
+The product, paths and settings use Harness (`~/.harness`, `HARNESS_PORT`). Earlier Lookout and Seatbelt paths and environment variables remain supported for existing installations.
 
 ## Abstract
 
@@ -81,15 +81,15 @@ A connection with an empty reason list does not move the score. Ordinary localho
 
 ### Decoy files
 
-On startup `src/monitor/files.js` creates `~/.lookout/bait/` with three files, mode `0600`:
+On startup `src/monitor/files.js` creates `~/.harness/bait/` with three files, mode `0600`:
 
 - `aws_credentials`, shaped like an AWS credentials file, with a fake access key id `AKIA` plus the marker
 - `passwords.txt`
 - `id_ed25519_backup`, shaped like an OpenSSH private key
 
-Each file contains a random marker, 16 bytes drawn from a 32-character alphabet, generated once and stored in `data/bait-markers.json`, also mode `0600`. Harness will rewrite a decoy that is missing its marker, including an older file whose body still says "Seatbelt decoy". The marker already in that file is kept. It will not overwrite a file in that directory that does not already look like one of its decoys (the check looks for "Harness decoy" or "Seatbelt decoy" in the body).
+Each file contains a random marker, 16 bytes drawn from a 32-character alphabet, generated once and stored in `data/bait-markers.json`, also mode `0600`. Harness will rewrite a decoy that is missing its marker, including an older file whose body still says "Seatbelt decoy". The marker already in that file is kept. It will not overwrite a file in that directory that does not already look like one of its decoys (the check looks for "Harness decoy", "Lookout decoy" or "Seatbelt decoy" in the body).
 
-If `~/.lookout/bait` does not exist yet and `~/.seatbelt/bait` does, those files are copied once. A read of the old path still counts, and a marker that only the old file still holds is remembered.
+If `~/.harness/bait` does not exist yet, decoys are copied once from `~/.lookout/bait`, or from `~/.seatbelt/bait` if only that older folder exists. Both legacy locations remain monitored. A read of the old path still counts, and a marker that only the old file still holds is remembered.
 
 Every 700 ms it stats the files. Before watching, it sets the access time two seconds behind the modification time, so a later read moves the access time. A change becomes a critical event. Access time does not name the process. Harness attributes the read to the alive agent whose `lastActive` is most recent, within 15 seconds. If exactly one agent qualifies, attribution is `sole`, and auto-protect may pause it. If several qualify, attribution is `guess`: the person still gets the event, and auto-protect will not pause anyone. If no agent was active, the event says it may have been something else on the computer.
 
@@ -194,11 +194,11 @@ Pausing happens after the poll that saw the event. A command that finished insid
 
 ### The Claude Code hook
 
-`pnpm protect <folder>` copies `hooks/lookout-hook.sh` into `<folder>/.lookout/` and adds three hooks to `<folder>/.claude/settings.json`: UserPromptSubmit, PreToolUse on every tool, and PostToolUse on every tool. Other hooks in that file are kept. If a settings file already exists, a copy is saved as `.lookout/settings.json.before-lookout`. `pnpm unprotect` removes entries whose command contains `.lookout/lookout-hook.sh`, and also ones installed before the rename (`.seatbelt/seatbelt-hook.sh`), then deletes the copied script.
+`pnpm protect <folder>` copies `hooks/harness-hook.sh` into `<folder>/.harness/` and adds three hooks to `<folder>/.claude/settings.json`: UserPromptSubmit, PreToolUse on every tool, and PostToolUse on every tool. Other hooks in that file are kept. If a settings file already exists, a copy is saved as `.harness/settings.json.before-harness`. `pnpm unprotect` removes entries whose command contains `.harness/harness-hook.sh`, and also ones installed before the rename (`.lookout/lookout-hook.sh` or `.seatbelt/seatbelt-hook.sh`), then deletes the copied script.
 
-The shell script POSTs Claude Code's hook JSON to `http://127.0.0.1:$LOOKOUT_PORT/hooks/<event>` (port 4100 if unset), with a timeout of 110 seconds. `SEATBELT_PORT` is used when `LOOKOUT_PORT` is not set. PreToolUse's own hook timeout in the settings file is 120 seconds. The request header is `X-Lookout-Project`.
+The shell script POSTs Claude Code's hook JSON to `http://127.0.0.1:$HARNESS_PORT/hooks/<event>` (port 4100 if unset), with a timeout of 110 seconds. `LOOKOUT_PORT`, then `SEATBELT_PORT`, is used when `HARNESS_PORT` is not set. PreToolUse's own hook timeout in the settings file is 120 seconds. The request header is `X-Harness-Project`.
 
-If the POST fails and the event is `pre-tool`, the script exits 2, which tells Claude Code to block the tool, unless `LOOKOUT_FAIL_OPEN=1`. `SEATBELT_FAIL_OPEN` still works if the Harness variable is unset. The message tells the person to start the monitor. Other hook events fail open: if Harness is down, the prompt and the post-tool notice are simply skipped.
+If the POST fails and the event is `pre-tool`, the script exits 2, which tells Claude Code to block the tool, unless `HARNESS_FAIL_OPEN=1`. `LOOKOUT_FAIL_OPEN` and `SEATBELT_FAIL_OPEN` still work if the Harness variable is unset. The message tells the person to start the monitor. Other hook events fail open: if Harness is down, the prompt and the post-tool notice are simply skipped.
 
 For a tool call that does reach Harness, `src/hooks.js` decides:
 
@@ -208,7 +208,7 @@ For a tool call that does reach Harness, `src/hooks.js` decides:
 
 "Secret-related" is a regex over the reason text: decoy, "accessed ", Keychain, saved passwords, scrambled secret, and the network-cutoff phrase.
 
-Relative paths and wildcards that resolve to a decoy are denied even when the plain substring check would miss them. `cat ~/.lookout/bait/*` is the case the code calls out. The Glob tool is checked the same way. `rm -rf` whose targets all stay inside the project is not treated as a recursive delete.
+Relative paths and wildcards that resolve to a decoy are denied even when the plain substring check would miss them. `cat ~/.harness/bait/*` is the case the code calls out. The Glob tool is checked the same way. `rm -rf` whose targets all stay inside the project is not treated as a recursive delete.
 
 The check's duration is written onto the event in milliseconds. The README records one session of Claude Code 2.1.170 where reading a decoy was blocked, and says decisions took about 10 ms. That figure is the README's report of one try. It is not a constant in the code, and there is no suite that re-measures it.
 
@@ -220,9 +220,9 @@ The hook is Claude Code only. Codex and the other recognized agents only get the
 
 ## Privacy
 
-The HTTP server binds to `127.0.0.1`. The dashboard is static files from `public/` plus server-sent events. Every event is also appended to `data/events.jsonl`. When the desktop app is packaged, it sets `LOOKOUT_DATA_DIR` to Tauri's app data directory. The identifier in `src-tauri/tauri.conf.json` is `dev.lookout.monitor`, so that folder is `~/Library/Application Support/dev.lookout.monitor` on macOS and the matching folder under `%APPDATA%` on Windows. `SEATBELT_DATA_DIR` is read when `LOOKOUT_DATA_DIR` is not set. If the new desktop folder is empty and `dev.seatbelt.monitor` is still beside it, those files are copied once. Running `tauri dev` does not set the variable, and uses the repo `data` directory like `pnpm start`.
+The HTTP server binds to `127.0.0.1`. The dashboard is static files from `public/` plus server-sent events. Every event is also appended to `data/events.jsonl`. When the desktop app is packaged, it sets `HARNESS_DATA_DIR` to Tauri's app data directory. The identifier in `src-tauri/tauri.conf.json` is `dev.harness.monitor`, so that folder is `~/Library/Application Support/dev.harness.monitor` on macOS and the matching folder under `%APPDATA%` on Windows. `LOOKOUT_DATA_DIR`, then `SEATBELT_DATA_DIR`, is read when `HARNESS_DATA_DIR` is not set. If the new desktop folder is empty and `dev.lookout.monitor` or `dev.seatbelt.monitor` is still beside it, those files are copied once. Running `tauri dev` does not set the variable, and uses the repo `data` directory like `pnpm start`.
 
-Summaries are optional and local. `src/llm.js` calls Ollama at `http://127.0.0.1:11434` unless `OLLAMA_HOST` is set. It asks `/api/tags`, drops any model whose name contains `cloud`, and uses the first remaining model unless `LOOKOUT_MODEL` is set. `SEATBELT_MODEL` is the fallback when `LOOKOUT_MODEL` is unset. The prompt is the session: the task, counts, and up to 25 notable events. It asks for 3 to 5 sentences and a verdict line. If Ollama is down, times out (60 seconds), or returns an empty reply, a shorter summary is built from the same facts with no model. Think-tags in a reply are stripped.
+Summaries are optional and local. `src/llm.js` calls Ollama at `http://127.0.0.1:11434` unless `OLLAMA_HOST` is set. It asks `/api/tags`, drops any model whose name contains `cloud`, and uses the first remaining model unless `HARNESS_MODEL` is set. `LOOKOUT_MODEL`, then `SEATBELT_MODEL`, is the fallback when `HARNESS_MODEL` is unset. The prompt is the session: the task, counts, and up to 25 notable events. It asks for 3 to 5 sentences and a verdict line. If Ollama is down, times out (60 seconds), or returns an empty reply, a shorter summary is built from the same facts with no model. Think-tags in a reply are stripped.
 
 Harness has no account, no license check, and no telemetry call in the source. The outbound lookup it makes on its own is reverse DNS, described above. The demo attacker listens on `127.0.0.1:4199` and counts bytes. It does not forward them.
 
@@ -258,7 +258,7 @@ No dates. The demo README is also honest about its own gap: use the scripted dem
 
 ## What the demo actually does
 
-`demo/packages/color-helpers/install.js` is a stand-in for a malicious install script. It logs a harmless line about color tables, then runs one shell script. On macOS and Linux the script sleeps 1.5 seconds, concatenates the project's `.env` and `~/.lookout/bait/aws_credentials`, base64-encodes them into a temp file, sleeps 1 second, and `curl -X POST`s that file to `http://127.0.0.1:4199/collect` with `--limit-rate 120`. Then it deletes the temp file. If the Harness bait file is missing and `~/.seatbelt/bait/aws_credentials` is still there, the script reads that older file instead. The Windows branch is the same steps in PowerShell. The sleeps are there so the half-second poll can see the process. The comment at the top of the file says so.
+`demo/packages/color-helpers/install.js` is a stand-in for a malicious install script. It logs a harmless line about color tables, then runs one shell script. On macOS and Linux the script sleeps 1.5 seconds, concatenates the project's `.env` and `~/.harness/bait/aws_credentials`, base64-encodes them into a temp file, sleeps 1 second, and `curl -X POST`s that file to `http://127.0.0.1:4199/collect` with `--limit-rate 120`. Then it deletes the temp file. If the Harness bait file is missing and `~/.lookout/bait/aws_credentials` or `~/.seatbelt/bait/aws_credentials` is still there, the script reads that older file instead. The Windows branch is the same steps in PowerShell. The sleeps are there so the half-second poll can see the process. The comment at the top of the file says so.
 
 The server on 4199 counts bytes and discards them. If the upload is cut off mid-body, it still reports how many bytes arrived. The secrets are fake. The demo `.env` carries the marker `DECOY-NOT-REAL`.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Lookout, wait until the dashboard and the event stream answer, then stop it.
+# Start Harness, wait until the dashboard and the event stream answer, then stop it.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -25,7 +25,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-LOOKOUT_DATA_DIR="$data" node src/server.js >"$log" 2>&1 &
+HARNESS_DATA_DIR="$data" node src/server.js >"$log" 2>&1 &
 pid=$!
 
 ready=0
@@ -36,7 +36,7 @@ while [ "$i" -lt 50 ]; do
     break
   fi
   if ! kill -0 "$pid" 2>/dev/null; then
-    echo "Lookout exited before it opened port 4100."
+    echo "Harness exited before it opened port 4100."
     cat "$log"
     exit 1
   fi
@@ -45,7 +45,7 @@ while [ "$i" -lt 50 ]; do
 done
 
 if [ "$ready" != 1 ]; then
-  echo "Lookout did not answer on http://127.0.0.1:4100."
+  echo "Harness did not answer on http://127.0.0.1:4100."
   cat "$log"
   exit 1
 fi
@@ -58,8 +58,8 @@ if [ "$code" != 200 ]; then
   cat "$log"
   exit 1
 fi
-if ! grep -q "<h1>Lookout</h1>" "$page"; then
-  echo "Dashboard response was not the Lookout page."
+if ! grep -q "<h1>Harness</h1>" "$page"; then
+  echo "Dashboard response was not the Harness page."
   cat "$log"
   exit 1
 fi

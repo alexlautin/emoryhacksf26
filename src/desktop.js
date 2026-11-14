@@ -1,7 +1,7 @@
-// The bridge to the Lookout desktop app (src-tauri). Only active when the app
-// starts this server with LOOKOUT_DESKTOP=1 (SEATBELT_DESKTOP=1 still works).
+// The bridge to the Harness desktop app (src-tauri). Only active when the app
+// starts this server with HARNESS_DESKTOP=1 (SEATBELT_DESKTOP=1 still works).
 //
-// Out, on stdout: one-line JSON messages prefixed with "@@lookout ", read by the app
+// Out, on stdout: one-line JSON messages prefixed with "@@harness ", read by the app
 // (the app also accepts the old "@@seatbelt " prefix):
 //   ready   { port }
 //   status  { score, level, active, paused, alerts, autoProtect, menuBarDisplay }
@@ -18,9 +18,9 @@ import { getSettings, setSettings, pauseAgent } from './guard.js';
 import { protect, unprotect } from './protect.js';
 import { alertCount, computeScore } from '../public/score.js';
 
-export const IS_DESKTOP = process.env.LOOKOUT_DESKTOP === '1' || process.env.SEATBELT_DESKTOP === '1';
+export const IS_DESKTOP = process.env.HARNESS_DESKTOP === '1' || process.env.LOOKOUT_DESKTOP === '1' || process.env.SEATBELT_DESKTOP === '1';
 
-const send = (msg) => process.stdout.write(`@@lookout ${JSON.stringify(msg)}\n`);
+const send = (msg) => process.stdout.write(`@@harness ${JSON.stringify(msg)}\n`);
 const recentDanger = new Map();
 
 /** The menu bar app turns this into a system notification. */
@@ -54,7 +54,7 @@ export function startDesktopBridge(port) {
   send({ type: 'ready', port });
 
   const lines = readline.createInterface({ input: process.stdin });
-  lines.on('line', (line) => command(line, port).catch((err) => send({ type: 'notify', title: 'Lookout', body: err.message })));
+  lines.on('line', (line) => command(line, port).catch((err) => send({ type: 'notify', title: 'Harness', body: err.message })));
   lines.on('close', () => process.exit(0));
 
   let last = '';
@@ -79,11 +79,11 @@ export function startDesktopBridge(port) {
   setInterval(tick, 1000).unref();
 
   onEvent((e) => {
-    if (e.guard === 'paused' && e.title.startsWith('Lookout')) {
+    if (e.guard === 'paused' && e.title.startsWith('Harness')) {
       if (Date.now() - (recentDanger.get(e.agentId) || 0) < 8000) return;
       send({ type: 'notify', title: e.title, body: e.detail ?? '' });
     }
-    if (e.guard === 'ended' && e.title.startsWith('Lookout')) send({ type: 'notify', title: e.title, body: e.detail ?? '' });
+    if (e.guard === 'ended' && e.title.startsWith('Harness')) send({ type: 'notify', title: e.title, body: e.detail ?? '' });
   });
 }
 
@@ -103,9 +103,9 @@ async function command(line, port) {
     if (!r.ok) throw new Error((await r.json()).error ?? 'Could not start the demo');
   } else if (msg.cmd === 'protect') {
     const dir = protect(msg.dir);
-    send({ type: 'notify', title: `Protecting ${path.basename(dir)}`, body: 'Lookout now checks every Claude Code action there before it runs. Restart Claude Code in that folder to pick it up.' });
+    send({ type: 'notify', title: `Protecting ${path.basename(dir)}`, body: 'Harness now checks every Claude Code action there before it runs. Restart Claude Code in that folder to pick it up.' });
   } else if (msg.cmd === 'unprotect') {
     const dir = unprotect(msg.dir);
-    send({ type: 'notify', title: `Stopped protecting ${path.basename(dir)}`, body: "Removed Lookout's Claude Code hooks from that folder." });
+    send({ type: 'notify', title: `Stopped protecting ${path.basename(dir)}`, body: "Removed Harness's Claude Code hooks from that folder." });
   }
 }

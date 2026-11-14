@@ -1,6 +1,6 @@
 // EXPERIMENTAL "deep mode": Apple's built-in eslogger (macOS 13+) reports every program launch
 // and file open as it happens, so nothing is missed between polls. It needs sudo, and the
-// terminal running Lookout needs Full Disk Access (System Settings › Privacy & Security).
+// terminal running Harness needs Full Disk Access (System Settings › Privacy & Security).
 // Not yet tested end to end: the default mode (polling) is what the demo uses.
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';

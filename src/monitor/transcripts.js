@@ -61,7 +61,7 @@ function discover() {
       let st;
       try { st = fs.statSync(f); } catch { continue; }
       if (st.mtimeMs < recent && started) continue;
-      // Files that existed before Lookout started: only read what gets added from now on.
+      // Files that existed before Harness started: only read what gets added from now on.
       files.set(f, { offset: started ? 0 : st.size, partial: '', kind, cwd: kind === 'codex' ? codexCwd(f) : null });
     }
   }

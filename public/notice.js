@@ -10,7 +10,7 @@ export function noticeFor(event, agent) {
   const where = agent ? `${agent.label} in ${agent.project}` : 'An agent';
   const sentence = why ? `${why.charAt(0).toUpperCase()}${why.slice(1)}.` : '';
   const body = sentence ? `${where}. ${sentence}` : where;
-  const title = event.title ? `Dangerous: ${event.title}` : 'Lookout: something dangerous happened';
+  const title = event.title ? `Dangerous: ${event.title}` : 'Harness: something dangerous happened';
   return {
     title: title.slice(0, 140),
     body: body.slice(0, 240),

@@ -1,4 +1,4 @@
-/* Lookout. System font, one type scale, one spacing scale.
+/* Harness. System font, one type scale, one spacing scale.
    light-dark() picks the value. No data-theme follows the system. */
 
 :root { color-scheme: light dark; }

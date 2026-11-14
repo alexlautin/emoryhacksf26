@@ -1,4 +1,4 @@
-// "What did this agent touch?" Built only from events Lookout already recorded.
+// "What did this agent touch?" Built only from events Harness already recorded.
 
 const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
@@ -51,8 +51,8 @@ export function sessionTouch(agent, events) {
   if (hosts.length) parts.push(`contacted ${plural(hosts.length, 'server')}`);
   const did = parts.length ? parts.join(', ') : 'left no record of commands, files, or servers';
   let extra = decoyCount ? ' It opened a decoy secret.' : ' It did not open a decoy secret.';
-  if (blocked.length) extra += ` Lookout blocked ${plural(blocked.length, 'action')} before they ran.`;
-  else if (asked.length) extra += ` Lookout asked you before ${plural(asked.length, 'action')}.`;
+  if (blocked.length) extra += ` Harness blocked ${plural(blocked.length, 'action')} before they ran.`;
+  else if (asked.length) extra += ` Harness asked you before ${plural(asked.length, 'action')}.`;
   if (agent?.paused) extra += ' The session is paused.';
   else if (agent && !agent.alive && agent.endedBy) extra += ' The session was ended.';
   else if (agent && !agent.alive) extra += ' The session has finished.';

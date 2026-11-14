@@ -1,10 +1,10 @@
-# Lookout
+# Harness
 
 [![CI](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml/badge.svg)](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml)
 
-Lookout watches what Claude Code and Codex do on your computer, including the parts their own windows don't show, and tells you about anything risky.
+Harness watches what Claude Code and Codex do on your computer, including the parts their own windows don't show, and tells you about anything risky.
 
-Say an agent runs `npm install`. Its window shows one line and a checkmark. Underneath, a package's install script could be reading your `.env` and uploading it. Lookout follows the whole chain (agent, shell, npm, install script, curl) along with the files and servers involved, and can pause the agent before it finishes.
+Say an agent runs `npm install`. Its window shows one line and a checkmark. Underneath, a package's install script could be reading your `.env` and uploading it. Harness follows the whole chain (agent, shell, npm, install script, curl) along with the files and servers involved, and can pause the agent before it finishes.
 
 It runs locally. Nothing is sent anywhere.
 
@@ -25,7 +25,7 @@ Works on macOS and Windows 10/11. On Windows, run it from PowerShell or Windows 
 
 ## Desktop app (menu bar)
 
-Lookout also comes as a desktop app built with [Tauri 2](https://tauri.app): an icon in the macOS menu bar (or the Windows system tray) that runs the same server in the background.
+Harness also comes as a desktop app built with [Tauri 2](https://tauri.app): an icon in the macOS menu bar (or the Windows system tray) that runs the same server in the background.
 
 Click the icon for a small menu:
 
@@ -36,39 +36,39 @@ Click the icon for a small menu:
 
 The same choice is in Preferences on the dashboard. Right-click the icon (or the system menu) for Auto-protect, protecting a folder, and Open at login.
 
-The icon switches when something needs you. No Dock icon unless the dashboard window is open. Closing the window keeps Lookout watching. Quit Lookout stops it, and its server.
+The icon switches when something needs you. No Dock icon unless the dashboard window is open. Closing the window keeps Harness watching. Quit Harness stops it, and its server.
 
-It ships its own Node, so it works on a computer without one (the demo still needs npm). It keeps its log, settings and demo copy in `~/Library/Application Support/dev.lookout.monitor` (`%APPDATA%` on Windows). If that folder is empty and the old `dev.seatbelt.monitor` folder is still next to it, Lookout copies those files over once. It runs on port 4100 so Claude Code hooks can reach it, or on a free port if 4100 is taken (for example by a `pnpm start` in a terminal).
+It ships its own Node, so it works on a computer without one (the demo still needs npm). It keeps its log, settings and demo copy in `~/Library/Application Support/dev.harness.monitor` (`%APPDATA%` on Windows). If that folder is empty and the old `dev.lookout.monitor` or `dev.seatbelt.monitor` folder is still next to it, Harness copies those files over once. It runs on port 4100 so Claude Code hooks can reach it, or on a free port if 4100 is taken (for example by a `pnpm start` in a terminal).
 
 To build it you need Rust (`brew install rustup`, then `rustup default stable`):
 
 ```bash
 pnpm desktop          # run it in development, straight from this folder
-pnpm desktop:build    # Lookout.app and a .dmg in src-tauri/target/release/bundle
+pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundle
 ```
 
-Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's damaged, run `xattr -cr /Applications/Lookout.app` once. Windows hasn't been built or tested yet.
+Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's damaged, run `xattr -cr /Applications/Harness.app` once. Windows hasn't been built or tested yet.
 
 ## Blocking actions before they run (Claude Code)
 
-The monitors below see what happened. Claude Code hooks let Lookout check each action **before** it runs:
+The monitors below see what happened. Claude Code hooks let Harness check each action **before** it runs:
 
 ```bash
-pnpm protect path/to/your-project     # adds Lookout's hooks to .claude/settings.json
-pnpm unprotect path/to/your-project   # removes only Lookout's entries
+pnpm protect path/to/your-project     # adds Harness's hooks to .claude/settings.json
+pnpm unprotect path/to/your-project   # removes only Harness's entries
 ```
 
-Restart Claude Code in that folder (or run `/hooks`) afterwards. Then every tool call goes through `hooks/lookout-hook.sh` to `POST /hooks/pre-tool` and is checked with the same rules as everything else:
+Restart Claude Code in that folder (or run `/hooks`) afterwards. Then every tool call goes through `hooks/harness-hook.sh` to `POST /hooks/pre-tool` and is checked with the same rules as everything else:
 
 - Decoy secrets, saved keys and passwords, home-folder wipes: **blocked**. Claude Code is told why and not to retry.
-- Uploads, downloads piped into a shell, force-pushes, startup-file changes, `sudo`: **Claude Code asks you first**, with Lookout's reason in the prompt.
-- Everything else: no objection, so Claude Code's own permission prompts work as usual. Lookout never answers "allow".
+- Uploads, downloads piped into a shell, force-pushes, startup-file changes, `sudo`: **Claude Code asks you first**, with Harness's reason in the prompt.
+- Everything else: no objection, so Claude Code's own permission prompts work as usual. Harness never answers "allow".
 
-Decoys are checked here too: relative paths and wildcards (`cat ~/.lookout/bait/*`) that reach a decoy are blocked. Each decoy also holds a random value unique to your computer. If that value shows up in a command or a file the agent writes, Lookout blocks it. If it shows up in a tool's output, the agent has the secret: Claude is told not to use it, and that session can't reach the network for the rest of its run.
+Decoys are checked here too: relative paths and wildcards (`cat ~/.harness/bait/*`) that reach a decoy are blocked. Each decoy also holds a random value unique to your computer. If that value shows up in a command or a file the agent writes, Harness blocks it. If it shows up in a tool's output, the agent has the secret: Claude is told not to use it, and that session can't reach the network for the rest of its run.
 
-`pnpm unprotect` also removes hooks installed before the rename (`.seatbelt/seatbelt-hook.sh`). The old script in this repo forwards to the new one. `LOOKOUT_PORT` and `LOOKOUT_FAIL_OPEN` are the hook's settings. `SEATBELT_PORT` and `SEATBELT_FAIL_OPEN` still work if those are what you already set.
+`pnpm unprotect` also removes hooks installed before the rename (`.lookout/lookout-hook.sh` or `.seatbelt/seatbelt-hook.sh`). The old script in this repo forwards to the new one. `HARNESS_PORT` and `HARNESS_FAIL_OPEN` are the hook's settings. `LOOKOUT_PORT` / `LOOKOUT_FAIL_OPEN` and `SEATBELT_PORT` / `SEATBELT_FAIL_OPEN` still work if those are what you already set.
 
-Decisions take about 10 ms. If Lookout isn't running, the hook blocks every action in protected folders until you start it (set `LOOKOUT_FAIL_OPEN=1` to change that). Blocked actions never run, so Auto-protect doesn't pause the agent over them. Tested with a real Claude Code session (v2.1.170): reading a decoy file was blocked and Claude reported it instead of retrying.
+Decisions take about 10 ms. If Harness isn't running, the hook blocks every action in protected folders until you start it (set `HARNESS_FAIL_OPEN=1` to change that). Blocked actions never run, so Auto-protect doesn't pause the agent over them. Tested with a real Claude Code session (v2.1.170): reading a decoy file was blocked and Claude reported it instead of retrying.
 
 ## Demo
 
@@ -79,7 +79,7 @@ What you should see:
 - The install script's command line names the decoy secrets, so it's flagged as Dangerous and traced back to the package rather than the agent.
 - Auto-protect is set to "Dangerous only" by default. It pauses the agent and everything under it before the upload happens. You can then end the session or let it continue.
 - The safety score, out of 100, drops, and the factor list shows why.
-- Explain writes a short summary with a local model if Ollama is running, or from the rules if it isn't. Set `LOOKOUT_MODEL` to pick the model (`SEATBELT_MODEL` still works).
+- Explain writes a short summary with a local model if Ollama is running, or from the rules if it isn't. Set `HARNESS_MODEL` to pick the model (`LOOKOUT_MODEL` and `SEATBELT_MODEL` still work).
 
 Set Auto-protect to Off if you want to watch the attack go all the way through. The secrets are fake and the attacker server only counts bytes, so this is safe to run.
 
@@ -101,7 +101,7 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 `src/monitor/network.js` lists open connections for those processes (`lsof` on macOS, `netstat -ano` on Windows) and names the server with reverse DNS or the URL in the command.
 
-`src/monitor/files.js` plants decoy secrets in `~/.lookout/bait` and notices when they're read by checking access times. If `~/.seatbelt/bait` is still there from before the rename, those files are copied over once and a read of the old path still counts. The random value inside an old decoy is kept, so a command that already contains it still counts. Each decoy embeds a random marker made on first run (saved in `data/bait-markers.json`); any rule that sees a marker in a command line treats it as a decoy being used. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
+`src/monitor/files.js` plants decoy secrets in `~/.harness/bait` and notices when they're read by checking access times. If `~/.lookout/bait` or `~/.seatbelt/bait` is still there from before the rename, those files are copied over once and a read of the old path still counts. The random value inside an old decoy is kept, so a command that already contains it still counts. Each decoy embeds a random marker made on first run (saved in `data/bait-markers.json`); any rule that sees a marker in a command line treats it as a decoy being used. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
 
 `src/monitor/transcripts.js` reads the session logs in `~/.claude/projects` and `~/.codex/sessions` to see what the agent was asked to do and which tools it used.
 
@@ -113,20 +113,20 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. Icons are from Lucide, served locally. The type is the system font. Every event is also written to `data/events.jsonl`.
 
-Select a session and Lookout draws the chain for the riskiest thing it saw: the agent, the shell, the package install, the install script, and the program that script started. Play the chain walks those boxes one at a time. If the system asks for less motion, the walk is skipped and the whole chain stays visible. Under the chain is a short account of what that session touched (commands, files, servers) and whether a decoy was opened. That account is also what you get when the session ends and you select it.
+Select a session and Harness draws the chain for the riskiest thing it saw: the agent, the shell, the package install, the install script, and the program that script started. Play the chain walks those boxes one at a time. If the system asks for less motion, the walk is skipped and the whole chain stays visible. Under the chain is a short account of what that session touched (commands, files, servers) and whether a decoy was opened. That account is also what you get when the session ends and you select it.
 
-Download report writes a Markdown file of the selected session, or of everything if nothing is selected. Print opens the browser dialog. Choose Save as PDF there if you want a PDF. Lookout does not build a PDF file itself.
+Download report writes a Markdown file of the selected session, or of everything if nothing is selected. Print opens the browser dialog. Choose Save as PDF there if you want a PDF. Harness does not build a PDF file itself.
 
-A low or medium row in the activity list has **Normal for this project**. Command marks match the complete command exactly, including paths and arguments. Older broad command marks no longer apply and should be removed and recreated. Saving that mark means the same command, or the same unknown server, no longer changes the score for that project. It stays in the log. Lookout will not do this for a decoy read, or for anything Risky or Dangerous, and it does not learn these marks on its own. They are listed in Preferences, and removing one puts the points back. The file is `data/baselines.json`.
+A low or medium row in the activity list has **Normal for this project**. Command marks match the complete command exactly, including paths and arguments. Older broad command marks no longer apply and should be removed and recreated. Saving that mark means the same command, or the same unknown server, no longer changes the score for that project. It stays in the log. Harness will not do this for a decoy read, or for anything Risky or Dangerous, and it does not learn these marks on its own. They are listed in Preferences, and removing one puts the points back. The file is `data/baselines.json`.
 
-The first time you open the dashboard it explains what Lookout is for, in a few sentences. **Contrast** switches to a black and white theme and underlines the score words, so color is not the only signal. **Shortcuts** lists the keys: 1 and 2 switch views, D runs the demo, W opens the walkthrough, / filters, Esc closes. The score has a text label for screen readers, and a new Dangerous event is announced. **What this number means**, under the score, is the plain version of the scoring rules.
+The first time you open the dashboard it explains what Harness is for, in a few sentences. **Contrast** switches to a black and white theme and underlines the score words, so color is not the only signal. **Shortcuts** lists the keys: 1 and 2 switch views, D runs the demo, W opens the walkthrough, / filters, Esc closes. The score has a text label for screen readers, and a new Dangerous event is announced. **What this number means**, under the score, is the plain version of the scoring rules.
 
 A Dangerous event also raises a banner on the page. On a Mac, `pnpm start` posts a system notification as well. The menu bar app posts one through the system. A second Dangerous event for the same agent within 20 seconds does not add another notification. Browser alerts stay off until you allow them in Preferences.
 
 ## Known limits
 
 - Programs that start and finish in under about half a second can be missed by polling. The decoy files still catch secret reads. On macOS, `pnpm deep` uses Apple's `eslogger` to see every launch and file open, but it needs sudo and Full Disk Access, and we haven't tested it yet.
-- Access times don't say which process read a file, so a decoy read is credited to the agent that was most recently active. If more than one agent is active, Lookout warns you but won't pause anyone over it.
+- Access times don't say which process read a file, so a decoy read is credited to the agent that was most recently active. If more than one agent is active, Harness warns you but won't pause anyone over it.
 - Auto-protect reacts to what it sees. It can't stop a command that finishes before the next poll. For Claude Code, `pnpm protect` adds a `PreToolUse` hook that blocks ahead of time; other agents only get Auto-protect.
 - The Windows support hasn't been run on real Windows yet. Some things we know about:
   - Windows can't easily report a process's working folder, so an agent's project is filled in from its session log.

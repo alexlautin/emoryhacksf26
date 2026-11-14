@@ -9,7 +9,7 @@ test('a finished attack names commands, the decoy, and the server', () => {
     { agentId: 'demo-1', kind: 'tool', command: 'npm install', risk: 'low' },
     { agentId: 'demo-1', kind: 'process', command: 'npm install', risk: 'low' },
     { agentId: 'demo-1', kind: 'file', path: '/tmp/project/.env', bait: false, risk: 'low' },
-    { agentId: 'demo-1', kind: 'file', path: '/home/me/.lookout/bait/aws_credentials', bait: true, risk: 'critical', reasons: ['opened a decoy secret Lookout planted'] },
+    { agentId: 'demo-1', kind: 'file', path: '/home/me/.harness/bait/aws_credentials', bait: true, risk: 'critical', reasons: ['opened a decoy secret Harness planted'] },
     { agentId: 'demo-1', kind: 'network', host: '127.0.0.1', risk: 'high', title: 'talked to the pretend attacker' },
     { agentId: 'other', kind: 'process', command: 'git status', risk: 'info' },
   ]);
@@ -33,7 +33,7 @@ test('a quiet finished session says so', () => {
 
 test('a blocked hook is counted once', () => {
   const touch = sessionTouch(agent, [
-    { agentId: 'demo-1', kind: 'tool', risk: 'critical', prevented: true, gate: 'deny', title: 'Lookout blocked it' },
+    { agentId: 'demo-1', kind: 'tool', risk: 'critical', prevented: true, gate: 'deny', title: 'Harness blocked it' },
   ]);
   assert.equal(touch.blocked.length, 1);
   assert.match(touch.headline, /blocked 1 action/);

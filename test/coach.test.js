@@ -4,7 +4,7 @@ import { COACH_STEPS, coachCursor } from '../public/coach.js';
 
 const task = { kind: 'task', title: 'You asked' };
 const script = { kind: 'process', risk: 'high', title: 'A package install script made a web request', reasons: ['this came from a package install script'] };
-const secret = { kind: 'file', risk: 'critical', bait: true, reasons: ['opened a decoy secret Lookout planted'] };
+const secret = { kind: 'file', risk: 'critical', bait: true, reasons: ['opened a decoy secret Harness planted'] };
 const paused = { kind: 'system', risk: 'info', guard: 'paused' };
 
 test('the walkthrough has five steps and starts on the intro', () => {

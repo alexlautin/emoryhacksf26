@@ -110,7 +110,7 @@ test('a thought-only Gemini reply is rejected and a thought plus JSON is kept', 
   process.env.GEMINI_API_KEY = 'test-only-key';
   globalThis.fetch = async (_url, options) => {
     const prompt = JSON.parse(options.body).contents[0].parts[0].text;
-    if (prompt.includes('hidden login')) return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'planning the trace' }] } }] });
+    if (prompt === SCENARIOS.persistence.prompt) return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'planning the trace' }] } }] });
     return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ thought: true, text: 'planning' }, { text: JSON.stringify({ events: raw }) }] } }] });
   };
   const ask = (scenario) => POST(new Request('http://localhost/api/demo', { method: 'POST', headers: { origin: 'http://127.0.0.1:4173', host: '127.0.0.1:4173' }, body: JSON.stringify({ scenario }) }));

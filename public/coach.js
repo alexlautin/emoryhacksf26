@@ -15,7 +15,7 @@ export const COACH_STEPS = [
   {
     id: 'script',
     title: 'The install script ran commands the agent did not type',
-    body: 'Lookout follows the process tree: the agent, a shell, npm, the package script, then whatever that script starts.',
+    body: 'Harness follows the process tree: the agent, a shell, npm, the package script, then whatever that script starts.',
     test(e) {
       if (/install script/i.test(`${e.title || ''} ${(e.reasons || []).join(' ')}`)) return true;
       const steps = e.steps || [];
@@ -28,7 +28,7 @@ export const COACH_STEPS = [
   {
     id: 'secret',
     title: 'The script opened a decoy secret',
-    body: 'Lookout plants fake keys in ~/.lookout/bait. A real task does not need them. Opening one drops the score.',
+    body: 'Harness plants fake keys in ~/.harness/bait. A real task does not need them. Opening one drops the score.',
     test(e) { return !!(e.bait || (e.reasons || []).some((r) => /decoy secret/.test(r))); },
   },
   {
