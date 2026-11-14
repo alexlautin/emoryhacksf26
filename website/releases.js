@@ -6,7 +6,7 @@ export const RELEASES = {
     // Swap this for the published .dmg, then set published to true.
     // While published is false the button still points here, and the page says
     // the file is not actually up.
-    url: 'https://github.com/alexlautin/emoryhacksf26/releases/download/v0.1.0/Harness.dmg',
+    url: 'https://github.com/alexlautin/harness/releases/download/v0.1.0/Harness.dmg',
     published: false,
     comingSoon: false,
   },

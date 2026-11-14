@@ -221,7 +221,7 @@ export default function Home() {
           <h2>Put your agent on a harness.</h2>
           <p className="lead">Free, with the source on GitHub. Lives in your menu bar.</p>
           <div id="downloads" />
-          <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/emoryhacksf26">GitHub</a>.</p></noscript>
+          <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness">GitHub</a>.</p></noscript>
         </div>
       </section>
       <Downloads />

@@ -12,7 +12,7 @@ export const metadata = {
 };
 export const viewport = { themeColor: '#fbfaf7' };
 
-const GITHUB = 'https://github.com/alexlautin/emoryhacksf26';
+const GITHUB = 'https://github.com/alexlautin/harness';
 
 export default function Layout({ children }) {
   return (

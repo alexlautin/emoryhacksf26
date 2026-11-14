@@ -35,7 +35,7 @@ The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_compone
 ## First deployment checklist
 
 1. In [Google AI Studio](https://aistudio.google.com/apikey), create a Gemini API key for your project. Keep it private. Check that the project has quota for `gemini-2.5-flash`; enable billing if your chosen tier requires it.
-2. In [Vercel](https://vercel.com/new), import `alexlautin/emoryhacksf26`. Name the project `harness` (or another available name), select the `main` production branch, set Root Directory to `website`, and use the Next.js preset with Node 22. The checked-in `vercel.json` supplies install and build commands; leave Output Directory at its default.
+2. In [Vercel](https://vercel.com/new), import `alexlautin/harness`. Name the project `harness` (or another available name), select the `main` production branch, set Root Directory to `website`, and use the Next.js preset with Node 22. The checked-in `vercel.json` supplies install and build commands; leave Output Directory at its default.
 3. Add `GEMINI_API_KEY` for Production and Preview. Optionally add `GEMINI_MODEL=gemini-2.5-flash`. The key stays on the server; do not use `NEXT_PUBLIC_` for it.
 4. Deploy. If you add or change environment variables after deployment, redeploy so the function receives them.
 5. Open `/`, `/whitepaper`, and `/demo`. On `/demo`, choose a scenario and request a Gemini simulation to verify a live response. The scripted example works even without credentials and does not verify the key.

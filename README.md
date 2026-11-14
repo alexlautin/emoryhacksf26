@@ -1,6 +1,6 @@
 # Harness
 
-[![CI](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml/badge.svg)](https://github.com/alexlautin/emoryhacksf26/actions/workflows/ci.yml)
+[![CI](https://github.com/alexlautin/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/alexlautin/harness/actions/workflows/ci.yml)
 
 Harness watches what Claude Code and Codex do on your computer, including the parts their own windows don't show, and tells you about anything risky.
 
