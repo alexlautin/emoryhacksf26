@@ -8,69 +8,97 @@
   <script>
     // The menu bar panel loads this page with ?view=panel. Set that before paint.
     if (new URLSearchParams(location.search).get('view') === 'panel') document.documentElement.classList.add('panel');
+    // Inside the macOS app the window has no title bar: the sidebar runs under the window buttons.
+    if (window.__TAURI_INTERNALS__ && /Mac/.test(navigator.userAgent)) document.documentElement.classList.add('mac-app');
     try {
       const t = localStorage.getItem('harness.theme') || localStorage.getItem('lookout.theme') || localStorage.getItem('seatbelt.theme');
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
       const c = localStorage.getItem('harness.contrast') || localStorage.getItem('lookout.contrast') || localStorage.getItem('seatbelt.contrast');
       if (c === '1') document.documentElement.dataset.contrast = 'high';
+      if (localStorage.getItem('harness.commands') === '1') document.documentElement.classList.add('show-commands');
     } catch {}
   </script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <a class="skip" href="#main">Skip to activity</a>
-  <header class="top">
-    <div class="top-inner">
-      <div class="brand">
-        <img src="/ui/pug.png" class="logo" width="32" height="32" alt="" />
-        <h1>Harness</h1>
-        <span id="live" class="live" role="status"><span class="dot"></span><span id="live-text">Connecting</span></span>
-      </div>
-      <div class="top-actions">
-        <button id="prefs-open" class="btn ghost" type="button"><svg class="i" aria-hidden="true"><use href="#settings"/></svg> Settings</button>
-        <button id="open-dash" class="btn primary" hidden>Open dashboard</button>
-      </div>
-    </div>
-  </header>
+  <a class="skip" href="#rows">Skip to activity</a>
 
-  <main id="main">
-    <p id="conn-error" class="conn-error" hidden role="status">Can’t reach Harness. Trying again.</p>
-
-    <section id="alert" class="alert" hidden role="status" aria-live="polite"></section>
-
-    <section class="report" id="score-live">
-      <div class="score-line">
-        <span id="score-num" class="score-num">--</span>
-        <span class="score-of">/ 100</span>
+  <div class="win" id="win">
+    <nav class="side" aria-label="Harness">
+      <div class="side-top" data-tauri-drag-region>
+        <img src="/ui/pug.png" class="side-logo" width="20" height="20" alt="" />
+        <span class="side-app">Harness</span>
+        <span id="live" class="live" role="status"><span class="dot" aria-hidden="true"></span><span id="live-text" class="sr">Connecting</span></span>
       </div>
-      <h2 id="score-level" class="level-word">Loading</h2>
-      <p id="score-blurb" class="score-blurb">Getting the latest activity.</p>
-      <div class="meter" aria-hidden="true">
-        <div class="meter-track"><div id="meter-fill" class="meter-fill"></div></div>
+
+      <div class="side-scroll">
+        <button type="button" class="side-item" data-nav="overview"><svg class="i" aria-hidden="true"><use href="#layout-dashboard"/></svg><span class="side-text">Overview</span></button>
+        <button type="button" class="side-item" data-nav="alerts"><svg class="i" aria-hidden="true"><use href="#bell"/></svg><span class="side-text">Alerts</span><span id="alert-count" class="side-count"></span></button>
+
+        <h2 class="side-head">Agents</h2>
+        <div id="side-agents" class="side-list"></div>
       </div>
+
+      <div class="side-foot">
+        <div id="pug" class="pug" aria-hidden="true"></div>
+        <button type="button" class="side-score" id="score-live" data-nav="overview">
+          <span class="ss-row">
+            <span class="ss-label">Safety score</span>
+            <span class="ss-num"><b id="score-num">--</b> / 100</span>
+          </span>
+          <span class="ss-track" aria-hidden="true"><span id="meter-fill" class="ss-fill"></span></span>
+          <span id="score-level" class="ss-word">Loading</span>
+        </button>
+        <button type="button" class="side-item" id="side-protect" data-prefs><svg class="i" aria-hidden="true"><use id="side-protect-icon" href="#shield-check"/></svg><span class="side-text">Auto-protect</span><span id="side-protect-state" class="side-count">On</span></button>
+        <button type="button" class="side-item" id="prefs-open" data-prefs><svg class="i" aria-hidden="true"><use href="#settings"/></svg><span class="side-text">Settings</span></button>
+      </div>
+    </nav>
+
+    <section class="main" aria-labelledby="view-title">
+      <header class="toolbar" data-tauri-drag-region>
+        <div class="tb-title" data-tauri-drag-region>
+          <h1 id="view-title">Overview</h1>
+          <p id="view-sub" class="tb-sub"></p>
+        </div>
+        <div id="tabs" class="tabs" role="tablist" aria-label="Show" hidden>
+          <button type="button" role="tab" data-tab="processes">Processes</button>
+          <button type="button" role="tab" data-tab="files">Files</button>
+          <button type="button" role="tab" data-tab="network">Network</button>
+          <button type="button" role="tab" data-tab="activity">Activity</button>
+        </div>
+        <div class="tb-tools">
+          <button type="button" class="tb-btn" id="cmd-toggle" aria-pressed="false" title="Show the exact commands and process IDs"><svg class="i" aria-hidden="true"><use href="#square-terminal"/></svg><span>Commands</span></button>
+          <label class="search">
+            <svg class="i" aria-hidden="true"><use href="#search"/></svg>
+            <input id="search" type="search" placeholder="Search" aria-label="Search this list" autocomplete="off" />
+          </label>
+        </div>
+      </header>
+
+      <p id="conn-error" class="conn-error" hidden role="status">Can’t reach Harness. Trying again.</p>
+      <div id="alert" class="banner" hidden role="status" aria-live="polite"></div>
+
+      <div class="body">
+        <div class="table" id="table">
+          <div id="thead" class="thead" aria-hidden="true"></div>
+          <ul id="rows" class="rows" aria-label="Activity" tabindex="-1"></ul>
+          <div id="empty" class="empty-state" hidden></div>
+        </div>
+        <aside id="inspector" class="inspector" aria-label="Details" aria-live="polite"></aside>
+      </div>
+
+      <footer class="statusbar">
+        <span id="status-left"></span>
+        <span class="status-right" id="foot-text">Nothing leaves this computer</span>
+      </footer>
     </section>
-
-    <section>
-      <h2 class="section-title">Your agents</h2>
-      <div id="agents" class="agents"></div>
-    </section>
-
-    <details id="simple" class="log">
-      <summary>What happened</summary>
-      <ol id="feed" class="feed"></ol>
-      <p id="feed-empty" class="empty">Connecting…</p>
-    </details>
-  </main>
-
-  <footer class="foot">
-    <p id="foot-text">Nothing leaves this computer.</p>
-  </footer>
+  </div>
 
   <dialog id="prefs" aria-labelledby="prefs-title">
     <form method="dialog">
       <header class="prefs-head">
         <h2 id="prefs-title">Settings</h2>
-        <button class="btn icon" id="prefs-close" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
+        <button class="btn icon ghost" id="prefs-close" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
       </header>
       <fieldset class="protect" id="protect" data-level="dangerous" data-local-only>
         <legend>Auto-protect <span id="protect-state" class="state-word">On</span></legend>
@@ -128,7 +156,7 @@
       </fieldset>
       <fieldset data-local-only>
         <legend>Try it</legend>
-        <p class="hint">Run a pretend attack to see how Harness reacts. It uses fake secrets and a server on this computer.</p>
+        <p class="hint">Run a pretend attack to see how Harness reacts. It uses fake secrets and a server on this computer. Shortcut: D.</p>
         <div class="coach-actions">
           <button type="button" class="btn" data-demo>Run demo attack</button>
           <button type="button" class="btn ghost" id="reset" title="Clear the activity and start the score over">Reset activity</button>
@@ -156,7 +184,7 @@
   </div>
 
   <div id="announce" class="sr" role="status" aria-live="assertive"></div>
-    <div id="toast" class="toast" hidden role="status"></div>
+  <div id="toast" class="toast" hidden role="status"></div>
   <script src="/app.js" type="module"></script>
 </body>
 </html>

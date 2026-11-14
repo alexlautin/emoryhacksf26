@@ -39,7 +39,30 @@
     "macOS": {
       "signingIdentity": "-",
       "minimumSystemVersion": "12.0",
-      "entitlements": "Entitlements.plist"
+      "entitlements": "Entitlements.plist",
+      "dmg": {
+        "background": "icons/dmg-background.tiff",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 190
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 190
+        }
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "icons/nsis-header.bmp",
+        "sidebarImage": "icons/nsis-sidebar.bmp",
+        "uninstallerHeaderImage": "icons/nsis-header.bmp"
+      }
     }
   }
 }

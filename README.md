@@ -66,6 +66,8 @@ pnpm desktop          # run it in development, straight from this folder
 pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundle
 ```
 
+The app icon, the menu bar icons, the DMG window and the Windows installer art are all made from the brand pug (`public/ui/pug.png`) by `python3 scripts/make-icons.py` (needs Pillow). Run it again after changing the pug; it overwrites the files in `src-tauri/icons`.
+
 Builds are for the platform you build on. Downloaded Mac builds use the approval steps under **First open on macOS** above. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
 
 ## Phone access
@@ -110,7 +112,7 @@ What you should see:
 
 Set Auto-protect to Off if you want to watch the attack go all the way through. The secrets are fake and the attacker server only counts bytes, so this is safe to run.
 
-The header has **Walk through the demo**. It stays on screen and moves through five notes as the demo actually happens: the request, the install script the agent did not type, the decoy read, and the pause (or the upload, if Auto-protect is off). Reset first if you want to watch a run that is already on the page from the beginning.
+When the demo starts, the window opens the demo agent's process tree, so you can watch the install script appear under `npm install`, read the decoy, and get paused (or finish the upload, if Auto-protect is off).
 
 To try it with a real agent:
 
@@ -138,17 +140,19 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 `public/score.js` works out the score. Everyone starts at 100. Risky events cost points in six categories, each with a cap, and the cost halves every 12 hours. The score stays between 0 and 100. Clear, Steady, Review and Act are short labels for that number, not a separate scale.
 
-The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. Icons are from Lucide, served locally. The type is locally served Instrument Sans. The app and landing page share the brand foundations and components in `public/ui/`; open `/ui/index.html` on either server for the visual kit, or read [the usage guide](public/ui/README.md). Every event is also written to `data/events.jsonl`.
+The dashboard in `public/` is plain HTML and JavaScript, updated live over Server-Sent Events. It is laid out like a desktop app: a sidebar, a list in the middle, and a details panel on the right. It uses the system font (SF on macOS, Segoe UI on Windows), follows the system's light or dark mode, and has no build step. Icons are from Lucide and agent logos from Lobe Icons, both served locally. The landing page shares the brand foundations in `public/ui/`; open `/ui/index.html` for the visual kit, or read [the usage guide](public/ui/README.md). Every event is also written to `data/events.jsonl`.
 
-Select a session and Harness draws the chain for the riskiest thing it saw: the agent, the shell, the package install, the install script, and the program that script started. Play the chain walks those boxes one at a time. If the system asks for less motion, the walk is skipped and the whole chain stays visible. Under the chain is a short account of what that session touched (commands, files, servers) and whether a decoy was opened. That account is also what you get when the session ends and you select it.
+The sidebar lists **Overview** (everything worth noting), **Alerts** (the risky moments), each agent with its logo and a status dot, and the safety score. Above the score sits the Harness pug, the same art as the landing page. It reacts to how things are going through posture: asleep (head down, slow breaths, z's) when no agents are running, relaxed or prancing when the score is clear, standing tall when something is worth a look, crouched and trembling when something dangerous happened, and braced and barking while Harness has an agent paused. It startles when the score drops and hops when it recovers or when clicked. `public/pug.js` keeps the art untouched: it moves the whole image, plus the head as its own layer for nods and tilts, frame by frame. If the system asks for less motion it holds each pose.
 
-Download report writes a Markdown file of the selected session, or of everything if nothing is selected. Print opens the browser dialog. Choose Save as PDF there if you want a PDF. Harness does not build a PDF file itself.
+Select an agent to see what ran under it. **Processes** is a tree: the agent, the commands it typed, and everything those started, such as an `npm install` and the install script a package ran on its own. Rows say what happened in plain words ("A package's setup script", "Opened a decoy secret") and give a verdict. **Files**, **Network** and **Activity** show the files it touched, the servers it contacted, and the timeline. Selecting a row fills the details panel: who started it, why it matters, and the exact command. With no row selected, the panel sums up the session, with **Pause**, **End Session**, **Explain** and **Report**.
 
-A low or medium row in the activity list has **Normal for this project**. Command marks match the complete command exactly, including paths and arguments. Older broad command marks no longer apply and should be removed and recreated. Saving that mark means the same command, or the same unknown server, no longer changes the score for that project. It stays in the log. Harness will not do this for a decoy read, or for anything Risky or Dangerous, and it does not learn these marks on its own. They are listed in Preferences, and removing one puts the points back. The file is `data/baselines.json`.
+**Commands** in the toolbar (or C) switches every list from plain language to the exact commands and process IDs, for people who want to see them. When Harness pauses an agent, or the demo starts, the window goes to that session and selects the process that triggered the pause. Keys: ↑ and ↓ move through the list, ← and → fold and unfold the tree, / searches, D runs the demo, Esc clears the selection.
 
-The first time you open the dashboard it explains what Harness is for, in a few sentences. **Contrast** switches to a black and white theme and underlines the score words, so color is not the only signal. **Shortcuts** lists the keys: 1 and 2 switch views, D runs the demo, W opens the walkthrough, / filters, Esc closes. The score has a text label for screen readers, and a new Dangerous event is announced. **What this number means**, under the score, is the plain version of the scoring rules.
+**Report** downloads a Markdown file of one session; **Download Report** on the overview covers everything. A low or medium row has **Normal for this project** in its details. Command marks match the complete command exactly, including paths and arguments. Saving that mark means the same command, or the same unknown server, no longer changes the score for that project. It stays in the log. Harness will not do this for a decoy read, or for anything Risky or Dangerous, and it does not learn these marks on its own. They are listed in Settings, and removing one puts the points back. The file is `data/baselines.json`.
 
-A Dangerous event also raises a banner on the page. On a Mac, `pnpm start` posts a system notification as well. The menu bar app posts one through the system. A second Dangerous event for the same agent within 20 seconds does not add another notification. Browser alerts stay off until you allow them in Preferences.
+**Higher contrast** in Settings switches to a black and white theme and underlines verdicts and score words, so color is not the only signal. The score has a text label for screen readers, and a new Dangerous event is announced. In the macOS app the sidebar runs up under the window buttons; on Windows the window keeps its standard title bar.
+
+A Dangerous event also raises a banner across the top of the window. On a Mac, `pnpm start` posts a system notification as well. The menu bar app posts one through the system. A second Dangerous event for the same agent within 20 seconds does not add another notification. Browser alerts stay off until you allow them in Settings.
 
 ## Known limits
 

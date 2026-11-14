@@ -58,7 +58,7 @@ if [ "$code" != 200 ]; then
   cat "$log"
   exit 1
 fi
-if ! grep -q "<h1>Harness</h1>" "$page"; then
+if ! grep -q "<title>Harness</title>" "$page"; then
   echo "Dashboard response was not the Harness page."
   cat "$log"
   exit 1
