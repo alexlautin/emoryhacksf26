@@ -216,7 +216,9 @@ main > *, .item > div { min-width: 0; }
 .task { font-size: 13.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .task span { color: var(--faint); font-weight: 500; margin-right: 4px; }
 .s-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 10px; }
-.s-buttons { display: flex; gap: 4px; }
+.s-buttons { display: flex; gap: 4px; margin-left: auto; margin-right: -8px; }
+.btn.ghost.end:hover, .btn.confirming { color: var(--danger); }
+.btn.confirming { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .counts { display: flex; gap: 14px; font-size: 13px; color: var(--muted); flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 .counts b { color: var(--text); font-weight: 600; }
 
@@ -309,6 +311,9 @@ td .reasons { color: var(--muted); font-size: 12.5px; }
 .panel .report { grid-template-columns: minmax(0, 1fr); }
 .panel .score-col { padding: 14px 16px; border: 0; }
 .panel .score-num { font-size: 44px; }
-.panel .factors-col, .panel .scale, .panel #score-basis, .panel #protect, .panel #explain,
+.panel #protect { padding: 12px 14px; gap: 10px; grid-template-columns: 1fr; }
+.panel #protect .protect-tile, .panel #protect-desc { display: none; }
+.panel #protect h2 { font-size: 15px; }
+.panel .factors-col, .panel .scale, .panel #score-basis, .panel #explain,
 .panel #simple, .panel #advanced, .panel #agent-hint, .panel #earlier { display: none !important; }
 .panel .session { cursor: default; }

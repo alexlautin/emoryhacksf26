@@ -2,7 +2,8 @@
 //
 // The server is the same Node program as `pnpm start`. The app ships its own Node binary
 // (a Tauri "sidecar"), starts the server on a free port, and reads one-line JSON messages it
-// prints to stdout (see src/desktop.js) to keep the tray icon, its title and notifications current.
+// prints to stdout (see src/desktop.js) to keep the tray icon, its title and notifications current,
+// and sends it commands from the tray menu on stdin.
 // Clicking the tray icon opens a small panel under it; "Open dashboard" opens the full window.
 
 use std::sync::Mutex;
@@ -10,9 +11,10 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use tauri::image::Image;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_positioner::{Position, WindowExt};
@@ -23,6 +25,10 @@ const TRAY_ID: &str = "seatbelt";
 const PANEL: &str = "panel";
 const DASHBOARD: &str = "dashboard";
 const MAX_RESTARTS: u32 = 3;
+/// Claude Code hooks (`pnpm protect`) look for Seatbelt here. The server falls back to a free
+/// port if something else is using it.
+const PREFERRED_PORT: &str = "4100";
+const LEVELS: [(&str, &str); 3] = [("off", "Off"), ("dangerous", "Dangerous only"), ("risky", "Anything risky")];
 
 // macOS menu bar icons are "template" images: black shapes the system tints for light/dark.
 // Windows trays have no such thing, so they get colored ones.
@@ -45,6 +51,24 @@ struct Monitor {
     /// the panel blurs it first, so a click right after that should not reopen it.
     panel_blurred_at: Mutex<Option<Instant>>,
     quitting: Mutex<bool>,
+    /// The Auto-protect menu's check items, by level, so status updates can tick the right one.
+    levels: Mutex<Vec<(String, CheckMenuItem<Wry>)>>,
+}
+
+/// Send one command to the server (see src/desktop.js for the list).
+fn send(app: &AppHandle, cmd: Value) {
+    if let Some(child) = app.state::<Monitor>().child.lock().unwrap().as_mut() {
+        let _ = child.write(format!("{cmd}\n").as_bytes());
+    }
+}
+
+fn pick_folder(app: &AppHandle, title: &str, cmd: &'static str) {
+    let app2 = app.clone();
+    app.dialog().file().set_title(title).pick_folder(move |dir| {
+        if let Some(path) = dir.and_then(|d| d.into_path().ok()) {
+            send(&app2, serde_json::json!({ "cmd": cmd, "dir": path }));
+        }
+    });
 }
 
 fn url(app: &AppHandle, path: &str) -> Option<WebviewUrl> {
@@ -143,6 +167,11 @@ fn on_status(app: &AppHandle, msg: &Value) {
     let active = msg["active"].as_u64().unwrap_or(0);
     let score = msg["score"].as_u64().unwrap_or(0);
     let band = msg["band"].as_str().unwrap_or("");
+    if let Some(level) = msg["autoProtect"].as_str() {
+        for (id, item) in app.state::<Monitor>().levels.lock().unwrap().iter() {
+            let _ = item.set_checked(id == level);
+        }
+    }
 
     let alert = paused > 0;
     let state = app.state::<Monitor>();
@@ -209,7 +238,7 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
         .map_err(|e| tauri::Error::Anyhow(e.into()))?
         .arg(script)
         .env("SEATBELT_DESKTOP", "1")
-        .env("PORT", "0");
+        .env("PORT", PREFERRED_PORT);
     if let Some(dir) = data_dir {
         cmd = cmd.env("SEATBELT_DATA_DIR", dir);
     }
@@ -275,9 +304,22 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let quit = MenuItem::with_id(app, "quit", "Quit Seatbelt", true, None::<&str>)?;
+
+    let mut levels = Vec::new();
+    for (id, label) in LEVELS {
+        levels.push((id.to_string(), CheckMenuItem::with_id(app, format!("level:{id}"), label, true, id == "dangerous", None::<&str>)?));
+    }
+    let level_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = levels.iter().map(|(_, i)| i as _).collect();
+    let protect_level = Submenu::with_items(app, "Auto-protect", true, &level_refs)?;
+    *app.state::<Monitor>().levels.lock().unwrap() = levels;
+
+    let protect = MenuItem::with_id(app, "protect", "Protect a folder for Claude Code…", true, None::<&str>)?;
+    let unprotect = MenuItem::with_id(app, "unprotect", "Stop protecting a folder…", true, None::<&str>)?;
+    let demo = MenuItem::with_id(app, "demo", "Run demo attack", true, None::<&str>)?;
+    let sep = || PredefinedMenuItem::separator(app);
     let menu = Menu::with_items(
         app,
-        &[&open, &PredefinedMenuItem::separator(app)?, &login, &PredefinedMenuItem::separator(app)?, &quit],
+        &[&open, &sep()?, &protect_level, &protect, &unprotect, &sep()?, &demo, &sep()?, &login, &sep()?, &quit],
     )?;
 
     TrayIconBuilder::with_id(TRAY_ID)
@@ -295,7 +337,17 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let _ = login.set_checked(auto.is_enabled().unwrap_or(!on));
             }
             "quit" => app.exit(0),
-            _ => {}
+            "demo" => {
+                send(app, serde_json::json!({ "cmd": "demo" }));
+                show_dashboard(app);
+            }
+            "protect" => pick_folder(app, "Choose a folder to protect for Claude Code", "protect"),
+            "unprotect" => pick_folder(app, "Choose a folder to stop protecting", "unprotect"),
+            id => {
+                if let Some(level) = id.strip_prefix("level:") {
+                    send(app, serde_json::json!({ "cmd": "auto-protect", "level": level }));
+                }
+            }
         })
         .on_tray_icon_event(|tray, event| {
             tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
@@ -322,6 +374,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Monitor::default())
         .invoke_handler(tauri::generate_handler![open_dashboard])

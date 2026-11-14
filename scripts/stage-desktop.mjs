@@ -1,6 +1,6 @@
 // Gets everything the desktop app bundles ready, before `tauri dev` / `tauri build`:
 //   src-tauri/binaries/node-<target>  this Node, which runs the Seatbelt server inside the app
-//   src-tauri/build/app/              the server, dashboard and demo, plus just the icon and
+//   src-tauri/build/app/              the server, dashboard, demo and Claude Code hook, plus just the icon and
 //                                     font files it needs from node_modules
 // Builds for the machine you're on. Build each platform on that platform (or in CI).
 import fs from 'node:fs';
@@ -28,6 +28,7 @@ const copy = (from, to = path.relative(ROOT, from)) =>
 copy(path.join(ROOT, 'src'));
 copy(path.join(ROOT, 'public'));
 copy(path.join(ROOT, 'demo'));
+copy(path.join(ROOT, 'hooks'));
 for (const name of ICONS) copy(path.join(LUCIDE_DIR, `${name}.svg`));
 for (const file of Object.values(BRANDS)) copy(path.join(BRAND_DIR, `${file}.svg`));
 copy(FONT_FILE);

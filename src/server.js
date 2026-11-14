@@ -17,10 +17,10 @@ import { IS_MAC, OS_NAME } from './platform.js';
 import { handleHook } from './hooks.js';
 import { ROOT, DEMO_DIR, prepareDemoDir } from './paths.js';
 import { iconSprite, FONT_FILE } from './icons.js';
-import { fixPath, startDesktopBridge } from './desktop.js';
+import { IS_DESKTOP, fixPath, startDesktopBridge } from './desktop.js';
 
 const PUBLIC = path.join(ROOT, 'public');
-const PORT = +(process.env.PORT ?? 4100); // 0 picks a free port (the desktop app does this)
+const PORT = +(process.env.PORT ?? 4100);
 fixPath();
 const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
@@ -151,7 +151,15 @@ const attacker = http.createServer(async (req, res) => {
   res.end('ok');
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+// The desktop app asks for 4100 (where Claude Code hooks look for Seatbelt) but takes any free
+// port if something else already has it, such as a `pnpm start` in a terminal.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE' && IS_DESKTOP && server.address() === null) {
+    console.log(`  Port ${PORT} is busy; using a free one. Claude Code hooks won't reach this copy.`);
+    server.listen(0, '127.0.0.1');
+  } else throw err;
+});
+server.on('listening', () => {
   const port = server.address().port;
   process.env.PORT = String(port); // the demo agent reports back to this port
   startDesktopBridge(port);
@@ -160,6 +168,7 @@ server.listen(PORT, '127.0.0.1', () => {
   if (process.argv.includes('--eslogger') && !IS_MAC) console.log('  Deep mode needs macOS; running in standard mode.');
   console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : '  Mode: standard (no admin rights needed).');
 });
+server.listen(PORT, '127.0.0.1');
 attacker.listen(4199, '127.0.0.1').on('error', () => console.log('  (demo attacker port 4199 busy; demo upload will fail)'));
 
 startProcessMonitor();
