@@ -109,6 +109,22 @@ html.mac-app .side-top > :not(.live) { visibility: hidden; }
 .sdot.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--w-text-2); opacity: .6; }
 .side-empty { padding: 4px 8px; color: var(--w-text-2); font-size: 12px; }
 .side-foot { flex: none; border-top: 1px solid var(--w-sep); padding-top: 10px; display: flex; flex-direction: column; gap: 1px; }
+.pug {
+  --pug-ink: light-dark(#17191b, #101213);
+  --pug-fawn: #f4cfa4;
+  --pug-ear: #1d1f22;
+  --pug-mask: #45474c;
+  --pug-teal: #45c7b8;
+  --pug-teal-deep: #1b857a;
+  --pug-mouth: #2a1416;
+  --pug-tongue: #ec7a88;
+  --pug-shadow: light-dark(rgba(0, 0, 0, .1), rgba(0, 0, 0, .35));
+  --pug-alert: light-dark(#d9480f, #ff8a4c);
+  --pug-z: var(--w-text-2);
+  height: 92px; display: flex; justify-content: center; align-items: flex-end; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+.pug-svg { width: 124px; height: 93px; overflow: visible; display: block; }
 .side-score { border: 0; background: transparent; border-radius: 6px; padding: 6px 8px 8px; text-align: left; display: grid; gap: 6px; color: var(--w-text); margin-bottom: 4px; }
 .side-score:hover { background: var(--w-hover); }
 .ss-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -318,7 +334,7 @@ kbd { font-family: var(--w-mono); font-size: 11px; border: 1px solid var(--w-btn
   .side-app { display: none; }
   .side-scroll { flex-direction: row; overflow: visible; flex: none; }
   .side-list { flex-direction: row; }
-  .side-head, .side-score { display: none; }
+  .side-head, .side-score, .pug { display: none; }
   .side-item { width: auto; }
   .side-foot { flex-direction: row; border-top: 0; padding-top: 0; }
   .side-foot .side-text { display: none; }

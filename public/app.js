@@ -430,7 +430,7 @@ function renderScore() {
   $('#score-live').setAttribute('aria-label', `Safety score ${s.score} out of 100. ${s.level.blurb}`);
   const paused = liveAgents().some((a) => a.paused && byUs(a.pausedBy));
   const working = liveAgents().some((a) => !a.paused && Date.now() - (a.lastActive ?? 0) < 15000);
-  setPugMood({ level: s.level.cls, score: s.score, paused, working });
+  setPugMood({ level: s.level.cls, score: s.score, paused, working, agents: liveAgents().length });
 }
 
 function renderProtect() {
