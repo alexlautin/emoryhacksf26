@@ -75,6 +75,13 @@ test('system notes and tasks do not cost points', () => {
   assert.equal(s.counted, 2);
 });
 
+test('an action marked normal for the project does not cost points', () => {
+  const marked = { ...secret(1), risk: 'info', baseline: true, reasons: [...secret(1).reasons, 'you marked this as normal for this project, so it no longer changes the score'] };
+  const s = computeScore([marked], now);
+  assert.equal(s.score, 100);
+  assert.equal(s.factors.find((f) => f.id === 'secrets').count, 0);
+});
+
 test('a package install is a small cost', () => {
   const s = computeScore([ev(1, ['installed packages (packages can run their own setup code)'], 'low')], now);
   assert.equal(s.score, 99);

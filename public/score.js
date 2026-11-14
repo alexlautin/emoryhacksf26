@@ -62,7 +62,7 @@ export function levelFor(score) {
 
 /** Which factors one event counts against. */
 export function factorsFor(e) {
-  if (e.kind === 'system' || e.kind === 'task') return [];
+  if (e.kind === 'system' || e.kind === 'task' || e.baseline) return [];
   const reasons = (e.reasons ?? []).join(' · ');
   if (!reasons) return [];
   return FACTORS.filter((f) => f.test.test(reasons));
