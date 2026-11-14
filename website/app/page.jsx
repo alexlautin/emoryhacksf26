@@ -1,11 +1,11 @@
 import Scenario from './_components/scenario.jsx';
+import HeroPanel from './_components/heropanel.jsx';
 import ScorePlay from './_components/scoreplay.jsx';
 import Downloads from './downloads.jsx';
 import { Pug } from './_components/brand.jsx';
 import { RELEASE_PAGE, CHECKSUMS_URL } from '../releases.js';
 
 const AGENTS = ['Claude Code', 'Codex', 'Gemini CLI', 'Cursor', 'Copilot', 'opencode', 'Amp'];
-const FEED = ['git status', 'pnpm test', 'node build.mjs', 'git diff --stat', 'rg "TODO" src', 'pnpm lint', 'git add -A', 'tsc --noEmit'];
 
 function Hero() {
   return (
@@ -20,21 +20,7 @@ function Hero() {
           </p>
         </div>
 
-        <div className="panel-wrap" aria-hidden="true">
-          <Pug size={132} className="panel-pug" />
-          <div className="panel">
-            <div className="panel-top"><b>Harness</b><span className="live"><i />Watching 2 sessions</span></div>
-            <div className="panel-score">
-              <span className="ring"><b>100</b></span>
-              <p><b>Clear</b><span>Nothing concerning so far.</span></p>
-            </div>
-            <ul className="panel-sessions">
-              <li><b>Claude Code</b><span>my-app</span><em>active</em></li>
-              <li><b>Codex</b><span>api-server</span><em>active</em></li>
-            </ul>
-            <div className="panel-feed"><ol>{[...FEED, ...FEED.slice(0, 3)].map((c, i) => <li key={i}><span>claude</span>{c}</li>)}</ol></div>
-          </div>
-        </div>
+        <HeroPanel />
       </div>
       <div className="wrap">
         <ul className="agents" aria-label="Agents Harness recognizes">
