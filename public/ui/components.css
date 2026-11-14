@@ -1,0 +1,45 @@
+/* Framework-free primitives. Legacy .btn names remain supported during migration. */
+:is(.ui-button, .btn) {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--h-space-2);
+  min-height: var(--ui-control-height); height: var(--ui-control-height); padding: 0 var(--ui-control-padding);
+  border: 1px solid var(--h-border-strong); border-radius: var(--h-radius-control);
+  background: var(--h-surface); color: var(--h-text); font-family: var(--h-font);
+  font-size: var(--ui-control-font); font-weight: 600; line-height: 1.2;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background var(--h-duration) var(--h-ease), border-color var(--h-duration) var(--h-ease);
+}
+:is(.ui-button, .btn):hover { background: var(--h-surface-2); }
+:is(.ui-button[data-variant='primary'], .btn.primary, .btn-ink, .btn-primary) {
+  background: var(--h-action); border-color: var(--h-action); color: var(--h-on-action);
+}
+:is(.ui-button[data-variant='primary'], .btn.primary, .btn-ink, .btn-primary):hover {
+  background: color-mix(in srgb, var(--h-action) 85%, black);
+}
+:is(.ui-button[data-variant='danger'], .btn.danger) {
+  background: var(--h-danger-fill); border-color: var(--h-danger-fill); color: #fff;
+}
+:is(.ui-button[data-variant='danger'], .btn.danger):hover { background: color-mix(in srgb, var(--h-danger-fill) 85%, black); }
+:is(.ui-button[data-variant='ghost'], .btn.ghost, .btn-line, .btn-secondary) { background: transparent; }
+:is(.btn.ghost) { border-color: transparent; color: var(--h-muted); }
+:is(.btn-soon) { background: var(--h-surface-2); color: var(--h-subtle); cursor: not-allowed; }
+:is(.ui-button, .btn):disabled, :is(.ui-button, .btn)[aria-disabled='true'] { opacity: .5; cursor: not-allowed; }
+:is(.ui-button[data-size='small'], .btn.small, .btn-sm) { --ui-control-height: 32px; --ui-control-padding: 12px; --ui-control-font: 13px; }
+:is(.btn.icon) { width: var(--ui-control-height); padding: 0; }
+:is(.ui-card) { padding: var(--h-space-5); border: 1px solid var(--h-border); border-radius: var(--h-radius-card); background: var(--h-surface); box-shadow: var(--h-shadow); }
+:is(.ui-field) { display: grid; gap: var(--h-space-2); font: 600 var(--h-type-sm)/1.4 var(--h-font); color: var(--h-text); }
+:is(.ui-input) { box-sizing: border-box; width: 100%; min-height: var(--ui-control-height); border: 1px solid var(--h-border-strong); border-radius: var(--h-radius-control); padding: 8px 12px; background: var(--h-surface); color: var(--h-text); font: 400 var(--h-type-md)/1.4 var(--h-font); }
+:is(.ui-input)[aria-invalid='true'] { border-color: var(--h-danger); }
+:is(.ui-help) { font: 400 var(--h-type-sm)/1.5 var(--h-font); color: var(--h-muted); }
+:is(.ui-badge) { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--h-radius-sm); color: var(--status, var(--h-muted)); background: color-mix(in srgb, var(--status, var(--h-muted)) 12%, var(--h-surface)); font: 600 var(--h-type-xs)/1.3 var(--h-font); }
+:is([data-status='clear']) { --status: var(--h-success); }
+:is([data-status='steady']) { --status: var(--h-steady); }
+:is([data-status='review']) { --status: var(--h-warning); }
+:is([data-status='act']) { --status: var(--h-danger); }
+:is([data-status='paused']) { --status: var(--h-paused); }
+:is(.ui-alert) { padding: var(--h-space-4); border: 1px solid var(--status, var(--h-border)); border-radius: var(--h-radius-control); background: color-mix(in srgb, var(--status, var(--h-muted)) 7%, var(--h-surface)); color: var(--h-text); }
+:is(.ui-brand) { display: inline-flex; align-items: center; gap: 10px; color: var(--h-text); font: 700 23px/1.2 var(--h-font); letter-spacing: -.04em; text-decoration: none; }
+:is(.ui-brand img) { width: 40px; height: 40px; object-fit: contain; }
+:is(.ui-button, .btn, .ui-input):focus-visible { outline: 2px solid var(--h-accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.ui-button, .btn, .ui-input) { transition: none; }
+}

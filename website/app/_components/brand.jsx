@@ -1,7 +1,5 @@
-import pug from '../../src/assets/pug.png';
-
 export function Pug({ size = 44, className = '' }) {
-  return <img className={`pug ${className}`} src={pug.src} width={size} height={Math.round(size * pug.height / pug.width)} alt="" />;
+  return <img className={`pug ${className}`} src="/ui/pug.png" width={size} height={size} alt="" />;
 }
 
 export default function Brand() {

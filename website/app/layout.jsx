@@ -1,10 +1,6 @@
-import { Figtree, Geist_Mono } from 'next/font/google';
 import '../src/site.css';
 import './demo.css';
 import Brand from './_components/brand.jsx';
-
-const sans = Figtree({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata = {
   title: 'Harness — Let your coding agent run. Keep it on a harness.',
@@ -16,7 +12,7 @@ const GITHUB = 'https://github.com/alexlautin/harness';
 
 export default function Layout({ children }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en">
       <body>
         <a className="skip" href="#main">Skip to content</a>
         <header className="nav">
@@ -43,6 +39,7 @@ export default function Layout({ children }) {
               <a href="/demo">Live demo</a>
               <a href="/whitepaper">White paper</a>
               <a href={GITHUB}>Source on GitHub</a>
+              <a href="/ui/index.html">Brand kit</a>
             </nav>
           </div>
         </footer>

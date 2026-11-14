@@ -1,12 +1,12 @@
 /* The live demo page. It reuses the scenario's window, chain and verdict pieces from site.css. */
 .demo-head { padding: clamp(48px, 7vw, 96px) 0 0; }
-.demo-head h1 { margin-top: 20px; font-size: clamp(40px, 6vw, 80px); font-weight: 800; letter-spacing: -0.05em; line-height: 0.98; }
+.demo-head h1 { margin-top: 20px; font-size: clamp(40px, 6vw, 80px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.98; }
 .demo-head h1 span { color: var(--teal-deep); }
 .demo-head .lead { margin-top: 24px; max-width: 36em; }
 
 .demo-controls { padding: 40px 0 48px; }
 .demo-scenarios { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.demo-scenarios button { display: grid; gap: 4px; align-content: start; padding: 16px 18px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 16px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+.demo-scenarios button { display: grid; gap: 4px; align-content: start; padding: 16px 18px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-card); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
 .demo-scenarios button:hover { border-color: var(--line-2); }
 .demo-scenarios button[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .demo-scenarios b { font-size: 16px; letter-spacing: -0.02em; }
@@ -14,12 +14,12 @@
 .demo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
 .switch { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; font-weight: 600; font-size: 15px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; }
-.switch i { position: relative; width: 44px; height: 26px; border-radius: 99px; background: var(--line-2); transition: background 0.25s; }
+.switch i { position: relative; width: 44px; height: 26px; border-radius: var(--h-radius-pill); background: var(--line-2); transition: background 0.25s; }
 .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform 0.25s var(--ease); }
 .switch input:checked + i { background: var(--teal); }
 .switch input:checked + i::after { transform: translateX(18px); }
 .switch input:focus-visible + i { outline: 2px solid var(--teal-deep); outline-offset: 3px; }
-.demo-error { margin-top: 18px; padding: 14px 18px; border-radius: 12px; background: var(--red-wash); color: #8f2323; font-size: 15px; }
+.demo-error { margin-top: 18px; padding: 14px 18px; border-radius: var(--h-radius-card); background: var(--red-wash); color: #8f2323; font-size: 15px; }
 
 .demo-stage { background: var(--night); color: var(--night-ink); padding: clamp(24px, 4vw, 56px) 0; }
 .demo-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 20px; align-items: start; font-family: var(--mono); font-size: 14px; }
@@ -37,7 +37,7 @@
 .demo-meter li { display: flex; justify-content: space-between; padding: 0.65em 0; border-bottom: 1px solid var(--night-line); font-size: 14.5px; }
 .demo-meter li b { font-family: var(--mono); font-weight: 500; color: var(--night-red); }
 .demo-source { margin-top: 1em; font-size: 13px; color: var(--night-dim); }
-.demo-replay { margin-top: 1em; height: 38px; padding: 0 18px; border-radius: 99px; background: transparent; border: 1px solid var(--night-line); color: var(--night-ink); font-weight: 600; font-size: 14px; cursor: pointer; }
+.demo-replay { margin-top: 1em; height: 38px; padding: 0 18px; border-radius: var(--h-radius-pill); background: transparent; border: 1px solid var(--night-line); color: var(--night-ink); font-weight: 600; font-size: 14px; cursor: pointer; }
 .demo-replay:hover { border-color: var(--night-dim); }
 
 .demo-hood { min-height: 30em; padding: 1.3em 1.5em 1.5em; }
@@ -46,7 +46,7 @@
 .demo-empty .pug { background: #f6f4ee; border-radius: 50%; padding: 14px; width: 104px; height: 104px; object-fit: contain; }
 .demo-empty p { max-width: 24em; }
 .demo-chain { display: grid; gap: 10px; margin-top: 1.2em; }
-.demo-chain > li { margin-left: calc(var(--i) * 22px); padding: 14px 16px; border-radius: 12px; background: var(--night-3); border: 1px solid transparent; animation: demo-in 0.55s var(--ease) both; }
+.demo-chain > li { margin-left: calc(var(--i) * 22px); padding: 14px 16px; border-radius: var(--h-radius-card); background: var(--night-3); border: 1px solid transparent; animation: demo-in 0.55s var(--ease) both; }
 .demo-chain > li.is-hidden { border-style: dashed; border-color: var(--night-line); background: transparent; }
 .demo-chain > li.risk-high { border: 1px solid color-mix(in srgb, #f2b84b 50%, transparent); }
 .demo-chain > li.risk-critical { border: 1px solid color-mix(in srgb, var(--night-red) 60%, transparent); background: color-mix(in srgb, var(--night-red) 9%, transparent); }
