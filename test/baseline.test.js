@@ -64,4 +64,16 @@ test('baselines are written to the data folder and can be removed', async () => 
   assert.equal(listBaselines().length, 1);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'baselines.json'), 'utf8'))[0].value, 'builds.example');
   assert.equal(removeBaseline('b-1').length, 0);
+
+  const legacy = { id: 'b-old', projectKey: 'cwd:/work/app', project: 'app', type: 'command', value: 'npm install', createdAt: 1 };
+  assert.equal(addBaseline(legacy).added, true);
+  assert.equal(addBaseline({ ...legacy, id: 'b-old-2' }).added, false);
+  const fresh = { id: 'b-new', projectKey: 'cwd:/work/app', project: 'app', type: 'command', value: 'npm install', matchVersion: 2, createdAt: 2 };
+  const replaced = addBaseline(fresh);
+  assert.equal(replaced.added, true);
+  assert.deepEqual(replaced.baselines.map((b) => b.id), ['b-new']);
+  const event = { kind: 'process', risk: 'low', command: 'npm install', reasons: ['installed packages'] };
+  assert.equal(applyBaseline(event, replaced.baselines, agent).risk, 'info');
+  assert.equal(addBaseline({ ...fresh, id: 'b-again' }).added, false);
+  assert.equal(listBaselines().length, 1);
 });
