@@ -2,7 +2,7 @@
 
 A local monitor for what AI coding agents run on your computer. Written against the code in this repository, November 2026.
 
-The app is being renamed from Seatbelt to Lookout. Paths, environment variables, and a lot of on-screen text still say Seatbelt. Where that difference matters, this note uses the name the code uses.
+Paths and settings use the Lookout names. A few older Seatbelt names still work if they were already set, and those are named where they matter.
 
 ## Abstract
 
@@ -74,20 +74,22 @@ The hostname is taken from a URL written in the command if there is one. Otherwi
 
 - Localhost is low, or info if the socket belongs to the agent process itself. Port 4199 is the exception. The demo's stand-in attacker listens there, and that destination is high, with the reason that it is standing in for an attacker.
 - A short allow list is treated as ordinary when the agent process itself is the one connecting: `anthropic.com`, `claude.ai`, `claude.com`, `openai.com`, `chatgpt.com`, `oaistatic.com`, `github.com`, `githubusercontent.com`, `npmjs.org`, `npmjs.com`, `yarnpkg.com`, `pypi.org`, `pythonhosted.org`, `apple.com`, `icloud.com`, `googleapis.com`, `google.com`, `sentry.io`, `statsig.com`, `datadoghq.com`. Subdomains count.
-- Any other remote host is medium: "connected to a server Seatbelt doesn't recognize." The reason string still says Seatbelt. The score matcher looks for that phrase.
+- Any other remote host is medium: "connected to a server Lookout doesn't recognize." The score matcher looks for that phrase.
 - If the process is `npm`, `pnpm`, `yarn`, `bun`, `pip`, `uv`, `git`, `gh`, or `brew`, that medium is dropped to info and the reason is cleared. Those tools talk to registries through CDNs whose reverse names are often useless.
 
 A connection with an empty reason list does not move the score. Ordinary localhost traffic is in that group. Port 4199 is not.
 
 ### Decoy files
 
-On startup `src/monitor/files.js` creates `~/.seatbelt/bait/` with three files, mode `0600`:
+On startup `src/monitor/files.js` creates `~/.lookout/bait/` with three files, mode `0600`:
 
 - `aws_credentials`, shaped like an AWS credentials file, with a fake access key id `AKIA` plus the marker
 - `passwords.txt`
 - `id_ed25519_backup`, shaped like an OpenSSH private key
 
-Each file contains a random marker, 16 bytes drawn from a 32-character alphabet, generated once and stored in `data/bait-markers.json`, also mode `0600`. Lookout will rewrite a decoy that is missing its marker. It will not overwrite a file in that directory that does not already look like one of its decoys (the check looks for the words "Seatbelt decoy" in the body).
+Each file contains a random marker, 16 bytes drawn from a 32-character alphabet, generated once and stored in `data/bait-markers.json`, also mode `0600`. Lookout will rewrite a decoy that is missing its marker, including an older file whose body still says "Seatbelt decoy". The marker already in that file is kept. It will not overwrite a file in that directory that does not already look like one of its decoys (the check looks for "Lookout decoy" or "Seatbelt decoy" in the body).
+
+If `~/.lookout/bait` does not exist yet and `~/.seatbelt/bait` does, those files are copied once. A read of the old path still counts, and a marker that only the old file still holds is remembered.
 
 Every 700 ms it stats the files. Before watching, it sets the access time two seconds behind the modification time, so a later read moves the access time. A change becomes a critical event. Access time does not name the process. Lookout attributes the read to the alive agent whose `lastActive` is most recent, within 15 seconds. If exactly one agent qualifies, attribution is `sole`, and auto-protect may pause it. If several qualify, attribution is `guess`: the person still gets the event, and auto-protect will not pause anyone. If no agent was active, the event says it may have been something else on the computer.
 
@@ -157,24 +159,26 @@ The hook and the process poller share `analyzeCommand` and `analyzePath`. They d
 
 ## The score
 
-`public/score.js`. The score runs from 300 to 850. A session with nothing to deduct is 850. The code comment compares the shape to a credit score: costs fade, and a clean stretch brings the number back up.
+`public/score.js`. The score is a plain number from 0 to 100. A session with nothing to deduct is 100. Costs fade, and a quiet stretch brings the number back up. It is not a separate scale with its own range.
 
-Each event can count against every factor whose test matches the joined reason text. The point cost depends on the event's risk level, then fades by half every 12 hours (`0.5 ** (age / 12 hours)`). The cap is applied after the faded costs are summed, per factor. The score is 850 minus the sum of the capped factors, rounded, and it does not go below 300.
+Each event can count against every factor whose test matches the joined reason text. The point cost depends on the event's risk level, then fades by half every 12 hours (`0.5 ** (age / 12 hours)`). The cap is applied after the faded costs are summed, per factor. The score is 100 minus the sum of the capped factors, rounded, and clamped to 0 through 100.
 
 The factors, the cap, and the cost before fade:
 
-- Passwords and secrets. Cap 420. Critical 260, high 120, medium 60, low 10. Matches decoy, SSH, AWS, `.env`, Keychain, Windows passwords, saved logins, access tokens, terminal history, mail or messages, and scrambled secrets.
-- Sending data out. Cap 320. Critical 200, high 140, medium 60, low 10. Matches uploads, the demo attacker reason, raw connections, and copies to another computer.
-- Hidden background changes. Cap 260. Critical 180, high 110, medium 50, low 10. Matches "run automatically" and "startup file".
-- Risky commands. Cap 200. Critical 150, high 70, medium 25, low 5. Matches deletes, administrator, AppleScript, force-push, screenshot, downloaded script, Defender, encoded commands, and safety checks.
-- Unknown websites. Cap 90. Critical 60, high 40, medium 12, low 4. Matches the unrecognized-server reason.
-- New software installed. Cap 30. Critical 10, high 8, medium 6, low 4. Matches "installed packages".
+- Passwords and secrets. Cap 70. Critical 45, high 20, medium 10, low 2. Matches decoy, SSH, AWS, `.env`, Keychain, Windows passwords, saved logins, access tokens, terminal history, mail or messages, and scrambled secrets.
+- Sending data out. Cap 55. Critical 35, high 24, medium 10, low 2. Matches uploads, the demo attacker reason, raw connections, and copies to another computer.
+- Hidden background changes. Cap 45. Critical 30, high 18, medium 8, low 2. Matches "run automatically" and "startup file".
+- Risky commands. Cap 35. Critical 25, high 12, medium 5, low 1. Matches deletes, administrator, AppleScript, force-push, screenshot, downloaded script, Defender, encoded commands, and safety checks.
+- Unknown servers. Cap 15. Critical 10, high 7, medium 3, low 1. Matches the unrecognized-server reason, which names Lookout.
+- New software. Cap 6. Critical 3, high 2, medium 1, low 1. Matches "installed packages".
 
 A new rule only affects the score if its reason text hits one of those tests. System lines are skipped. Task lines (the prompt the person typed) do not match a factor, so they add no points.
 
-Bands: Excellent from 800 ("Nothing concerning so far"), Very good from 740, Good from 670, Fair from 580, Poor from 300 ("An agent did something dangerous").
+Labels, from `LEVELS`: Clear from 90 ("Nothing concerning so far"), Steady from 70 ("A few things worth knowing. Nothing serious."), Review from 40 ("Some activity is worth a look."), Act from 0 ("Something dangerous happened. Look at it now."). The label is a name for the number. It is not a second score.
 
-One event with several reasons can land in more than one factor. The repo does not contain an evaluation of false positives or of how hard the score is to game. This note does not invent one.
+One event with several reasons can land in more than one factor. The scripted demo is the worked example. The package install is low and matches New software, which costs 1. The install script is one critical command. Its reasons match Passwords and secrets (45) and Sending data out (35), because the same line names the decoy and a `curl -X POST`. Those three costs are 81, so the score is 19, which is Act. If the connection to port 4199 is recorded as its own event, that reason also matches Sending data out, at the high cost of 24. The uploads cap is 55, so the total can reach the floor of 0. With auto-protect at the default, the pause is meant to land before that connection opens, which is the path that stays at 19.
+
+The repo does not contain an evaluation of false positives or of how hard the score is to game. This note does not invent one. The 19 is the arithmetic of those costs, not a measured detection rate.
 
 ## Acting on a finding
 
@@ -190,11 +194,11 @@ Pausing happens after the poll that saw the event. A command that finished insid
 
 ### The Claude Code hook
 
-`pnpm protect <folder>` copies `hooks/seatbelt-hook.sh` into `<folder>/.seatbelt/` and adds three hooks to `<folder>/.claude/settings.json`: UserPromptSubmit, PreToolUse on every tool, and PostToolUse on every tool. Other hooks in that file are kept. If a settings file already exists, a copy is saved as `.seatbelt/settings.json.before-seatbelt`. `pnpm unprotect` removes only the entries whose command contains `.seatbelt/seatbelt-hook.sh`, and deletes the copied script.
+`pnpm protect <folder>` copies `hooks/lookout-hook.sh` into `<folder>/.lookout/` and adds three hooks to `<folder>/.claude/settings.json`: UserPromptSubmit, PreToolUse on every tool, and PostToolUse on every tool. Other hooks in that file are kept. If a settings file already exists, a copy is saved as `.lookout/settings.json.before-lookout`. `pnpm unprotect` removes entries whose command contains `.lookout/lookout-hook.sh`, and also ones installed before the rename (`.seatbelt/seatbelt-hook.sh`), then deletes the copied script.
 
-The shell script POSTs Claude Code's hook JSON to `http://127.0.0.1:$SEATBELT_PORT/hooks/<event>` (port 4100 if unset), with a timeout of 110 seconds. PreToolUse's own hook timeout in the settings file is 120 seconds.
+The shell script POSTs Claude Code's hook JSON to `http://127.0.0.1:$LOOKOUT_PORT/hooks/<event>` (port 4100 if unset), with a timeout of 110 seconds. `SEATBELT_PORT` is used when `LOOKOUT_PORT` is not set. PreToolUse's own hook timeout in the settings file is 120 seconds. The request header is `X-Lookout-Project`.
 
-If the POST fails and the event is `pre-tool`, the script exits 2, which tells Claude Code to block the tool, unless `SEATBELT_FAIL_OPEN=1`. The message tells the person to start the monitor. Other hook events fail open: if Lookout is down, the prompt and the post-tool notice are simply skipped.
+If the POST fails and the event is `pre-tool`, the script exits 2, which tells Claude Code to block the tool, unless `LOOKOUT_FAIL_OPEN=1`. `SEATBELT_FAIL_OPEN` still works if the Lookout variable is unset. The message tells the person to start the monitor. Other hook events fail open: if Lookout is down, the prompt and the post-tool notice are simply skipped.
 
 For a tool call that does reach Lookout, `src/hooks.js` decides:
 
@@ -204,7 +208,7 @@ For a tool call that does reach Lookout, `src/hooks.js` decides:
 
 "Secret-related" is a regex over the reason text: decoy, "accessed ", Keychain, saved passwords, scrambled secret, and the network-cutoff phrase.
 
-Relative paths and wildcards that resolve to a decoy are denied even when the plain substring check would miss them. `cat ~/.seatbelt/bait/*` is the case the code calls out. The Glob tool is checked the same way. `rm -rf` whose targets all stay inside the project is not treated as a recursive delete.
+Relative paths and wildcards that resolve to a decoy are denied even when the plain substring check would miss them. `cat ~/.lookout/bait/*` is the case the code calls out. The Glob tool is checked the same way. `rm -rf` whose targets all stay inside the project is not treated as a recursive delete.
 
 The check's duration is written onto the event in milliseconds. The README records one session of Claude Code 2.1.170 where reading a decoy was blocked, and says decisions took about 10 ms. That figure is the README's report of one try. It is not a constant in the code, and there is no suite that re-measures it.
 
@@ -216,9 +220,9 @@ The hook is Claude Code only. Codex and the other recognized agents only get the
 
 ## Privacy
 
-The HTTP server binds to `127.0.0.1`. The dashboard is static files from `public/` plus server-sent events. Every event is also appended to `data/events.jsonl`. When the desktop app is packaged, it sets `SEATBELT_DATA_DIR` to Tauri's app data directory. The README identifies that folder as `~/Library/Application Support/dev.seatbelt.monitor` on macOS and `%APPDATA%` on Windows. Running `tauri dev` does not set the variable, and uses the repo `data` directory like `pnpm start`.
+The HTTP server binds to `127.0.0.1`. The dashboard is static files from `public/` plus server-sent events. Every event is also appended to `data/events.jsonl`. When the desktop app is packaged, it sets `LOOKOUT_DATA_DIR` to Tauri's app data directory. The identifier in `src-tauri/tauri.conf.json` is `dev.lookout.monitor`, so that folder is `~/Library/Application Support/dev.lookout.monitor` on macOS and the matching folder under `%APPDATA%` on Windows. `SEATBELT_DATA_DIR` is read when `LOOKOUT_DATA_DIR` is not set. If the new desktop folder is empty and `dev.seatbelt.monitor` is still beside it, those files are copied once. Running `tauri dev` does not set the variable, and uses the repo `data` directory like `pnpm start`.
 
-Summaries are optional and local. `src/llm.js` calls Ollama at `http://127.0.0.1:11434` unless `OLLAMA_HOST` is set. It asks `/api/tags`, drops any model whose name contains `cloud`, and uses the first remaining model unless `SEATBELT_MODEL` is set. The prompt is the session: the task, counts, and up to 25 notable events. It asks for 3 to 5 sentences and a verdict line. If Ollama is down, times out (60 seconds), or returns an empty reply, a shorter summary is built from the same facts with no model. Think-tags in a reply are stripped.
+Summaries are optional and local. `src/llm.js` calls Ollama at `http://127.0.0.1:11434` unless `OLLAMA_HOST` is set. It asks `/api/tags`, drops any model whose name contains `cloud`, and uses the first remaining model unless `LOOKOUT_MODEL` is set. `SEATBELT_MODEL` is the fallback when `LOOKOUT_MODEL` is unset. The prompt is the session: the task, counts, and up to 25 notable events. It asks for 3 to 5 sentences and a verdict line. If Ollama is down, times out (60 seconds), or returns an empty reply, a shorter summary is built from the same facts with no model. Think-tags in a reply are stripped.
 
 Lookout has no account, no license check, and no telemetry call in the source. The outbound lookup it makes on its own is reverse DNS, described above. The demo attacker listens on `127.0.0.1:4199` and counts bytes. It does not forward them.
 
@@ -239,7 +243,6 @@ Collected from the code and the README, not softened:
 - The compromised-session flag is memory only.
 - Windows support has not been run on real Windows. Known gaps called out in the README: no easy working directory, pausing waits on PowerShell to start, and last-access times may be off. The hook script is a POSIX shell script. The README lists "the hook script under Git Bash" as unfinished testing.
 - The desktop app is signed ad hoc (`signingIdentity` is `-` in the Tauri config), not with a Developer ID, and it is not notarized. macOS warns on first open of a downloaded build. There is no published Windows app build. The bundle targets include `nsis`, and nobody has produced that installer as a tested release.
-- The dashboard, the rules, and the hook messages still say Seatbelt in many places.
 
 ## Roadmap
 
@@ -250,13 +253,12 @@ The README's "What's next" list matches what is unfinished in the tree. Restated
 - Fewer false alarms, better prompts for the local model, and some notion of what is normal for a project. None of that learning is implemented.
 - A timeline on the dashboard.
 - A Developer ID signature, notarization, Windows builds, and builds in CI.
-- The rename from Seatbelt to Lookout, which this site is already using and the app is not.
 
 No dates. The demo README is also honest about its own gap: use the scripted demo when showing the project, because a run with a real agent had not been tested.
 
 ## What the demo actually does
 
-`demo/packages/color-helpers/install.js` is a stand-in for a malicious install script. It logs a harmless line about color tables, then runs one shell script. On macOS and Linux the script sleeps 1.5 seconds, concatenates the project's `.env` and `~/.seatbelt/bait/aws_credentials`, base64-encodes them into a temp file, sleeps 1 second, and `curl -X POST`s that file to `http://127.0.0.1:4199/collect` with `--limit-rate 120`. Then it deletes the temp file. The Windows branch is the same steps in PowerShell. The sleeps are there so the half-second poll can see the process. The comment at the top of the file says so.
+`demo/packages/color-helpers/install.js` is a stand-in for a malicious install script. It logs a harmless line about color tables, then runs one shell script. On macOS and Linux the script sleeps 1.5 seconds, concatenates the project's `.env` and `~/.lookout/bait/aws_credentials`, base64-encodes them into a temp file, sleeps 1 second, and `curl -X POST`s that file to `http://127.0.0.1:4199/collect` with `--limit-rate 120`. Then it deletes the temp file. If the Lookout bait file is missing and `~/.seatbelt/bait/aws_credentials` is still there, the script reads that older file instead. The Windows branch is the same steps in PowerShell. The sleeps are there so the half-second poll can see the process. The comment at the top of the file says so.
 
 The server on 4199 counts bytes and discards them. If the upload is cut off mid-body, it still reports how many bytes arrived. The secrets are fake. The demo `.env` carries the marker `DECOY-NOT-REAL`.
 

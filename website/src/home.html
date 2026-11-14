@@ -15,8 +15,11 @@
     </div>
     <aside class="session" aria-labelledby="session-title">
       <div class="session-top">
-        <p id="session-title">Scripted demo</p>
-        <p>Example, not a live capture</p>
+        <div>
+          <p id="session-title">Scripted demo</p>
+          <p>Example, not a live capture</p>
+        </div>
+        <p class="session-score"><b>19</b> <span>/ 100</span></p>
       </div>
       <p class="session-task">You asked the agent to set up the project. Its window shows the install.</p>
       <ol class="events">
@@ -39,10 +42,10 @@
             <span class="event-name">127.0.0.1:4199</span>
             <span class="tag tag-warn">Risky</span>
           </div>
-          <p>The connection, from <code>lsof</code>. Port 4199 is the demo's stand-in server. It counts bytes and drops them.</p>
+          <p>The connection, from <code>lsof</code>, if the script gets that far. Port 4199 is the demo's stand-in server. It counts bytes and drops them. The default pause is meant to land before this.</p>
         </li>
       </ol>
-      <p class="session-foot">Auto-protect defaults to pausing on Dangerous. The demo sleeps between steps so the half-second poll can see the script.</p>
+      <p class="session-foot">The install costs 1. The script is one critical command, so it costs 45 for the decoy and 35 for the upload on that same line. That is 19 out of 100, which is Act. The demo sleeps between steps so the half-second poll can see the script.</p>
     </aside>
   </div>
 </section>
@@ -97,7 +100,7 @@
       <li>
         <p class="level level-bad">Dangerous</p>
         <h3>Decoy secrets</h3>
-        <p>On startup Lookout writes three fake files under <code>~/.seatbelt/bait</code>: an AWS credentials file, a passwords file, and a fake SSH key. Each holds a random marker saved on first run. A read moves the file's access time. If that marker shows up later in a command, a file the agent writes, or a tool's output, that is critical too. The folder name still says seatbelt. The app rename has not landed there.</p>
+        <p>On startup Lookout writes three fake files under <code>~/.lookout/bait</code>: an AWS credentials file, a passwords file, and a fake SSH key. Each holds a random marker saved on first run. A read moves the file's access time. If that marker shows up later in a command, a file the agent writes, or a tool's output, that is critical too. An older <code>~/.seatbelt/bait</code> folder is copied over once, and a read of that old path still counts.</p>
       </li>
       <li>
         <p class="level level-bad">Dangerous</p>
@@ -131,53 +134,53 @@
 <section id="score" class="section">
   <div class="wrap">
     <p class="section-label">The score</p>
-    <h2>It starts at 850 and bottoms at 300.</h2>
-    <p class="section-intro">Everyone starts at 850. Events cost points in six groups, each group has a cap, and a cost halves every 12 hours, so a quiet stretch brings the number back up. The floor is 300. Bands run from Excellent at 800, through Very good, Good, and Fair, down to Poor at 300.</p>
+    <h2>A score out of 100.</h2>
+    <p class="section-intro">Everyone starts at 100. Events cost points in six groups, each group has a cap, and a cost halves every 12 hours, so a quiet stretch brings the number back up. The number stays between 0 and 100. Clear is 90 and up, Steady is 70, Review is 40, and Act is anything under that.</p>
     <ul class="factors">
       <li>
-        <p class="cap">420</p>
+        <p class="cap">70</p>
         <div>
           <h3>Passwords and secrets</h3>
-          <p>A critical hit costs 260 before the fade, and before the cap.</p>
+          <p>A critical hit costs 45 before the fade, and before the cap.</p>
         </div>
       </li>
       <li>
-        <p class="cap">320</p>
+        <p class="cap">55</p>
         <div>
           <h3>Sending data out</h3>
-          <p>A high upload costs 140 before the fade.</p>
+          <p>A high upload costs 24 before the fade. The same event at critical costs 35.</p>
         </div>
       </li>
       <li>
-        <p class="cap">260</p>
+        <p class="cap">45</p>
         <div>
           <h3>Hidden background changes</h3>
           <p>Startup files, launch items, scheduled tasks.</p>
         </div>
       </li>
       <li>
-        <p class="cap">200</p>
+        <p class="cap">35</p>
         <div>
           <h3>Risky commands</h3>
           <p>Deletes, admin access, screenshots, encoded commands.</p>
         </div>
       </li>
       <li>
-        <p class="cap">90</p>
+        <p class="cap">15</p>
         <div>
-          <h3>Unknown websites</h3>
-          <p>A medium hit on an unrecognized server costs 12 before the fade.</p>
+          <h3>Unknown servers</h3>
+          <p>A medium hit on an unrecognized server costs 3 before the fade.</p>
         </div>
       </li>
       <li>
-        <p class="cap">30</p>
+        <p class="cap">6</p>
         <div>
-          <h3>New software installed</h3>
-          <p>A package install at low risk costs 4. The cap on this group is small on purpose.</p>
+          <h3>New software</h3>
+          <p>A package install at low risk costs 1. The cap on this group is small on purpose.</p>
         </div>
       </li>
     </ul>
-    <p class="section-note">The full cost table, and the way a reason string is matched to a group, is in the <a href="/whitepaper#the-score">white paper</a>.</p>
+    <p class="section-note">The scripted demo's install and that one critical command cost 81 points, so the score is 19, which is Act. The full cost table is in the <a href="/whitepaper#the-score">white paper</a>.</p>
   </div>
 </section>
 
@@ -194,7 +197,7 @@
       <article>
         <h3>Before the command, for Claude Code</h3>
         <p><code>pnpm protect</code> on a folder adds a PreToolUse hook. Critical actions, and high ones that touch a secret, are denied. Other high and medium actions ask you, with the reason included. Lookout never answers "allow", so Claude Code's own prompts still apply to everything else.</p>
-        <p>If Lookout is not running, the hook blocks the action unless <code>SEATBELT_FAIL_OPEN=1</code>. The variable still has the old name. Codex and the other agents do not get this hook. They get the poll and auto-protect.</p>
+        <p>If Lookout is not running, the hook blocks the action unless <code>LOOKOUT_FAIL_OPEN=1</code>. <code>SEATBELT_FAIL_OPEN</code> still works if that is what you already set. Codex and the other agents do not get this hook. They get the poll and auto-protect.</p>
       </article>
     </div>
   </div>
@@ -205,7 +208,7 @@
     <p class="section-label">Privacy</p>
     <h2>The log stays on the computer.</h2>
     <div class="privacy">
-      <p>The server binds to <code>127.0.0.1</code>, port 4100 unless that port is taken or <code>PORT</code> is set. The dashboard is a local page. Events are appended to a jsonl file in the repo's <code>data</code> directory, or, for the desktop build, in the app data directory Tauri picks (the README names <code>~/Library/Application Support/dev.seatbelt.monitor</code>).</p>
+      <p>The server binds to <code>127.0.0.1</code>, port 4100 unless that port is taken or <code>PORT</code> is set. The dashboard is a local page. Events are appended to a jsonl file in the repo's <code>data</code> directory, or, for the desktop build, in <code>~/Library/Application Support/dev.lookout.monitor</code> (<code>%APPDATA%</code> on Windows). If that folder is empty and the old <code>dev.seatbelt.monitor</code> folder is still next to it, those files are copied over once.</p>
       <p>A session summary calls Ollama at <code>127.0.0.1:11434</code> if it is running. Models with "cloud" in the name are skipped. If Ollama is down, you get a short note built from the events, with no model. When Lookout needs a hostname for an IP a watched process already contacted, it uses your machine's DNS resolver. There is no account and no telemetry call in the source.</p>
     </div>
   </div>
@@ -221,7 +224,7 @@
         <p class="demo-title">A video or GIF of the scripted attack goes in this frame. Nothing plays yet.</p>
       </div>
       <figcaption>
-        What it will show: "Run demo attack" starts a stand-in agent in <code>demo/victim-project</code>. The agent runs <code>npm install</code>. The dependency <code>color-helpers</code> has an install script that reads <code>.env</code> and the fake AWS key, base64-encodes them, and POSTs them to <code>127.0.0.1:4199</code>. The secrets are fake. The server only counts bytes. With auto-protect at the default, the decoy read pauses the process tree. The README says to use this scripted demo when showing the project. A run with a real agent had not been tested when that note was written.
+        What it will show: "Run demo attack" starts a stand-in agent in <code>demo/victim-project</code>. The agent runs <code>npm install</code>. The dependency <code>color-helpers</code> has an install script that reads <code>.env</code> and the fake AWS key, base64-encodes them, and POSTs them to <code>127.0.0.1:4199</code>. The secrets are fake. The server only counts bytes. With auto-protect at the default, the decoy read pauses the process tree, and the score is 19 out of 100. The README says to use this scripted demo when showing the project. A run with a real agent had not been tested when that note was written.
       </figcaption>
     </figure>
   </div>
@@ -257,8 +260,8 @@
         <p>Normal mode does not. Deep mode on macOS runs <code>sudo eslogger</code>. The desktop app is signed ad hoc, not with an Apple Developer ID, so macOS warns the first time you open a downloaded copy.</p>
       </details>
       <details>
-        <summary>Why do some files still say Seatbelt?</summary>
-        <p>The product is being renamed to Lookout in the app. This site already uses the new name. Paths like <code>~/.seatbelt/bait</code>, the hook script, and several environment variables still say Seatbelt, because that rename has not landed in the code this page describes.</p>
+        <summary>What if I already set the old variable names?</summary>
+        <p>Set <code>LOOKOUT_PORT</code>, <code>LOOKOUT_FAIL_OPEN</code>, <code>LOOKOUT_MODEL</code>, or <code>LOOKOUT_DATA_DIR</code>. If the matching <code>SEATBELT_</code> variable is already set and the Lookout one is not, that older value is still read. An old <code>~/.seatbelt/bait</code> folder is copied into <code>~/.lookout/bait</code> once.</p>
       </details>
     </div>
   </div>
