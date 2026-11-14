@@ -7,7 +7,8 @@ import path from 'node:path';
 // Keep the store's event log out of the repo's data folder.
 process.env.HARNESS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-proc-'));
 const { setProcessSource, resetProcessState, pollProcesses, collectTree, agentTree, trackedPids, recordExec, describeCaller } = await import('../src/monitor/processes.js');
-const { listEvents, clearAll } = await import('../src/store.js');
+const { listEvents, clearAll, getAgent, clearFinishedAgents } = await import('../src/store.js');
+const { parseWinSnapshot } = await import('../src/platform.js');
 
 const proc = (pid, ppid, args) => ({ pid, ppid, comm: args.split(' ')[0], args });
 const snap = (...list) => new Map(list.map((p) => [p.pid, p]));
@@ -124,4 +125,74 @@ test('the Claude desktop app is not an agent, but Claude Code sessions inside it
   assert.equal((await describeCaller(730)).agentId, null);
   assert.equal((await describeCaller(750)).agentId, 'claude-740');
   assert.equal((await describeCaller(760)).agentId, null);
+});
+
+test('the Microsoft Store build of the Claude desktop app is not an agent either', async () => {
+  // Windows reports only the bare program name; the path is in the command line.
+  const src = setup();
+  const win = (pid, ppid, args) => ({ pid, ppid, comm: 'claude.exe', args });
+  const store = 'C:\\Program Files\\WindowsApps\\Claude_5.1.0_x64__abc123\\app\\Claude.exe';
+  const app = win(800, 1, `"${store}"`);
+  const renderer = win(810, 800, `"${store}" --type=renderer --user-data-dir="C:\\Users\\me\\AppData\\Local\\Claude"`);
+  const code = 'C:\\Users\\me\\AppData\\Local\\Claude-Data\\claude_abc123\\claude-code\\2.1.0\\abc\\claude.exe';
+  const one = win(820, 800, `${code} --output-format stream-json --verbose`);
+  const two = win(830, 800, `${code} --output-format stream-json --verbose`);
+  const tool = { pid: 840, ppid: 820, comm: 'node.exe', args: 'node build.js' };
+  await pollProcesses(src.set(snap(launchd, app, renderer, one, two, tool)));
+  assert.equal((await describeCaller(810)).agentId, null);
+  assert.equal((await describeCaller(840)).agentId, 'claude-820');
+  assert.equal(trackedPids().get(830)?.agentId, 'claude-830');
+  assert.equal(trackedPids().has(800), false);
+});
+
+test('a Windows process with no command line is not mistaken for an agent', async () => {
+  const src = setup();
+  const store = '"C:\\Program Files\\WindowsApps\\Claude_5.1.0_x64__abc123\\app\\Claude.exe"';
+  const row = (ProcessId, ParentProcessId, CommandLine, Name = 'claude.exe') => ({ ProcessId, ParentProcessId, Name, CommandLine });
+  const first = parseWinSnapshot([row(900, 1, store), row(910, 900, `${store} --type=renderer`), row(920, 900, 'C:\\Users\\me\\.local\\bin\\claude.exe')]);
+  await pollProcesses(src.set(first));
+  assert.equal(trackedPids().get(920)?.agentId, 'claude-920');
+
+  // The app is closing: Windows no longer reports command lines. A helper that was never seen
+  // before (930) has only its name, claude.exe.
+  const closing = parseWinSnapshot([row(900, 1, null), row(910, 900, null), row(920, 900, null), row(930, 900, null)], first);
+  assert.equal(closing.get(910).args, `${store} --type=renderer`);
+  assert.equal(closing.get(930).noArgs, true);
+  await pollProcesses(src.set(closing));
+  assert.deepEqual([...trackedPids().keys()], [920]);
+  assert.equal(getAgent('claude-930'), undefined);
+  assert.equal(getAgent('claude-900'), undefined);
+});
+
+test('an agent that gets a finished agent’s pid is a new session', async () => {
+  const src = setup();
+  await pollProcesses(src.set(snap(launchd, agent)));
+  await pollProcesses(src.set(snap(launchd)));
+  assert.equal(getAgent('claude-100').alive, false);
+
+  // A new Claude Code starts and the system hands it pid 100 again.
+  const child = proc(210, 100, 'git status');
+  await pollProcesses(src.set(snap(launchd, agent)));
+  await pollProcesses(src.set(snap(launchd, agent, child)));
+  assert.equal(getAgent('claude-100').alive, false);
+  assert.equal(getAgent('claude-100-2').alive, true);
+  assert.equal(trackedPids().get(210)?.agentId, 'claude-100-2');
+
+  await pollProcesses(src.set(snap(launchd)));
+  assert.equal(getAgent('claude-100-2').alive, false);
+});
+
+test('clearing finished sessions leaves running agents alone', async () => {
+  const src = setup();
+  const other = proc(110, 1, 'codex');
+  clearFinishedAgents(); // sessions left over from the tests above
+  await pollProcesses(src.set(snap(launchd, agent, other)));
+  await pollProcesses(src.set(snap(launchd, other)));
+  assert.deepEqual(clearFinishedAgents('codex-110'), []);
+  assert.deepEqual(clearFinishedAgents(), ['claude-100']);
+  assert.equal(getAgent('claude-100'), undefined);
+  assert.equal(getAgent('codex-110').alive, true);
+  // Nothing brings the cleared session back.
+  await pollProcesses(src.set(snap(launchd, other)));
+  assert.equal(getAgent('claude-100'), undefined);
 });

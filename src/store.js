@@ -52,6 +52,21 @@ export function listAgents() {
   return [...agents.values()];
 }
 
+/**
+ * Take finished sessions off the list: one by id, or every one that has ended. A running agent is
+ * never removed. Their events stay in the log and keep counting toward the score.
+ */
+export function clearFinishedAgents(agentId) {
+  const ids = [];
+  for (const a of agents.values()) {
+    if (a.alive || (agentId && a.id !== agentId)) continue;
+    ids.push(a.id);
+  }
+  for (const id of ids) agents.delete(id);
+  if (ids.length) broadcast('cleared', { ids });
+  return ids;
+}
+
 export function addEvent(e) {
   const agent = e.agentId ? agents.get(e.agentId) : null;
   const adjusted = applyBaseline(e, listBaselines(), agent);

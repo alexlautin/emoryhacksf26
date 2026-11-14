@@ -9,6 +9,7 @@ export const ICONS = [
   'key-round', 'upload', 'package', 'pause', 'play', 'octagon-x', 'octagon-alert', 'triangle-alert', 'circle-pause',
   'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x', 'bot', 'settings',
   'layout-dashboard', 'bell', 'search', 'chevron-right', 'chevron-down', 'folder', 'download', 'sparkles', 'list-tree',
+  'house', 'activity',
 ];
 export const BRANDS = {
   claude: 'claudecode', codex: 'codex', gemini: 'geminicli', cursor: 'cursor',

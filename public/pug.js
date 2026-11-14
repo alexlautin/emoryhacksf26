@@ -13,8 +13,11 @@
 //   alert    score Review: stands taller, head up
 //   worried  score Act: crouched, head low, leaning back, a slight tremble
 //   guard    Harness paused an agent: braced and leaning in, head up, a short bark now and then
-// Reactions: a startle when the score gets worse, a happy hop when it recovers, and a hop when
-// you click it. With reduced motion it holds each pose and skips the movement.
+//   wary     part of Harness stopped watching: standing tall, ears up, quick shallow breaths
+//   lost     the dashboard lost contact with Harness: head hung low, waiting
+// Reactions: a startle when the score gets worse, a happy hop when it recovers, a hop when you
+// click it, a perk-up when a new agent starts, a slow nod when one finishes, a head tilt at
+// something worth a look, and a bark when Harness blocks an action before it runs. With reduced motion it holds each pose and skips the movement.
 
 const NS = 'http://www.w3.org/2000/svg';
 const SRC = '/ui/pug.png';
@@ -37,6 +40,8 @@ const MOODS = {
   alert:   [-0.025,0.4, -4.5,  0,     0,   0,      0,  0,   0.45,    0.8],
   worried: [0.06, -1.6,  4.5,  0,     0,   1,      0,  0,   0.7,     0.8],
   guard:   [0.025, 1.8, -2.5,  0,     0,   0,      0,  1,   0.5,     0.9],
+  wary:    [-0.03, 0.9, -5.5,  0,     0,   0,      0,  0,   0.6,     0.6],
+  lost:    [0.04, -0.6,  8,    0,     0,   0,      0,  0,   0.25,    1.4],
 };
 const KEYS = ['crouch', 'lean', 'head', 'bounce', 'bob', 'tremble', 'zz', 'bark', 'breathHz', 'breathAmp'];
 const pose = (name) => Object.fromEntries(KEYS.map((k, i) => [k, MOODS[name][i]]));
@@ -44,6 +49,8 @@ const TITLES = {
   loading: 'Waking up', asleep: 'Asleep. No agents running.', happy: 'Happy. Everything looks fine.',
   content: 'Relaxed', alert: 'Keeping an eye on things', worried: 'Worried. Something dangerous happened.',
   guard: 'On guard. An agent is paused until you decide.',
+  wary: 'Uneasy. Part of Harness isn’t watching right now.',
+  lost: 'Lost contact with Harness. Trying again.',
 };
 
 const el = (tag, attrs = {}, parent) => {
@@ -174,8 +181,10 @@ function frame(now) {
 }
 
 function react(kind) {
+  if (!parts) return;
   if (REDUCED.matches) {
     if (kind === 'startle') fx.bang = 1;
+    if (kind === 'bark') fx.bark = 1;
     return;
   }
   if (kind === 'startle') {
@@ -185,6 +194,20 @@ function react(kind) {
     spring.hopV += 600; spring.squashV -= 2;
   } else if (kind === 'pet') {
     spring.hopV += 480; spring.squashV -= 1.6; spring.nodV += 40;
+  } else if (kind === 'greet') {
+    // A new agent showed up: ears up and a small hop.
+    spring.hopV += 380; spring.squashV -= 1.2; spring.nodV -= 60;
+  } else if (kind === 'bye') {
+    // An agent finished: one slow nod.
+    spring.nodV += 55;
+  } else if (kind === 'notice') {
+    // Something worth a look: the head snaps up, no hop.
+    spring.nodV -= 75;
+  } else if (kind === 'bark') {
+    // Harness blocked something before it ran.
+    barkAt = performance.now();
+    spring.nodV -= 80; spring.hopV += 160;
+    fx.bark = 1;
   }
 }
 
@@ -198,13 +221,20 @@ export function mountPug(host) {
   requestAnimationFrame(frame);
 }
 
+/** One-off reactions to things that just happened: 'greet', 'bye', 'notice', 'bark'. */
+export function pugReact(kind) {
+  if (['greet', 'bye', 'notice', 'bark'].includes(kind)) react(kind);
+}
+
 /** Called on every render with the latest score and agent state. Cheap when nothing changed. */
-export function setPugMood({ level = 'loading', paused = false, working = false, agents = 0 } = {}) {
+export function setPugMood({ level = 'loading', paused = false, working = false, agents = 0, lost = false, unwatched = false } = {}) {
   if (!parts) return;
   let next;
-  if (level === 'loading') next = 'loading';
+  if (lost) next = 'lost';
+  else if (level === 'loading') next = 'loading';
   else if (paused) next = 'guard';
   else if (level === 'act') next = 'worried';
+  else if (unwatched) next = 'wary';
   else if (level === 'review') next = 'alert';
   else if (!agents) next = 'asleep';
   else if (level === 'clear' && working) next = 'happy';

@@ -3,7 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { subscribe, listAgents, listEvents, clearAll, upsertAgent, addEvent, getAgent, reviseEvents, onEvent, broadcast } from './store.js';
+import { subscribe, listAgents, listEvents, clearAll, clearFinishedAgents, upsertAgent, addEvent, getAgent, reviseEvents, onEvent, broadcast } from './store.js';
 import { startProcessMonitor, describeCaller } from './monitor/processes.js';
 import { startNetworkMonitor } from './monitor/network.js';
 import { startFileMonitor, rearmBait, ignoreWrites, refreshHookState, BAIT_DIR } from './monitor/files.js';
@@ -148,6 +148,11 @@ async function handle(req, res, { remote = false } = {}) {
       } catch (err) {
         return json(res, 409, { error: err.message });
       }
+    }
+    if (url.pathname === '/api/agents/clear' && req.method === 'POST' && !remote) {
+      const { agentId } = await readBody(req);
+      if (agentId != null && typeof agentId !== 'string') return json(res, 400, { error: 'agentId must be text' });
+      return json(res, 200, { cleared: clearFinishedAgents(agentId) });
     }
     if (url.pathname === '/api/report.md' && req.method === 'GET') {
       const agentId = url.searchParams.get('agent') || '';
