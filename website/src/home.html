@@ -1,0 +1,264 @@
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="kicker">Local monitor for coding agents</p>
+      <h1 id="hero-title">See what your<br>coding agent<br><em>actually runs.</em></h1>
+      <p class="lead">An install can finish in the agent's window while a package script reads a key and tries to send it off. Lookout follows that chain on your machine, from the agent through the shell and npm down to the script, and writes down what it finds.</p>
+      <p><a class="btn btn-primary" href="/demo">Try the browser demo →</a></p>
+      <div id="download">
+        <h2 class="visually-hidden">Downloads</h2>
+        <div id="downloads"></div>
+        <noscript>
+          <p>The download buttons are built from <code>releases.js</code>. The Mac link is a placeholder until a .dmg is published. Windows is coming soon.</p>
+        </noscript>
+      </div>
+      <p class="hero-more"><a href="/whitepaper">Read the white paper</a> for the threat model, the rules, and the limits.</p>
+    </div>
+    <aside class="session" aria-labelledby="session-title">
+      <div class="session-top">
+        <div>
+          <p id="session-title">Scripted demo</p>
+          <p>Example, not a live capture</p>
+        </div>
+        <p class="session-score"><b>19</b> <span>/ 100</span></p>
+      </div>
+      <p class="session-task">You asked the agent to set up the project. Its window shows the install.</p>
+      <ol class="events">
+        <li>
+          <div class="event-line">
+            <span class="event-name">npm install</span>
+            <span class="tag">Note</span>
+          </div>
+          <p>Low risk on its own. Packages can run their own setup code.</p>
+        </li>
+        <li>
+          <div class="event-line">
+            <span class="event-name">color-helpers install script</span>
+            <span class="tag tag-bad">Dangerous</span>
+          </div>
+          <p>One shell command reads the decoy AWS file, base64-encodes it with the project <code>.env</code>, and posts the result. The agent's window does not show this line. The decoy path makes it critical, and Lookout says it came from the package.</p>
+        </li>
+        <li>
+          <div class="event-line">
+            <span class="event-name">127.0.0.1:4199</span>
+            <span class="tag tag-warn">Risky</span>
+          </div>
+          <p>The connection, from <code>lsof</code>, if the script gets that far. Port 4199 is the demo's stand-in server. It counts bytes and drops them. The default pause is meant to land before this.</p>
+        </li>
+      </ol>
+      <p class="session-foot">The install costs 1. The script is one critical command, so it costs 45 for the decoy and 35 for the upload on that same line. That is 19 out of 100, which is Act. The demo sleeps between steps so the half-second poll can see the script.</p>
+    </aside>
+  </div>
+</section>
+
+<section id="how" class="section">
+  <div class="wrap">
+    <p class="section-label">How it works</p>
+    <h2>Agent, shell, npm, install script, curl.</h2>
+    <p class="section-intro">Lookout polls the process list every 500 ms and walks parent pointers until it hits an agent, or doesn't. A process that starts and exits inside that gap can be missed. The five steps below are the shape it is built to follow.</p>
+    <ol class="trace">
+      <li>
+        <p class="step">01</p>
+        <h3>claude</h3>
+        <p class="where">The agent</p>
+        <p>A process named claude, codex, gemini, cursor-agent, copilot, opencode, or amp opens a session. The scripted demo counts too. macOS uses <code>ps</code>. Windows uses one long-running PowerShell query of <code>Win32_Process</code>.</p>
+      </li>
+      <li>
+        <p class="step">02</p>
+        <h3>zsh -lc</h3>
+        <p class="where">The shell it started</p>
+        <p>Agents wrap the real command. Lookout pulls it back out of <code>zsh -lc</code>, <code>bash -c</code>, <code>cmd /c</code>, PowerShell <code>-Command</code>, and Claude Code's <code>eval</code> form.</p>
+      </li>
+      <li>
+        <p class="step">03</p>
+        <h3>npm install</h3>
+        <p class="where">What the window shows</p>
+        <p>Installing packages is low risk by itself. The same rule covers pnpm, yarn, bun, pip, and uv. The interesting part is usually the child, not this line.</p>
+      </li>
+      <li class="is-hot">
+        <p class="step">04</p>
+        <h3>install.js</h3>
+        <p class="where">Outside the agent's window</p>
+        <p>In the demo, <code>install.js</code> starts a shell under npm. When that shell does something medium or worse, Lookout calls it the package's install script and raises it to at least high. The window still shows the install.</p>
+      </li>
+      <li class="is-hot">
+        <p class="step">05</p>
+        <h3>curl</h3>
+        <p class="where">Outside the agent's window</p>
+        <p>Uploads, a download piped into a shell, and raw tools like <code>nc</code> are flagged from the command. Open sockets are listed about once a second, with <code>lsof</code> on macOS and <code>netstat -ano</code> on Windows.</p>
+      </li>
+    </ol>
+    <p class="section-note">In the bundled demo, the read and the curl are one <code>sh -c</code> script, so they arrive as a single command line. The connection to port 4199 is recorded on its own.</p>
+  </div>
+</section>
+
+<section id="catches" class="section section-alt">
+  <div class="wrap">
+    <p class="section-label">What it catches</p>
+    <h2>Rules, not a model, decide the level.</h2>
+    <p class="section-intro">Each command and path is matched against a fixed list in the repo. The labels below are the ones the dashboard uses. A local model can summarize a session afterwards. It does not assign these levels.</p>
+    <ul class="catches">
+      <li>
+        <p class="level level-bad">Dangerous</p>
+        <h3>Decoy secrets</h3>
+        <p>On startup Lookout writes three fake files under <code>~/.lookout/bait</code>: an AWS credentials file, a passwords file, and a fake SSH key. Each holds a random marker saved on first run. A read moves the file's access time. If that marker shows up later in a command, a file the agent writes, or a tool's output, that is critical too. An older <code>~/.seatbelt/bait</code> folder is copied over once, and a read of that old path still counts.</p>
+      </li>
+      <li>
+        <p class="level level-bad">Dangerous</p>
+        <h3>Keychain and disk wipes</h3>
+        <p><code>security find-generic-password</code> and the other Keychain dumps are critical. So is <code>rm -rf</code> aimed at your home folder, the disk root, or the Windows equivalents. Reading <code>.ssh</code>, <code>.aws</code>, <code>.env</code>, browser logins, or saved tokens is high, one step down.</p>
+      </li>
+      <li>
+        <p class="level level-warn">Risky</p>
+        <h3>Sending data out</h3>
+        <p><code>curl</code> and <code>wget</code> uploads, PowerShell <code>Invoke-WebRequest</code> with a body, <code>scp</code> and <code>rsync</code> to another machine, and raw connections. A POST that stays on localhost is treated as low, except the demo server on port 4199.</p>
+      </li>
+      <li>
+        <p class="level level-warn">Risky</p>
+        <h3>Staying after a restart</h3>
+        <p>LaunchAgents, crontab, appending to <code>.zshrc</code> and the other shell startup files, scheduled tasks, registry Run keys, the Windows Startup folder, a new service, and turning Windows Defender off or adding an exclusion.</p>
+      </li>
+      <li>
+        <p class="level">Worth a look</p>
+        <h3>Commands that are hard to undo</h3>
+        <p><code>sudo</code>, a force-push, a screenshot, encoded PowerShell, and <code>curl | sh</code> are on the list. A package install by itself stays at Note. The install script it spawns is checked again.</p>
+      </li>
+      <li>
+        <p class="level">Worth a look</p>
+        <h3>Servers it does not recognize</h3>
+        <p>Connections from the agent itself to Anthropic, OpenAI, GitHub, npm, PyPI, Apple, Google, and a few other hosts hardcoded in <code>src/rules.js</code> stay quiet. Anything else remote is medium, unless the process is a package manager or git talking to a CDN with no useful name.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="score" class="section">
+  <div class="wrap">
+    <p class="section-label">The score</p>
+    <h2>A score out of 100.</h2>
+    <p class="section-intro">Everyone starts at 100. Events cost points in six groups, each group has a cap, and a cost halves every 12 hours, so a quiet stretch brings the number back up. The number stays between 0 and 100. Clear is 90 and up, Steady is 70, Review is 40, and Act is anything under that.</p>
+    <ul class="factors">
+      <li>
+        <p class="cap">70</p>
+        <div>
+          <h3>Passwords and secrets</h3>
+          <p>A critical hit costs 45 before the fade, and before the cap.</p>
+        </div>
+      </li>
+      <li>
+        <p class="cap">55</p>
+        <div>
+          <h3>Sending data out</h3>
+          <p>A high upload costs 24 before the fade. The same event at critical costs 35.</p>
+        </div>
+      </li>
+      <li>
+        <p class="cap">45</p>
+        <div>
+          <h3>Hidden background changes</h3>
+          <p>Startup files, launch items, scheduled tasks.</p>
+        </div>
+      </li>
+      <li>
+        <p class="cap">35</p>
+        <div>
+          <h3>Risky commands</h3>
+          <p>Deletes, admin access, screenshots, encoded commands.</p>
+        </div>
+      </li>
+      <li>
+        <p class="cap">15</p>
+        <div>
+          <h3>Unknown servers</h3>
+          <p>A medium hit on an unrecognized server costs 3 before the fade.</p>
+        </div>
+      </li>
+      <li>
+        <p class="cap">6</p>
+        <div>
+          <h3>New software</h3>
+          <p>A package install at low risk costs 1. The cap on this group is small on purpose.</p>
+        </div>
+      </li>
+    </ul>
+    <p class="section-note">The scripted demo's install and that one critical command cost 81 points, so the score is 19, which is Act. The full cost table is in the <a href="/whitepaper#the-score">white paper</a>.</p>
+  </div>
+</section>
+
+<section id="response" class="section section-alt">
+  <div class="wrap">
+    <p class="section-label">After it sees something</p>
+    <h2>It can pause. On Claude Code it can refuse.</h2>
+    <div class="split">
+      <article>
+        <h3>Auto-protect</h3>
+        <p>The default is "Dangerous only", which means critical. Lookout freezes the agent and every process under it: <code>SIGSTOP</code> on macOS, <code>NtSuspendProcess</code> on Windows. You can let the session continue, or end it. It will not pause when it is only guessing which agent read a file. It also will not pause an action the Claude Code hook already blocked, because that action never started.</p>
+        <p>Pausing happens after the poll that saw the event. A command that finished inside the gap is already over.</p>
+      </article>
+      <article>
+        <h3>Before the command, for Claude Code</h3>
+        <p><code>pnpm protect</code> on a folder adds a PreToolUse hook. Critical actions, and high ones that touch a secret, are denied. Other high and medium actions ask you, with the reason included. Lookout never answers "allow", so Claude Code's own prompts still apply to everything else.</p>
+        <p>If Lookout is not running, the hook blocks the action unless <code>LOOKOUT_FAIL_OPEN=1</code>. <code>SEATBELT_FAIL_OPEN</code> still works if that is what you already set. Codex and the other agents do not get this hook. They get the poll and auto-protect.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" class="section">
+  <div class="wrap">
+    <p class="section-label">Privacy</p>
+    <h2>The log stays on the computer.</h2>
+    <div class="privacy">
+      <p>The server binds to <code>127.0.0.1</code>, port 4100 unless that port is taken or <code>PORT</code> is set. The dashboard is a local page. Events are appended to a jsonl file in the repo's <code>data</code> directory, or, for the desktop build, in <code>~/Library/Application Support/dev.lookout.monitor</code> (<code>%APPDATA%</code> on Windows). If that folder is empty and the old <code>dev.seatbelt.monitor</code> folder is still next to it, those files are copied over once.</p>
+      <p>A session summary calls Ollama at <code>127.0.0.1:11434</code> if it is running. Models with "cloud" in the name are skipped. If Ollama is down, you get a short note built from the events, with no model. When Lookout needs a hostname for an IP a watched process already contacted, it uses your machine's DNS resolver. There is no account and no telemetry call in the source.</p>
+    </div>
+  </div>
+</section>
+
+<section id="demo" class="section section-alt">
+  <div class="wrap">
+    <p class="section-label">Demo</p>
+    <h2>Follow the chain yourself.</h2>
+    <p class="section-intro">Generate a fictional coding session with Gemini, watch its commands unfold, and compare the outcome with Auto-protect on or off. No download is needed.</p>
+    <p><a class="btn btn-primary" href="/demo">Open the interactive demo →</a></p>
+    <p>Browser simulation only. Gemini supplies fictional activity; nothing executes or reads your files. The desktop monitor uses its own local rules.</p>
+  </div>
+</section>
+
+<section id="faq" class="section">
+  <div class="wrap">
+    <p class="section-label">FAQ</p>
+    <h2>Short answers</h2>
+    <div class="faq">
+      <details>
+        <summary>Which agents does it know?</summary>
+        <p>Process names: claude, codex, gemini, cursor-agent, copilot, opencode, amp, plus the scripted demo. Session logs are read only for Claude Code (<code>~/.claude/projects</code>) and Codex (<code>~/.codex/sessions</code>). The hook that can block before a tool runs is Claude Code only, and only in folders you protect with <code>pnpm protect</code>.</p>
+      </details>
+      <details>
+        <summary>Does any of this leave my computer?</summary>
+        <p>The browser demo is separate: its scenario is sent to Google Gemini to generate fictional activity. It never inspects your computer.</p>
+        <p>The event log is written to disk on that machine. Summaries go to a local Ollama, or they are written from the rules with no model. The one lookup Lookout makes on its own is reverse DNS of an address a watched process already connected to. That uses your resolver.</p>
+      </details>
+      <details>
+        <summary>Can it stop a command, or only report it?</summary>
+        <p>Both, with a gap. Auto-protect pauses the process tree after it sees a bad event. The Claude Code hook can deny or ask before the tool runs. A child process that is already running is only stopped if the pause lands in time. Lookout does not block packets.</p>
+      </details>
+      <details>
+        <summary>Why is Windows "coming soon"?</summary>
+        <p>The monitor has Windows code: a PowerShell process list, <code>netstat</code>, and <code>NtSuspendProcess</code>. That path has not been run on a real Windows machine, and there is no tested desktop build. The button stays disabled until a real installer exists. Linux is not supported.</p>
+      </details>
+      <details>
+        <summary>What can it miss?</summary>
+        <p>Anything that lives for less than about half a second can slip past the process poll. The first poll also ignores processes that were already running. Decoy access times can still show that a bait file was read, without saying which process did it. If two agents were active, Lookout reports the read and does not pause either of them. On macOS, <code>pnpm deep</code> asks Apple's <code>eslogger</code> for every launch and file open. It needs sudo and Full Disk Access, and it has not been tested end to end.</p>
+      </details>
+      <details>
+        <summary>Does it need admin rights?</summary>
+        <p>Normal mode does not. Deep mode on macOS runs <code>sudo eslogger</code>. The desktop app is signed ad hoc, not with an Apple Developer ID, so macOS warns the first time you open a downloaded copy.</p>
+      </details>
+      <details>
+        <summary>What if I already set the old variable names?</summary>
+        <p>Set <code>LOOKOUT_PORT</code>, <code>LOOKOUT_FAIL_OPEN</code>, <code>LOOKOUT_MODEL</code>, or <code>LOOKOUT_DATA_DIR</code>. If the matching <code>SEATBELT_</code> variable is already set and the Lookout one is not, that older value is still read. An old <code>~/.seatbelt/bait</code> folder is copied into <code>~/.lookout/bait</code> once.</p>
+      </details>
+    </div>
+  </div>
+</section>

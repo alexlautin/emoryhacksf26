@@ -127,3 +127,5 @@ The dashboard in `public/` is plain HTML and JavaScript, updated live over Serve
 - Dashboard: a timeline view.
 - Desktop app: a Developer ID signature and notarization, Windows builds, and builds in CI.
 - Demo: a run with a real agent, a backup video, and slides.
+
+Product site, white paper, and Gemini browser simulation: [website/](website/). The Next.js site targets Vercel; the simulation uses a server-side Gemini API key and never executes commands.
