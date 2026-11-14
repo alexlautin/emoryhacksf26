@@ -8,6 +8,7 @@ import { listProcesses, processCwd, exeName, isShell } from '../platform.js';
 import { addEvent, upsertAgent, getAgent } from '../store.js';
 import { analyzeCommand, maxRisk, riskRank } from '../rules.js';
 import { extractCommand, friendlyCommand, truncate, AGENT_LABELS } from '../describe.js';
+import { chainSteps } from '../../public/timeline.js';
 
 const SELF = process.pid;
 const POLL_MS = 500;
@@ -44,16 +45,6 @@ function findAgentRoot(pid, procs) {
     cur = procs.get(cur.ppid);
   }
   return null;
-}
-
-function ancestorsUntil(pid, rootPid, procs) {
-  const chain = [];
-  let cur = procs.get(procs.get(pid)?.ppid);
-  while (cur && cur.pid !== rootPid) {
-    chain.push(cur);
-    cur = procs.get(cur.ppid);
-  }
-  return chain; // nearest first
 }
 
 /** A friendly name for an agent's folder. */
@@ -135,10 +126,27 @@ function isUnderSelf(p, procs) {
   return false;
 }
 
+function ancestorEntries(pid, rootPid, procs) {
+  const chain = [];
+  let cur = procs.get(procs.get(pid)?.ppid);
+  while (cur && cur.pid !== rootPid) {
+    const seen = known.get(cur.pid);
+    chain.push({
+      pid: cur.pid,
+      comm: cur.comm,
+      cmd: truncate(seen?.cmd || extractCommand(cur.args || ''), 400),
+      shell: isShell(cur.comm),
+      label: exeName(cur.comm),
+    });
+    cur = procs.get(cur.ppid);
+  }
+  return chain; // nearest first
+}
+
 function emitProcess(entry, rootPid, procs) {
   const agent = getAgent(entry.agentId);
   if (!agent) return;
-  const chain = ancestorsUntil(entry.pid, rootPid, procs).map((a) => known.get(a.pid)).filter(Boolean);
+  const chain = ancestorEntries(entry.pid, rootPid, procs);
 
   // A shell line like "git status && ls" shows up as the shell plus each piece.
   // Only report the pieces when they weren't already visible in a parent's command.
@@ -158,8 +166,19 @@ function emitProcess(entry, rootPid, procs) {
   }
 
   const depth = chain.length;
+  const steps = chainSteps({
+    agentLabel: agent.label,
+    rootPid,
+    ancestors: chain,
+    current: {
+      pid: entry.pid,
+      cmd: truncate(entry.cmd, 500),
+      shell: isShell(entry.comm),
+      label: exeName(entry.comm),
+    },
+  });
   const verb = friendlyCommand(entry.cmd);
-  const title = depth === 0 || (depth === 1 && isShell(chain[0]?.comm))
+  const title = depth === 0 || (depth === 1 && chain[0]?.shell)
     ? `${agent.label} ${verb}`
     : viaInstall
       ? `A package's install script ${verb}`
@@ -176,6 +195,7 @@ function emitProcess(entry, rootPid, procs) {
     pid: entry.pid,
     ppid: entry.ppid,
     depth,
+    steps,
   });
 }
 

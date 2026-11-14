@@ -11,11 +11,14 @@
     try {
       const t = localStorage.getItem('lookout.theme') || localStorage.getItem('seatbelt.theme');
       if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      const c = localStorage.getItem('lookout.contrast') || localStorage.getItem('seatbelt.contrast');
+      if (c === '1') document.documentElement.dataset.contrast = 'high';
     } catch {}
   </script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a class="skip" href="#main">Skip to activity</a>
   <header class="top">
     <div class="top-inner">
       <div class="brand">
@@ -36,28 +39,46 @@
           <button data-theme="light" role="radio" aria-label="Light" title="Light"><svg class="i" aria-hidden="true"><use href="#sun"/></svg></button>
           <button data-theme="dark" role="radio" aria-label="Dark" title="Dark"><svg class="i" aria-hidden="true"><use href="#moon"/></svg></button>
         </div>
+        <button id="contrast" class="btn ghost" type="button" aria-pressed="false">Contrast</button>
+        <button id="help-open" class="btn ghost" type="button" aria-label="Keyboard shortcuts">Shortcuts</button>
         <button id="prefs-open" class="btn icon" title="Preferences" aria-label="Preferences"><svg class="i" aria-hidden="true"><use href="#settings"/></svg></button>
         <button id="reset" class="btn ghost" title="Clear the activity and start the score over">Reset</button>
+        <button id="coach-open" class="btn ghost" type="button">Walk through the demo</button>
         <button id="demo" class="btn primary">Run demo attack</button>
         <button id="open-dash" class="btn primary" hidden>Open dashboard</button>
       </div>
     </div>
   </header>
 
-  <main>
+  <main id="main">
     <p id="conn-error" class="conn-error" hidden role="status">Can’t reach Lookout. Trying again.</p>
 
-    <section id="alert" class="alert" hidden></section>
+    <section id="coach" class="coach" hidden aria-labelledby="coach-title">
+      <div class="coach-kicker"><span>Demo walkthrough</span> <span id="coach-count">1 of 5</span></div>
+      <h2 id="coach-title"></h2>
+      <p id="coach-body"></p>
+      <p id="coach-note" class="hint"></p>
+      <div class="coach-actions">
+        <button id="coach-start" class="btn primary" type="button">Run the demo</button>
+        <button id="coach-close" class="btn ghost" type="button">Close</button>
+      </div>
+    </section>
+
+    <section id="alert" class="alert" hidden role="status" aria-live="polite"></section>
 
     <section class="report">
       <div class="score-col">
         <div class="label">Safety score</div>
-        <div class="score-line">
+        <div class="score-line" id="score-live">
           <span id="score-num" class="score-num">--</span>
           <span class="score-of">/ 100</span>
         </div>
         <p id="score-level" class="level-word">Loading</p>
         <p id="score-blurb" class="score-blurb">Getting the latest activity.</p>
+        <details class="plain">
+          <summary>What this number means</summary>
+          <p>100 means Lookout has not seen a risky action yet. Points come off for secrets, uploads, things that keep running later, risky commands, unknown servers, and package installs. Clear, Steady, Review, and Act are names for ranges of that number.</p>
+        </details>
         <div class="meter" aria-hidden="true">
           <div class="meter-track"><div id="meter-fill" class="meter-fill"></div></div>
           <div class="meter-ends"><span>0</span><span>100</span></div>
@@ -97,6 +118,23 @@
         <summary>Earlier sessions <span id="earlier-count" class="count">0</span></summary>
         <div id="earlier-list" class="earlier-list"></div>
       </details>
+    </section>
+
+    <section id="detail" class="detail" hidden aria-labelledby="detail-title">
+      <div class="section-head">
+        <h2 id="detail-title">This session</h2>
+        <div class="detail-actions">
+          <button id="detail-play" class="btn small" type="button">Play the chain</button>
+          <button id="detail-md" class="btn small" type="button">Download report</button>
+          <button id="detail-print" class="btn small" type="button">Print</button>
+        </div>
+      </div>
+      <p id="detail-touch"></p>
+      <div id="detail-chain"></div>
+      <p id="detail-chain-note" class="hint"></p>
+      <div id="detail-lists" class="detail-lists"></div>
+      <ol id="detail-replay" class="replay"></ol>
+      <p class="hint">Print opens the browser’s dialog. Choose Save as PDF there if you want a PDF. Lookout does not build a PDF file itself. A command or server you marked as normal for this project stays in the report and is labeled.</p>
     </section>
 
     <section id="explain" class="explain" hidden>
@@ -171,6 +209,54 @@
         </div>
         <p id="prefs-preview" class="hint"></p>
       </fieldset>
+      <fieldset>
+        <legend>Reading the page</legend>
+        <p class="hint">Higher contrast uses black and white and underlines the score words, so the color is not the only signal. The same switch is in the header.</p>
+        <button type="button" class="btn" id="prefs-contrast" aria-pressed="false">Higher contrast</button>
+      </fieldset>
+      <fieldset>
+        <legend>Alerts</legend>
+        <p class="hint" id="notify-hint">Dangerous events always show a banner on this page. On a Mac, Lookout also posts a system notification when you run it in a terminal. The menu bar app uses the system notification. Browser alerts stay off until you allow them.</p>
+        <button type="button" class="btn" id="prefs-notify">Allow browser alerts</button>
+      </fieldset>
+      <fieldset>
+        <legend>Normal for a project</legend>
+        <p class="hint">Mark a low or medium action from the activity list. Lookout does not learn this on its own. It will not hide a decoy read, or anything Risky or Dangerous. Removing a mark puts the points back.</p>
+        <ul id="baseline-list" class="baseline-list"></ul>
+      </fieldset>
+    </form>
+  </dialog>
+
+  <dialog id="intro" aria-labelledby="intro-title">
+    <form method="dialog">
+      <header class="prefs-head">
+        <h2 id="intro-title">Lookout watches the agent, not just its window</h2>
+      </header>
+      <p>Claude Code and Codex can start programs that never show up in their chat: a shell, npm, a package’s install script, then curl. Lookout follows that chain on this computer and scores it from 0 to 100.</p>
+      <p>Nothing is sent anywhere. The demo uses fake secrets and a pretend server on this machine.</p>
+      <div class="coach-actions">
+        <button class="btn primary" id="intro-demo" type="button" value="demo">Walk through the demo</button>
+        <button class="btn" id="intro-skip" type="submit" value="skip">I’ll look around</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="help" aria-labelledby="help-title">
+    <form method="dialog">
+      <header class="prefs-head">
+        <h2 id="help-title">Keyboard shortcuts</h2>
+        <button class="btn icon" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
+      </header>
+      <ul class="shortcut-list">
+        <li><kbd>1</kbd> Simple view</li>
+        <li><kbd>2</kbd> Advanced view</li>
+        <li><kbd>D</kbd> Run the demo</li>
+        <li><kbd>W</kbd> Walk through the demo</li>
+        <li><kbd>/</kbd> Filter activity</li>
+        <li><kbd>?</kbd> This list</li>
+        <li><kbd>Esc</kbd> Close a dialog, or clear the selected session</li>
+      </ul>
+      <p class="hint">Shortcuts stay quiet while you are typing in a field.</p>
     </form>
   </dialog>
 
@@ -204,6 +290,8 @@
     <button type="button" class="mp-row" id="mp-quit" role="menuitem">Quit Lookout <kbd id="mp-quit-key">⌘Q</kbd></button>
   </div>
 
+  <div id="announce" class="sr" role="status" aria-live="assertive"></div>
+  <div id="print-root"></div>
   <div id="toast" class="toast" hidden role="status"></div>
   <script src="/app.js" type="module"></script>
 </body>

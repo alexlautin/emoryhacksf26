@@ -21,6 +21,14 @@ import { alertCount, computeScore } from '../public/score.js';
 export const IS_DESKTOP = process.env.LOOKOUT_DESKTOP === '1' || process.env.SEATBELT_DESKTOP === '1';
 
 const send = (msg) => process.stdout.write(`@@lookout ${JSON.stringify(msg)}\n`);
+const recentDanger = new Map();
+
+/** The menu bar app turns this into a system notification. */
+export function pushNotice(notice) {
+  if (!IS_DESKTOP || !notice) return;
+  if (notice.agentId) recentDanger.set(notice.agentId, Date.now());
+  send({ type: 'notify', title: notice.title, body: notice.body });
+}
 
 /**
  * Apps opened from the Finder get a bare PATH (/usr/bin:/bin:...), so the demo's npm and
@@ -71,7 +79,10 @@ export function startDesktopBridge(port) {
   setInterval(tick, 1000).unref();
 
   onEvent((e) => {
-    if (e.guard === 'paused' && e.title.startsWith('Lookout')) send({ type: 'notify', title: e.title, body: e.detail ?? '' });
+    if (e.guard === 'paused' && e.title.startsWith('Lookout')) {
+      if (Date.now() - (recentDanger.get(e.agentId) || 0) < 8000) return;
+      send({ type: 'notify', title: e.title, body: e.detail ?? '' });
+    }
     if (e.guard === 'ended' && e.title.startsWith('Lookout')) send({ type: 'notify', title: e.title, body: e.detail ?? '' });
   });
 }
