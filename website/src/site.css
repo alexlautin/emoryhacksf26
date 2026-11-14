@@ -78,24 +78,24 @@ main:focus { outline: none; }
 .hero-note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
 
 .panel-wrap { position: relative; padding-top: 96px; justify-self: end; width: min(100%, 400px); }
-.pug-rig { --pug-w: 132px; position: absolute; bottom: calc(100% + 1px - var(--pug-w) * 0.076); right: 28px; width: var(--pug-w); pointer-events: none; translate: 0 0; will-change: translate; transition: translate 1.1s cubic-bezier(.33,0,.2,1); animation: pug-in 0.9s var(--ease) 0.25s both; }
+.pug-rig { --pug-w: 132px; position: absolute; bottom: calc(100% + 1px - var(--pug-w) * 0.076); right: 28px; width: var(--pug-w); pointer-events: none; translate: 0 0; will-change: translate; transition: translate 1.1s cubic-bezier(.33,0,.2,1); animation: pug-in 0.9s var(--ease) 0.25s backwards; }
 .pug-rig.is-split { translate: calc(var(--pug-w) * -1.4) 0; transition: translate 2.6s cubic-bezier(.5,.05,.3,1) 0.4s; }
 @keyframes pug-in { from { opacity: 0; transform: translateY(-14px); } }
 .stack { position: relative; }
-.panel { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-lg); box-shadow: 0 1px 0 rgba(13,16,18,0.03), 0 30px 60px -28px rgba(13,16,18,0.22); padding: 6px 20px 16px; font-size: 14px; animation: rise 0.9s var(--ease) 0.1s both; }
+.panel { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-lg); box-shadow: 0 1px 0 rgba(13,16,18,0.03), 0 30px 60px -28px rgba(13,16,18,0.22); padding: 6px 20px 16px; font-size: 14px; animation: rise 0.9s var(--ease) 0.1s backwards; }
 
 /* Hero panel: the card breaks in two when the agent does something risky. */
 .stack { position: relative; --pop: cubic-bezier(.2,1.35,.3,1); --red-line: color-mix(in srgb, var(--red) 50%, var(--line)); }
 .panel-a { border-radius: var(--h-radius-lg) var(--h-radius-lg) 0 0; padding-bottom: 6px; position: relative; z-index: 1; box-shadow: none; }
-.panel-b { border-top: 0; border-radius: 0 0 var(--h-radius-lg) var(--h-radius-lg); padding: 0 20px 16px; animation-delay: 0.25s; }
-.panel-a, .panel-b { transition: transform 0.8s var(--pop), border-radius 0.5s, border-color 0.4s, box-shadow 0.5s; will-change: transform; }
+.panel-b { border-top: 0 solid transparent; border-radius: 0 0 var(--h-radius-lg) var(--h-radius-lg); padding: 0 20px 16px; animation-delay: 0.25s; }
+.panel-a, .panel-b { transition: transform 0.8s var(--pop), border-radius 0.5s, border-color 0.4s, border-top-width 0.5s, padding-top 0.5s, box-shadow 0.5s; will-change: transform; }
 .seam { position: relative; height: 0; z-index: 2; pointer-events: none; transition: transform 0.8s var(--pop); }
 .seam i { position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: var(--red); transform: scaleX(0); opacity: 0; box-shadow: 0 0 14px 2px color-mix(in srgb, var(--red) 55%, transparent); transition: transform 0.5s var(--ease) 0.1s, opacity 0.3s; }
 .seam span { position: absolute; left: 50%; top: 0; font: 600 11px/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; background: var(--red); color: #fff; padding: 6px 12px; border-radius: 99px; white-space: nowrap; opacity: 0; transform: translate(-50%, -50%) scale(0.6); transition: opacity 0.3s 0.25s, transform 0.6s var(--pop) 0.25s; }
-.is-alert .panel-a { animation: shake 0.5s both; border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent); }
+.is-alert .panel-a { animation: rise 0.9s var(--ease) 0.1s backwards, shake 0.5s; border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent); }
 .is-alert .panel-b { border-color: var(--red-line); }
 .is-split .panel-a { transform: translate(-8px, -8px) rotate(-1.5deg); border-radius: var(--h-radius-lg); border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 30px 60px -28px rgba(13,16,18,0.22); }
-.is-split .panel-b { transform: translate(10px, 28px) rotate(1.8deg); border-radius: var(--h-radius-lg); border-top: 1px solid var(--red-line); border-color: var(--red-line); padding-top: 14px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 40px 60px -26px rgba(193,53,42,0.35); }
+.is-split .panel-b { transform: translate(10px, 28px) rotate(1.8deg); border-radius: var(--h-radius-lg); border-top-width: 1px; border-color: var(--red-line); padding-top: 14px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 40px 60px -26px rgba(193,53,42,0.35); }
 .is-split .seam { transform: translateY(10px); }
 .is-split .seam i { transform: scaleX(1); opacity: 1; }
 .is-split .seam span { opacity: 1; transform: translate(-50%, -50%); }
