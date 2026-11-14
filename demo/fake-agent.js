@@ -18,7 +18,7 @@ async function report(body) {
       const r = await fetch(`${API}/api/demo/step`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: process.pid, ...body }) });
       if (r.ok) return;
     } catch {}
-    await sleep(300); // Lookout hasn't noticed us yet
+    await sleep(300); // Harness hasn't noticed us yet
   }
 }
 

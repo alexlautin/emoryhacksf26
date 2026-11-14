@@ -10,7 +10,7 @@ function appleString(s) {
 
 export function deliverNotice(notice) {
   if (!notice || IS_DESKTOP || !IS_MAC) return false;
-  const script = `display notification ${appleString(notice.body)} with title "Lookout" subtitle ${appleString(notice.title)}`;
+  const script = `display notification ${appleString(notice.body)} with title "Harness" subtitle ${appleString(notice.title)}`;
   try {
     const child = spawn('osascript', ['-e', script], { stdio: 'ignore', detached: true });
     child.unref();

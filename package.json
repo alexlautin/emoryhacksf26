@@ -1,5 +1,5 @@
 {
-  "name": "lookout",
+  "name": "harness",
   "version": "0.1.0",
   "private": true,
   "description": "Watches what AI coding agents (Claude Code, Codex, Gemini CLI, Cursor and more) do on your computer.",

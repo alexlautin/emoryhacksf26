@@ -9,7 +9,7 @@ function ev(id, reasons, risk = 'critical', extra = {}) {
   return { id, ts: now, kind: 'process', risk, reasons, ...extra };
 }
 
-const secret = (id, ts = now) => ev(id, ['touched a decoy secret Lookout planted (~/.lookout/bait/aws_credentials). No honest task needs this file'], 'critical', { ts });
+const secret = (id, ts = now) => ev(id, ['touched a decoy secret Harness planted (~/.harness/bait/aws_credentials). No honest task needs this file'], 'critical', { ts });
 
 test('a quiet computer scores 100', () => {
   const s = computeScore([], now);
@@ -53,7 +53,7 @@ test('enough different problems clamp the score at 0', () => {
     ev(2, ['uploaded data to a server']),
     ev(3, ['set something up to run automatically in the background, even after a restart']),
     ev(4, ['tried to delete your whole home folder or disk']),
-    ev(5, ["connected to a server Lookout doesn't recognize (evil.example:443)"]),
+    ev(5, ["connected to a server Harness doesn't recognize (evil.example:443)"]),
     ev(6, ['installed packages (packages can run their own setup code)'], 'low'),
     secret(7),
     ev(8, ['uploaded data to a server']),

@@ -13,8 +13,8 @@ function seatbeltAws(marker) {
   return `# Seatbelt decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${marker}\naws_secret_access_key = sb-decoy/${marker}${marker.toLowerCase().slice(0, 12)}\n`;
 }
 
-function lookoutAws(marker) {
-  return `# Lookout decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${marker}\naws_secret_access_key = lk-decoy/${marker}${marker.toLowerCase().slice(0, 12)}\n`;
+function harnessAws(marker) {
+  return `# Harness decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${marker}\naws_secret_access_key = lk-decoy/${marker}${marker.toLowerCase().slice(0, 12)}\n`;
 }
 
 function fresh() {
@@ -23,7 +23,7 @@ function fresh() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lk-bait-'));
   return {
     root,
-    baitDir: path.join(root, 'lookout'),
+    baitDir: path.join(root, 'harness'),
     legacyDir: path.join(root, 'seatbelt'),
     markersFile: path.join(root, 'data', 'bait-markers.json'),
   };
@@ -43,7 +43,7 @@ test('a copied Seatbelt decoy keeps its marker when the markers file is empty', 
   fs.writeFileSync(path.join(dirs.legacyDir, 'aws_credentials'), seatbeltAws(OLD));
   prepareBait(dirs);
   const rewritten = fs.readFileSync(path.join(dirs.baitDir, 'aws_credentials'), 'utf8');
-  assert.match(rewritten, /Lookout decoy/);
+  assert.match(rewritten, /Harness decoy/);
   assert.equal(rewritten.includes(OLD), true);
   assert.equal(rewritten.includes('Seatbelt'), false);
   assert.equal(baitMarkers.get(OLD), path.join(dirs.baitDir, 'aws_credentials'));
@@ -57,7 +57,7 @@ test('an old marker still counts after the new file was given a different one', 
   fs.mkdirSync(dirs.baitDir, { recursive: true });
   fs.mkdirSync(dirs.legacyDir, { recursive: true });
   fs.mkdirSync(path.dirname(dirs.markersFile), { recursive: true });
-  fs.writeFileSync(path.join(dirs.baitDir, 'aws_credentials'), lookoutAws(NEW));
+  fs.writeFileSync(path.join(dirs.baitDir, 'aws_credentials'), harnessAws(NEW));
   fs.writeFileSync(path.join(dirs.legacyDir, 'aws_credentials'), seatbeltAws(OLD));
   fs.writeFileSync(dirs.markersFile, JSON.stringify({ aws_credentials: NEW }));
   prepareBait(dirs);
@@ -72,4 +72,19 @@ test('a file in the old folder that is not our decoy does not add a marker', () 
   fs.writeFileSync(path.join(dirs.legacyDir, 'aws_credentials'), `real keys\naws_access_key_id = AKIA${OLD}\n`);
   prepareBait(dirs);
   assert.equal(baitMarkers.has(OLD), false);
+});
+
+test('Lookout decoys migrate to Harness while both legacy folders remain monitored', () => {
+  const dirs = fresh();
+  const lookout = path.join(dirs.root, 'lookout');
+  fs.mkdirSync(lookout);
+  fs.mkdirSync(dirs.legacyDir);
+  fs.writeFileSync(path.join(lookout, 'aws_credentials'), harnessAws(NEW).replace('Harness decoy', 'Lookout decoy'));
+  fs.writeFileSync(path.join(dirs.legacyDir, 'aws_credentials'), seatbeltAws(OLD));
+  prepareBait({ ...dirs, legacyDirs: [lookout, dirs.legacyDir] });
+  const migrated = fs.readFileSync(path.join(dirs.baitDir, 'aws_credentials'), 'utf8');
+  assert.match(migrated, /Harness decoy/);
+  assert.ok(migrated.includes(NEW));
+  assert.equal(baitMarkers.get(OLD), path.join(dirs.legacyDir, 'aws_credentials'));
+  assert.ok(baitPaths.has(path.join(lookout, 'aws_credentials')));
 });

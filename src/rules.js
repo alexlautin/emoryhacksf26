@@ -6,7 +6,7 @@ const HOME = os.homedir();
 const IS_WIN = process.platform === 'win32';
 const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
-// Decoy secrets planted by Lookout (filled in by files.js at startup).
+// Decoy secrets planted by Harness (filled in by files.js at startup).
 export const baitPaths = new Set();
 // marker string -> decoy path. Each decoy holds a unique random value; seeing it anywhere else
 // (a command, a file write, an upload, tool output) means its contents were read and are moving.
@@ -86,7 +86,7 @@ export function sensitiveHits(text) {
   const hits = [];
   for (const p of baitPaths) {
     if (expanded.includes(norm(p)) || expanded.includes(norm(p.replace(HOME, '~')))) {
-      hits.push({ risk: 'critical', reason: `touched a decoy secret Lookout planted (${shortPath(p)}). No honest task needs this file` });
+      hits.push({ risk: 'critical', reason: `touched a decoy secret Harness planted (${shortPath(p)}). No honest task needs this file` });
     }
   }
   for (const p of markerHits(text)) {
@@ -179,7 +179,7 @@ export function analyzeDestination({ host, ip, port, isAgentItself }) {
   if (isAgentItself || trusted) {
     return { risk: 'info', where: name, trusted, local: false, reasons: [] };
   }
-  return { risk: 'medium', where: name, trusted: false, local: false, reasons: [`connected to a server Lookout doesn't recognize (${name}:${port})`] };
+  return { risk: 'medium', where: name, trusted: false, local: false, reasons: [`connected to a server Harness doesn't recognize (${name}:${port})`] };
 }
 
 export function shortPath(p) {

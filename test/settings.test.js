@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lookout-settings-'));
-process.env.LOOKOUT_DATA_DIR = dir;
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-settings-'));
+process.env.HARNESS_DATA_DIR = dir;
 
 test('menu bar display is saved, and a bad value is rejected', async () => {
   const { getSettings, setSettings } = await import('../src/guard.js');

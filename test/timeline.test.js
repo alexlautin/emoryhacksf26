@@ -18,7 +18,7 @@ test('a chain reads agent, shell, npm, then the install script', () => {
       { pid: 30, cmd: 'npm install', shell: false, label: 'npm' },
       { pid: 20, cmd: 'npm install --no-audit', shell: true, label: 'zsh' },
     ],
-    current: { pid: 50, cmd: 'cat ~/.lookout/bait/aws_credentials | base64', shell: true, label: 'sh' },
+    current: { pid: 50, cmd: 'cat ~/.harness/bait/aws_credentials | base64', shell: true, label: 'sh' },
   });
   const shown = presentSteps(steps);
   assert.deepEqual(shown.map((s) => s.name), [

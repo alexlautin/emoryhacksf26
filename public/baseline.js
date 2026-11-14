@@ -1,5 +1,5 @@
 // A person can mark a low or medium action as normal for one project.
-// Lookout does not learn this by itself, and it will not hide a decoy read or anything critical.
+// Harness does not learn this by itself, and it will not hide a decoy read or anything critical.
 
 const SECRET = /decoy secret|Keychain|whole home folder|saved passwords|scrambled secret/;
 
@@ -45,7 +45,7 @@ export function matchesBaseline(baseline, event, agent) {
 
 export function baselineFromEvent(event, agent, now = Date.now()) {
   if (!canBaseline(event)) {
-    return { error: 'Lookout will not hide that. Decoy reads and anything marked Dangerous or Risky stay flagged.' };
+    return { error: 'Harness will not hide that. Decoy reads and anything marked Dangerous or Risky stay flagged.' };
   }
   const key = projectKey(agent);
   if (!key) return { error: 'This session has no project folder, so there is nowhere to save the exception.' };

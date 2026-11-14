@@ -1,4 +1,4 @@
-// Lookout dashboard. Plain JS, live updates over Server-Sent Events.
+// Harness dashboard. Plain JS, live updates over Server-Sent Events.
 import { alertCount, computeScore, factorsFor } from './score.js';
 import { bestChain, replayItems } from './timeline.js';
 import { sessionTouch } from './touch.js';
@@ -21,7 +21,7 @@ const DISPLAYS = [
   { id: 'alerts', label: 'Alert count' },
 ];
 const PROTECT = {
-  off: { word: 'Off', icon: 'shield-off', desc: 'Lookout only watches and warns. Agents keep running even when they do something dangerous.' },
+  off: { word: 'Off', icon: 'shield-off', desc: 'Harness only watches and warns. Agents keep running even when they do something dangerous.' },
   dangerous: { word: 'On', icon: 'shield-check', desc: 'Pauses a session as soon as it does something dangerous, like opening your secrets or wiping files. You decide whether it continues.' },
   risky: { word: 'Strict', icon: 'shield-alert', desc: 'Pauses a session on anything risky, including uploads to unknown servers and background changes. Expect more interruptions.' },
 };
@@ -91,13 +91,13 @@ const state = {
 };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const byUs = (who) => who === 'lookout' || who === 'seatbelt';
+const byUs = (who) => who === 'harness' || who === 'lookout' || who === 'seatbelt';
 
 function localGet(key) {
-  try { return localStorage.getItem(`lookout.${key}`) ?? localStorage.getItem(`seatbelt.${key}`); } catch { return null; }
+  try { return localStorage.getItem(`harness.${key}`) ?? localStorage.getItem(`lookout.${key}`) ?? localStorage.getItem(`seatbelt.${key}`); } catch { return null; }
 }
 function localSet(key, value) {
-  try { localStorage.setItem(`lookout.${key}`, value); } catch {}
+  try { localStorage.setItem(`harness.${key}`, value); } catch {}
 }
 
 function ago(ts) {
@@ -203,8 +203,8 @@ function renderProtect() {
 }
 
 function sessionState(a) {
-  if (a.alive && a.paused) return { cls: 'paused', text: byUs(a.pausedBy) ? 'Paused by Lookout' : 'Paused by you' };
-  if (!a.alive && a.endedBy) return { cls: 'ended', text: byUs(a.endedBy) ? 'Ended by Lookout' : 'Ended by you' };
+  if (a.alive && a.paused) return { cls: 'paused', text: byUs(a.pausedBy) ? 'Paused by Harness' : 'Paused by you' };
+  if (!a.alive && a.endedBy) return { cls: 'ended', text: byUs(a.endedBy) ? 'Ended by Harness' : 'Ended by you' };
   if (!a.alive) return { cls: 'done', text: 'Finished' };
   const recent = Date.now() - (a.lastActive ?? 0) < 15000;
   return { cls: recent ? 'working' : 'idle', text: recent ? 'Working' : 'Idle' };
@@ -249,7 +249,7 @@ function sessionCard(a) {
       </button>
       ${a.paused ? `
         <div class="s-callout">
-          <div class="s-callout-title">${icon('circle-pause')} ${byUs(a.pausedBy) ? 'Paused by Lookout' : 'Paused'}</div>
+          <div class="s-callout-title">${icon('circle-pause')} ${byUs(a.pausedBy) ? 'Paused by Harness' : 'Paused'}</div>
           ${a.pausedReason ? `<div class="s-callout-why">It ${esc(a.pausedReason)}.</div>` : ''}
           ${trigger?.command ? `<div class="cmd mono">${esc(trigger.command)}</div>` : ''}
           ${a.task ? `<div class="s-callout-ask">You asked it to “${esc(a.task)}”. Does this look like part of that job?</div>` : ''}
@@ -297,7 +297,7 @@ function renderAgents() {
   const earlier = all.filter((a) => !a.alive).sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
   $('#active-count').textContent = active.length;
   setList($('#agents'), active.map((a) => [a.id, sessionCard(a)]),
-    '<p class="empty"><strong>No agents running</strong>Open Claude Code or Codex, or run the demo attack. Lookout picks it up on its own.</p>');
+    '<p class="empty"><strong>No agents running</strong>Open Claude Code or Codex, or run the demo attack. Harness picks it up on its own.</p>');
   $('#earlier').hidden = !earlier.length;
   $('#earlier-count').textContent = earlier.length;
   setList($('#earlier-list'), earlier.map((a) => [a.id, earlierRow(a)]), '');
@@ -404,7 +404,7 @@ function renderAlert() {
     setHTML(el, `
       <span class="tile pause">${icon('shield-check')}</span>
       <div>
-        <h3>Lookout paused ${esc(a.label)} in ${esc(a.project)}</h3>
+        <h3>Harness paused ${esc(a.label)} in ${esc(a.project)}</h3>
         ${a.pausedReason ? `<p>It ${esc(a.pausedReason)}. The agent and everything it started are frozen until you choose what happens next.</p>` : ''}
         ${paused.length > 1 ? `<div class="meta">${paused.length - 1} more session${paused.length > 2 ? 's are' : ' is'} paused.</div>` : ''}
       </div>
@@ -484,7 +484,7 @@ function renderPanel() {
   level.className = `mp-level ${s ? s.level.cls : ''}`;
   level.textContent = s ? s.level.name : 'Loading';
   const offline = !state.ready && $('#conn-error') && !$('#conn-error').hidden;
-  let blurb = s ? s.level.blurb : offline ? 'Can’t reach Lookout. Trying again.' : 'Getting the latest activity.';
+  let blurb = s ? s.level.blurb : offline ? 'Can’t reach Harness. Trying again.' : 'Getting the latest activity.';
   if (s && !state.connected) blurb = 'Reconnecting. This may be a few seconds behind.';
   $('#mp-blurb').textContent = blurb;
 
@@ -499,7 +499,7 @@ function renderPanel() {
         <span class="mp-dot ${st.cls}"></span>
         <span class="mp-agent-name">${esc(a.label)}</span>
         <span class="mp-agent-proj">${esc(a.project)}</span>
-        <span class="mp-agent-state">${esc(st.text.replace('Paused by Lookout', 'Paused').replace('Paused by you', 'Paused'))}</span>
+        <span class="mp-agent-state">${esc(st.text.replace('Paused by Harness', 'Paused').replace('Paused by you', 'Paused'))}</span>
       </button>`;
       return [a.id, html];
     }), '');
@@ -647,7 +647,7 @@ function openDashboard() {
 function quitApp() {
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   if (invoke) invoke('quit_app').catch(() => {});
-  else toast('Quit from the Lookout menu bar app.');
+  else toast('Quit from the Harness menu bar app.');
 }
 
 async function pauseAll() {
@@ -689,7 +689,7 @@ function renderDetail() {
   const playing = state.playAgent === agent.id && state.playIndex !== null;
   if (!chain) {
     $('#detail-chain').innerHTML = '';
-    $('#detail-chain-note').textContent = 'No process chain yet. Lookout checks about twice a second, so a program that starts and exits faster than that can be missed. File and network events still show up below.';
+    $('#detail-chain-note').textContent = 'No process chain yet. Harness checks about twice a second, so a program that starts and exits faster than that can be missed. File and network events still show up below.';
     $('#detail-play').hidden = true;
   } else {
     $('#detail-play').hidden = false;
@@ -761,7 +761,7 @@ function downloadReport() {
   const blob = new Blob([md], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = state.selected ? 'lookout-session.md' : 'lookout-report.md';
+  a.download = state.selected ? 'harness-session.md' : 'harness-report.md';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -815,7 +815,7 @@ async function markNormal(eventId) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { toast(j.error || 'Could not save that'); return; }
   state.baselines = j.baselines || state.baselines;
-  toast('Saved. Lookout will treat that as normal in this project. It stays in the log.');
+  toast('Saved. Harness will treat that as normal in this project. It stays in the log.');
   render();
 }
 
@@ -1042,7 +1042,7 @@ function connect() {
     const n = JSON.parse(m.data);
     toast(n.title, 7000);
     if (window.Notification && Notification.permission === 'granted') {
-      try { new Notification('Lookout', { body: `${n.title}. ${n.body}` }); } catch {}
+      try { new Notification('Harness', { body: `${n.title}. ${n.body}` }); } catch {}
     }
   });
   es.addEventListener('reset', () => { state.events = []; state.shownScore = null; render(); });
@@ -1050,7 +1050,7 @@ function connect() {
   es.addEventListener('demo', (m) => {
     const d = JSON.parse(m.data);
     toast(d.cutOff
-      ? `Lookout cut the upload off. The pretend attacker only got ${d.bytes} bytes.`
+      ? `Harness cut the upload off. The pretend attacker only got ${d.bytes} bytes.`
       : `The pretend attacker received ${d.bytes} bytes.`, 7000);
   });
 }

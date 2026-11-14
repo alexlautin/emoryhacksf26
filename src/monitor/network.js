@@ -10,7 +10,7 @@ import { listConnections } from '../platform.js';
 const POLL_MS = 1000;
 const seen = new Set(); // `${agentId}|${pid or root}|${ip}:${port}`
 const dnsCache = new Map();
-const IGNORE_PORTS = new Set([+(process.env.PORT ?? 4100)]); // Lookout's own dashboard
+const IGNORE_PORTS = new Set([+(process.env.PORT ?? 4100)]); // Harness's own dashboard
 
 async function reverse(ip) {
   if (dnsCache.has(ip)) return dnsCache.get(ip);

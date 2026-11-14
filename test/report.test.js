@@ -10,13 +10,13 @@ test('the report names the score, the chain, and the decoy', () => {
     {
       id: 2, ts: now + 1, agentId: 'demo-1', kind: 'process', risk: 'critical',
       title: 'A package install script looked through files',
-      command: 'cat ~/.lookout/bait/aws_credentials',
-      reasons: ['touched a decoy secret Lookout planted (~/.lookout/bait/aws_credentials). No honest task needs this file'],
+      command: 'cat ~/.harness/bait/aws_credentials',
+      reasons: ['touched a decoy secret Harness planted (~/.harness/bait/aws_credentials). No honest task needs this file'],
       steps: [
         { role: 'agent', label: 'Demo agent', pid: 1 },
         { role: 'shell', cmd: 'zsh -c npm install', pid: 2 },
         { role: 'install', cmd: 'npm install', pid: 3 },
-        { role: 'shell', cmd: 'cat ~/.lookout/bait/aws_credentials', pid: 4 },
+        { role: 'shell', cmd: 'cat ~/.harness/bait/aws_credentials', pid: 4 },
       ],
     },
   ];
@@ -24,7 +24,7 @@ test('the report names the score, the chain, and the decoy', () => {
   assert.equal(model.score.score < 100, true);
   assert.equal(model.sessions[0].chain.steps[2].name, 'Package install');
   const md = incidentMarkdown(model);
-  assert.match(md, /# Lookout report/);
+  assert.match(md, /# Harness report/);
   assert.match(md, /out of 100/);
   assert.match(md, /Demo agent -> Shell -> Package install -> Install script/);
   assert.match(md, /decoy/);
@@ -35,7 +35,7 @@ test('the report names the score, the chain, and the decoy', () => {
 
 test('print html keeps a heading between lists', () => {
   const html = incidentPrintHtml([
-    '# Lookout report',
+    '# Harness report',
     '',
     '## Score',
     '',

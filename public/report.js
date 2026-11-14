@@ -44,9 +44,9 @@ function bullet(text) {
 
 export function incidentMarkdown(model) {
   const lines = [];
-  lines.push('# Lookout report');
+  lines.push('# Harness report');
   lines.push('');
-  lines.push(`Written ${model.generated}${model.os ? ` on this ${model.os}` : ''}. Lookout did not send this anywhere.`);
+  lines.push(`Written ${model.generated}${model.os ? ` on this ${model.os}` : ''}. Harness did not send this anywhere.`);
   lines.push('');
   lines.push('## Score');
   lines.push('');
@@ -96,7 +96,7 @@ export function incidentMarkdown(model) {
     }
     if (s.events.items.length) {
       lines.push('');
-      lines.push('### What Lookout flagged');
+      lines.push('### What Harness flagged');
       lines.push('');
       for (const e of s.events.items) {
         const when = new Date(e.ts).toISOString();
@@ -110,7 +110,7 @@ export function incidentMarkdown(model) {
   lines.push('');
   lines.push('## Limits');
   lines.push('');
-  lines.push('Lookout checks the process list about twice a second. A program that starts and exits faster than that can be missed. When a decoy file is read, the file system does not say which process read it, so Lookout credits the agent that was active.');
+  lines.push('Harness checks the process list about twice a second. A program that starts and exits faster than that can be missed. When a decoy file is read, the file system does not say which process read it, so Harness credits the agent that was active.');
   lines.push('');
   lines.push('This is a Markdown file. To get a PDF, open the dashboard report and choose Save as PDF in the print dialog.');
   lines.push('');
