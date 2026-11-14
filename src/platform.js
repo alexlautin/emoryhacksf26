@@ -67,6 +67,26 @@ let winLatest = null;
 let winWaiters = [];
 let winPs = null;
 
+/**
+ * Turn one Win32_Process listing into Map pid -> { pid, ppid, comm, args }.
+ * Windows stops reporting a command line for a process that is shutting down (and never reports
+ * one for processes it won't let you inspect). Such a process keeps the command line it had in the
+ * previous snapshot; if there was none it is marked `noArgs`, so nothing is concluded from its
+ * bare name. Without this, every helper of the Claude desktop app (all named claude.exe) looked
+ * like a new Claude Code session for a moment whenever the app closed.
+ */
+export function parseWinSnapshot(list, prev = null) {
+  const procs = new Map();
+  for (const p of list) {
+    const comm = p.Name ?? '';
+    const before = prev?.get(p.ProcessId);
+    const kept = before && !before.noArgs && before.comm === comm && before.ppid === p.ParentProcessId ? before.args : '';
+    const args = p.CommandLine || kept;
+    procs.set(p.ProcessId, { pid: p.ProcessId, ppid: p.ParentProcessId, comm, args: args || comm, ...(args ? {} : { noArgs: true }) });
+  }
+  return procs;
+}
+
 function startWinLister() {
   const script = `
 $ErrorActionPreference = 'SilentlyContinue'
@@ -85,11 +105,7 @@ while ($true) {
       const json = buf.slice(0, i).trim();
       buf = buf.slice(i + MARK.length);
       try {
-        const list = [].concat(JSON.parse(json));
-        const procs = new Map();
-        for (const p of list) {
-          procs.set(p.ProcessId, { pid: p.ProcessId, ppid: p.ParentProcessId, comm: p.Name ?? '', args: p.CommandLine || p.Name || '' });
-        }
+        const procs = parseWinSnapshot([].concat(JSON.parse(json)), winLatest);
         winLatest = procs;
         winLatestAt = Date.now();
         for (const w of winWaiters) w.resolve(procs);

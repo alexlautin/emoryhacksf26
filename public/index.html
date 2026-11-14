@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f3f0" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#262729" media="(prefers-color-scheme: dark)" />
   <title>Harness</title>
   <link rel="icon" href="/ui/pug.png" />
   <script>
@@ -21,7 +23,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <a class="skip" href="#rows">Skip to activity</a>
+  <a class="skip" href="#body">Skip to content</a>
 
   <div class="win" id="win">
     <nav class="side" aria-label="Harness">
@@ -32,16 +34,17 @@
       </div>
 
       <div class="side-scroll">
-        <button type="button" class="side-item" data-nav="overview"><svg class="i" aria-hidden="true"><use href="#layout-dashboard"/></svg><span class="side-text">Overview</span></button>
+        <button type="button" class="side-item" data-nav="home"><svg class="i" aria-hidden="true"><use href="#house"/></svg><span class="side-text">Home</span></button>
+        <button type="button" class="side-item" data-nav="activity"><svg class="i" aria-hidden="true"><use href="#activity"/></svg><span class="side-text">Activity</span></button>
         <button type="button" class="side-item" data-nav="alerts"><svg class="i" aria-hidden="true"><use href="#bell"/></svg><span class="side-text">Alerts</span><span id="alert-count" class="side-count"></span></button>
 
-        <h2 class="side-head">Agents</h2>
+        <div class="side-head-row"><h2 class="side-head">Agents</h2><button type="button" class="side-clear" id="side-clear" data-clear-agents hidden title="Take finished sessions off the list. Their activity stays in the log.">Clear finished</button></div>
         <div id="side-agents" class="side-list"></div>
       </div>
 
       <div class="side-foot">
         <div id="pug" class="pug" aria-hidden="true"></div>
-        <button type="button" class="side-score" id="score-live" data-nav="overview">
+        <button type="button" class="side-score" id="score-live" data-nav="home">
           <span class="ss-row">
             <span class="ss-label">Safety score</span>
             <span class="ss-num"><b id="score-num">--</b> / 100</span>
@@ -57,7 +60,7 @@
     <section class="main" aria-labelledby="view-title">
       <header class="toolbar" data-tauri-drag-region>
         <div class="tb-title" data-tauri-drag-region>
-          <h1 id="view-title">Overview</h1>
+          <h1 id="view-title">Home</h1>
           <p id="view-sub" class="tb-sub"></p>
         </div>
         <div id="tabs" class="tabs" role="tablist" aria-label="Show" hidden>
@@ -78,7 +81,19 @@
       <p id="conn-error" class="conn-error" hidden role="status">Can’t reach Harness. Trying again.</p>
       <div id="alert" class="banner" hidden role="status" aria-live="polite"></div>
 
-      <div class="body">
+      <div class="body" id="body">
+        <div class="home" id="home" hidden>
+          <div class="home-in">
+            <section class="h-score" id="hc-score" aria-label="Safety score"></section>
+            <div class="h-stats" id="hc-stats"></div>
+            <div class="h-cols">
+              <section id="hc-agents" aria-label="Agents"></section>
+              <section id="hc-recent" aria-label="Worth a look"></section>
+            </div>
+            <section id="hc-chart" aria-label="The last hour"></section>
+            <footer class="h-foot" id="hc-foot"></footer>
+          </div>
+        </div>
         <div class="table" id="table">
           <div id="thead" class="thead" aria-hidden="true"></div>
           <ul id="rows" class="rows" aria-label="Activity" tabindex="-1"></ul>
@@ -120,7 +135,7 @@
         <p><button type="button" class="btn" id="prefs-contrast" aria-pressed="false">Higher contrast</button></p>
       </fieldset>
       <fieldset data-local-only>
-        <legend>Menu bar item</legend>
+        <legend id="display-legend">Menu bar item</legend>
         <div class="choice-list" role="radiogroup" aria-label="Menu bar item" id="display-seg">
           <button type="button" data-display="score" role="radio">Score</button>
           <button type="button" data-display="icon" role="radio">Icon only</button>

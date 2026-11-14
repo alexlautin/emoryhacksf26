@@ -24,6 +24,15 @@ const DETACHED_REASON = 'kept running in the background after the program that s
 const known = new Map();
 /** agentId -> root pid (kept after the agent exits, so detached leftovers still map to it) */
 const agentRoots = new Map();
+/**
+ * Root pid -> the agent id it has now. Normally `<kind>-<pid>`. When an agent exits and a later
+ * agent is handed the same pid (Windows reuses pids quickly), the new one gets its own id, so it
+ * shows up as a new session instead of being filed under the finished one.
+ */
+const rootIds = new Map();
+/** Agent ids whose root pid has been seen missing from a snapshot: that session is over for good. */
+const goneRoots = new Set();
+const idFor = (kind, pid) => rootIds.get(pid) ?? `${kind}-${pid}`;
 /** The last full snapshot, so deep mode can describe a process's parents. */
 let lastProcs = new Map();
 
@@ -40,15 +49,24 @@ export function setProcessSource({ list, cwd, self } = {}) {
 export function resetProcessState() {
   known.clear();
   agentRoots.clear();
+  rootIds.clear();
+  goneRoots.clear();
   lastProcs = new Map();
   firstPoll = true;
 }
 
 /**
- * Programs of the Claude desktop app: anything inside Claude.app on macOS, AnthropicClaude\ on
- * Windows. Case matters: Claude Code sessions the app starts live in a lowercase claude.app.
+ * Programs of the Claude desktop app: anything inside Claude.app on macOS; on Windows,
+ * AnthropicClaude\ (the installer build) or WindowsApps\Claude_<version>\ (the Microsoft Store
+ * build). Case matters: Claude Code sessions the app starts live in a lowercase claude.app.
  */
-const IS_CLAUDE_DESKTOP = /[\\/]Claude\.app[\\/]Contents[\\/]|[\\/]AnthropicClaude[\\/]/;
+const IS_CLAUDE_DESKTOP = /[\\/]Claude\.app[\\/]Contents[\\/]|[\\/]AnthropicClaude[\\/]|[\\/]WindowsApps[\\/]Claude_[^\\/]+[\\/]/;
+
+/** The program's path from a command line. Windows only reports the bare name as `comm`. */
+function exePath(args) {
+  const m = String(args ?? '').match(/^\s*(?:"([^"]+)"|(\S+))/);
+  return m ? m[1] ?? m[2] : '';
+}
 
 function agentKind(comm, args) {
   if (/demo[\\/]fake-agent\.js/.test(args)) return 'demo';
@@ -56,7 +74,7 @@ function agentKind(comm, args) {
   // The Claude desktop app's own process is also named Claude. It isn't an agent (its Claude Code
   // sessions run as separate `claude` processes), and counting it would put everything started from
   // the app, including its terminal, under an agent.
-  if (IS_CLAUDE_DESKTOP.test(comm)) return null;
+  if (IS_CLAUDE_DESKTOP.test(comm) || IS_CLAUDE_DESKTOP.test(exePath(args))) return null;
   if (base === 'claude' || /@anthropic-ai[\\/]claude-code[\\/]/.test(args)) return 'claude';
   if (base === 'codex' || /@openai[\\/]codex[\\/]/.test(args)) return 'codex';
   if (base === 'gemini' || /@google[\\/]gemini-cli[\\/]/.test(args)) return 'gemini';
@@ -66,6 +84,9 @@ function agentKind(comm, args) {
   if (base === 'amp' || /@sourcegraph[\\/]amp[\\/]/.test(args)) return 'amp';
   return null;
 }
+
+/** A process whose command line Windows wouldn't give is never called an agent on its name alone. */
+const kindOf = (p) => (p.noArgs ? null : agentKind(p.comm, p.args));
 
 const keyOf = (p) => `${p.pid}:${p.args}`;
 
@@ -81,8 +102,8 @@ function ownerOf(pid, procs) {
   let guard = 0;
   while (cur && guard++ < 64) {
     if (cur.pid === SELF) return null; // Harness's own helpers
-    const kind = agentKind(cur.comm, cur.args);
-    if (kind) return { agentId: `${kind}-${cur.pid}`, rootPid: cur.pid, detached: false };
+    const kind = kindOf(cur);
+    if (kind) return { agentId: idFor(kind, cur.pid), rootPid: cur.pid, detached: false };
     chain.push(cur);
     if (cur.ppid <= 1 || cur.ppid === cur.pid) break;
     cur = procs.get(cur.ppid);
@@ -105,9 +126,11 @@ export function projectName(cwd) {
 }
 
 async function registerAgent(root) {
-  const kind = agentKind(root.comm, root.args);
-  const id = `${kind}-${root.pid}`;
+  const kind = kindOf(root);
+  let id = `${kind}-${root.pid}`;
+  for (let n = 2; agentRoots.has(id); n++) id = `${kind}-${root.pid}-${n}`; // the pid was used by an earlier session
   agentRoots.set(id, root.pid);
+  rootIds.set(root.pid, id);
   const cwd = await source.cwd(root.pid);
   const project = projectName(cwd);
   const agent = upsertAgent({ id, kind, label: AGENT_LABELS[kind], pid: root.pid, cwd, project, startedAt: Date.now(), lastActive: Date.now(), alive: true });
@@ -128,16 +151,18 @@ export async function pollProcesses(procs) {
 
   // 1. Discover agents.
   for (const p of procs.values()) {
-    const kind = agentKind(p.comm, p.args);
+    const kind = kindOf(p);
     if (!kind) continue;
-    const id = `${kind}-${p.pid}`;
-    if (!agentRoots.has(id) && ownerOf(p.ppid, procs) === null && (kind === 'demo' || !isUnderSelf(p, procs))) {
+    const id = idFor(kind, p.pid);
+    // New, or the session that had this pid is over and the pid has been handed to a new agent.
+    if ((!agentRoots.has(id) || goneRoots.has(id)) && ownerOf(p.ppid, procs) === null && (kind === 'demo' || !isUnderSelf(p, procs))) {
       await registerAgent(p);
     }
   }
   // 2. Mark agents that exited.
   for (const [id, pid] of agentRoots) {
     const a = getAgent(id);
+    if (!procs.has(pid)) goneRoots.add(id);
     if (!procs.has(pid) && a?.alive) {
       upsertAgent({ id, alive: false, paused: false });
       addEvent({ agentId: id, kind: 'system', risk: 'info', title: `${a.label} in ${a.project} stopped`, detail: `pid ${pid}` });
@@ -157,8 +182,9 @@ export async function pollProcesses(procs) {
     const cmd = extractCommand(p.args);
     const entry = { ...p, key, cmd, agentId: owner.agentId };
     known.set(p.pid, entry);
-    // Processes that already existed when Harness started aren't news.
-    if (firstPoll) continue;
+    // Processes that already existed when Harness started aren't news. Neither is conhost.exe:
+    // Windows starts one beside every console program, so it would double every row.
+    if (firstPoll || exeName(p.comm) === 'conhost') continue;
     emitProcess(entry, owner.rootPid, procs, { detached: owner.detached });
   }
   firstPoll = false;
@@ -283,7 +309,7 @@ export function recordExec({ pid, ppid, comm, args, agentId }) {
  */
 export function collectTree(agentId, rootPid, procs) {
   const root = procs.get(rootPid);
-  const rootLive = !!root && agentKind(root.comm, root.args) !== null;
+  const rootLive = !!root && kindOf(root) !== null;
   const children = new Map();
   for (const p of procs.values()) {
     if (!children.has(p.ppid)) children.set(p.ppid, []);

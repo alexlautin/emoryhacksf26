@@ -5,9 +5,9 @@ const NOTES = {
   macos: 'This computer is a Mac.',
   windows: 'This computer runs Windows.',
   linux: 'This computer runs Linux. Harness does not support Linux.',
-  ios: 'This is an iPhone. Harness is a desktop app.',
-  ipad: 'This is an iPad. Harness is a desktop app.',
-  android: 'This is an Android device. Harness is a desktop app.',
+  ios: 'This is an iPhone. Harness installs on a Mac or PC, and then this phone can pair with it.',
+  ipad: 'This is an iPad. Harness installs on a Mac or PC, and then this iPad can pair with it.',
+  android: 'This is an Android device. Harness installs on a Mac or PC, and then this phone can pair with it.',
   unknown: 'This does not look like macOS or Windows.',
 };
 

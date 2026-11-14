@@ -1,10 +1,11 @@
 // Harness dashboard. Plain JS, live updates over Server-Sent Events.
-// Layout: a sidebar (overview, alerts, agents, score), a list in the middle, and a details panel.
+// Layout: a sidebar (home, activity, alerts, agents, score), then either the Home cards or a list
+// with a details panel beside it.
 // "Commands" switches the list between plain language and the exact commands.
 import { computeScore, withHealth } from './score.js';
 import { canBaseline } from './baseline.js';
 import { sessionTouch } from './touch.js';
-import { mountPug, setPugMood } from './pug.js';
+import { mountPug, setPugMood, pugReact } from './pug.js';
 
 const $ = (s) => document.querySelector(s);
 const PANEL = document.documentElement.classList.contains('panel');
@@ -72,6 +73,8 @@ function setList(el, items) {
 
 const state = {
   degraded: [], // monitors that stopped working: { label, message }
+  monitors: 0, // how many monitors the server runs
+  os: '',
   agents: new Map(),
   events: [],
   settings: { autoProtect: 'dangerous', menuBarDisplay: 'score' },
@@ -84,7 +87,7 @@ const state = {
   followDemoSince: 0,
   autoNavAt: 0,
   // What the window shows
-  view: 'overview', // overview | alerts | agent
+  view: 'home', // home | activity | alerts | agent
   agentId: null,
   tab: 'processes',
   sel: null,
@@ -112,6 +115,7 @@ const clock = (ts) => new Date(ts).toLocaleTimeString([], { hour: 'numeric', min
 const sentence = (r) => (/^(this|happened)\b/.test(r) ? r[0].toUpperCase() + r.slice(1) : `It ${r}`);
 const eventsOf = (id) => state.events.filter((e) => e.agentId === id);
 const liveAgents = () => [...state.agents.values()].filter((a) => a.alive);
+const finishedAgents = () => [...state.agents.values()].filter((a) => !a.alive);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const isWhole = (a) => !a?.project || a.project === 'the whole computer';
 const agentName = (a) => (isWhole(a) ? a?.label ?? 'Agent' : a.project);
@@ -404,6 +408,7 @@ function renderSidebar() {
         ${agentLogo(a)}<span class="side-text">${esc(agentName(a))}</span><span class="sdot ${st.cls}" aria-label="${esc(st.text)}"></span></button>`];
     }));
   }
+  $('#side-clear').hidden = state.remote || !finishedAgents().length;
   const alerts = state.events.filter((e) => e.kind !== 'system' && !e.baseline && RANK[e.risk] >= 3 && now - e.ts < 24 * 3600 * 1000).length;
   const ac = $('#alert-count');
   ac.textContent = alerts ? String(alerts) : '';
@@ -419,7 +424,7 @@ function renderScore() {
     word.className = 'ss-word';
     word.textContent = 'Loading';
     fill.style.width = '0%';
-    setPugMood({ level: 'loading' });
+    setPugMood({ level: 'loading', lost: !!state.failedLoad });
     return;
   }
   const s = scoreNow();
@@ -431,7 +436,7 @@ function renderScore() {
   $('#score-live').setAttribute('aria-label', `Safety score ${s.score} out of 100. ${s.level.blurb}`);
   const paused = liveAgents().some((a) => a.paused && byUs(a.pausedBy));
   const working = liveAgents().some((a) => !a.paused && Date.now() - (a.lastActive ?? 0) < 15000);
-  setPugMood({ level: s.level.cls, score: s.score, paused, working, agents: liveAgents().length });
+  setPugMood({ level: s.level.cls, score: s.score, paused, working, agents: liveAgents().length, lost: !state.connected, unwatched: state.degraded.length > 0 });
 }
 
 function renderProtect() {
@@ -463,10 +468,11 @@ function renderToolbar() {
   } else {
     tabs.hidden = true;
     const live = liveAgents().length;
-    $('#view-title').textContent = state.view === 'alerts' ? 'Alerts' : 'Overview';
+    $('#view-title').textContent = { alerts: 'Alerts', activity: 'Activity' }[state.view] ?? 'Home';
     $('#view-sub').textContent = state.view === 'alerts'
       ? 'Risky moments and what Harness did about them'
-      : live ? `Watching ${plural(live, 'agent')}` : 'No agents running';
+      : state.view === 'activity' ? 'Everything worth noting, newest first'
+        : live ? `Watching ${plural(live, 'agent')}` : 'No agents running';
   }
   const t = $('#cmd-toggle');
   t.setAttribute('aria-pressed', String(state.showCommands));
@@ -532,6 +538,153 @@ function renderList() {
   setHTML(empty, `<img src="/ui/pug.png" alt="" /><strong>${liveAgents().length ? 'All quiet' : 'No agents running'}</strong>
     <p>${liveAgents().length ? 'Risky commands, secret reads and uploads show up here as they happen.' : 'Open Claude Code or Codex and Harness picks it up on its own.'}</p>
     <button type="button" class="pbtn primary" data-demo>${icon('play')}Run Demo Attack</button>`);
+}
+
+/* ---------------- Render: home ---------------- */
+
+const HOUR = 3600 * 1000;
+const isAlert = (e) => e.kind !== 'system' && !e.baseline && RANK[e.risk] >= 3;
+const worthALook = (e) => !!e.guard || (e.kind !== 'system' && !e.baseline && RANK[e.risk] >= 2);
+const homeHead = (title, extra = '') => `<header class="h-head"><h2>${esc(title)}</h2>${extra}</header>`;
+
+function homeScore() {
+  const s = scoreNow();
+  const lost = s.factors.filter((f) => f.lost > 0).sort((a, b) => b.lost - a.lost);
+  const head = s.level.unwatched ? s.level.name : HEADLINE[s.level.cls] ?? s.level.name;
+  return `
+    <div class="hs-top">
+      <div class="hs-num"><b>${s.score}</b><span>/ 100</span></div>
+      <div class="hs-copy"><p class="hs-head ${s.level.cls}">${esc(head)}</p><p class="hs-blurb">${esc(s.level.blurb)}</p></div>
+      <div class="hs-actions">
+        <a class="pbtn" href="/api/report.md" download>Download Report</a>
+        <button type="button" class="pbtn" data-demo>Run Demo Attack</button>
+      </div>
+    </div>
+    <span class="ss-track" aria-hidden="true"><span class="ss-fill ${s.level.cls}" style="width:${s.score}%"></span></span>
+    ${lost.length ? `<ul class="hs-factors">${lost.map((f) => `<li>${esc(f.name)}<b class="${f.lost >= 20 ? 't-bad' : f.lost >= 5 ? 't-warn' : ''}">−${f.lost}</b></li>`).join('')}</ul>` : ''}`;
+}
+
+function homeStats() {
+  const now = Date.now();
+  const live = liveAgents();
+  const working = live.filter((a) => !a.paused && now - (a.lastActive ?? 0) < 15000).length;
+  const paused = live.filter((a) => a.paused).length;
+  const idle = live.length - working - paused;
+  const alerts = state.events.filter((e) => isAlert(e) && now - e.ts < 24 * HOUR);
+  const lastAlert = alerts.reduce((m, e) => Math.max(m, e.ts), 0);
+  const stopped = state.events.filter((e) => e.prevented || e.gate === 'deny' || ((e.guard === 'paused' || e.guard === 'ended') && /^Harness/.test(e.title ?? ''))).length;
+  const programs = state.events.filter((e) => e.kind === 'process').length;
+  const hosts = new Set(state.events.filter((e) => e.kind === 'network' && e.host).map((e) => e.host)).size;
+  const tiles = [
+    { n: live.length, label: live.length === 1 ? 'Agent running' : 'Agents running',
+      sub: !live.length ? 'None right now' : [working && `${working} working`, paused && `${paused} paused`, idle && `${idle} idle`].filter(Boolean).join(' · ') },
+    { n: alerts.length, label: alerts.length === 1 ? 'Alert today' : 'Alerts today', bad: alerts.length > 0, nav: 'alerts',
+      sub: alerts.length ? `Latest ${ago(lastAlert)}` : 'None in the last 24 hours' },
+    { n: stopped, label: stopped === 1 ? 'Time Harness stepped in' : 'Times Harness stepped in', nav: 'alerts', sub: 'Blocked, paused or ended' },
+    { n: programs, label: programs === 1 ? 'Program watched' : 'Programs watched', nav: 'activity', sub: `${plural(hosts, 'server')} contacted` },
+  ];
+  return tiles.map((t) => {
+    const body = `<b class="${t.bad ? 't-bad' : ''}">${t.n.toLocaleString()}</b><span class="st-label">${esc(t.label)}</span><span class="st-sub">${esc(t.sub)}</span>`;
+    return t.nav ? `<button type="button" class="st" data-nav="${t.nav}">${body}</button>` : `<div class="st">${body}</div>`;
+  }).join('');
+}
+
+function homeAgents() {
+  const live = liveAgents().sort((a, b) => (b.paused - a.paused) || ((b.lastActive ?? 0) - (a.lastActive ?? 0)));
+  const done = finishedAgents().sort((a, b) => (b.lastActive ?? b.startedAt ?? 0) - (a.lastActive ?? a.startedAt ?? 0));
+  const shown = [...live, ...done.slice(0, 3)];
+  const more = done.length - Math.min(done.length, 3);
+  const head = homeHead('Agents', [
+    !state.remote && live.filter((a) => !a.paused).length > 1 ? '<button type="button" class="linkbtn" data-pause-all>Pause all</button>' : '',
+    !state.remote && done.length ? '<button type="button" class="linkbtn" data-clear-agents title="Take finished sessions off the list. Their activity stays in the log.">Clear finished</button>' : '',
+  ].join(''));
+  if (!shown.length) {
+    return `${head}<div class="h-empty"><strong>No agents running</strong>
+      <p>Open Claude Code, Codex or another coding agent and Harness picks it up on its own.</p></div>`;
+  }
+  return `${head}<ul class="h-list">${shown.map((a) => {
+    const st = sessionState(a);
+    const s = computeScore(eventsOf(a.id));
+    const act = !a.alive || state.remote ? ''
+      : a.paused ? `<button type="button" class="pbtn" data-act="resume" data-id="${esc(a.id)}">Continue</button>`
+        : `<button type="button" class="pbtn" data-act="pause" data-id="${esc(a.id)}">Pause</button>`;
+    return `<li class="${a.alive ? '' : 'done'}">
+      <button type="button" class="h-row" data-nav="agent" data-id="${esc(a.id)}" title="${esc(a.cwd || a.project || a.label)}">
+        ${agentLogo(a)}
+        <span class="h-text"><span class="h-name">${esc(agentName(a))}</span>
+          <span class="h-sub"><span class="sdot ${st.cls}"></span>${esc(isWhole(a) ? st.text : `${a.label} · ${st.text}`)}</span></span>
+        <span class="h-num ${s.level.cls}" title="This session’s score">${s.score}</span>
+      </button>${act}</li>`;
+  }).join('')}</ul>${more > 0 ? `<p class="h-more">And ${plural(more, 'older finished session')}.</p>` : ''}`;
+}
+
+function homeRecent() {
+  const list = state.events.filter(worthALook).slice(-5).reverse();
+  const head = homeHead('Worth a look', list.length ? '<button type="button" class="linkbtn" data-nav="alerts">See all</button>' : '');
+  if (!list.length) {
+    return `${head}<div class="h-empty"><strong>Nothing risky so far</strong>
+      <p>Risky commands, secret reads and uploads show up here as they happen.</p></div>`;
+  }
+  return `${head}<ul class="h-list">${list.map((e) => {
+    const a = state.agents.get(e.agentId);
+    return `<li><button type="button" class="h-row" ${a ? `data-show-event="${e.id}"` : 'data-nav="alerts"'}>
+      <span class="h-text"><span class="h-name">${esc(e.title)}</span>
+        <span class="h-sub">${esc(a ? `${a.label}${isWhole(a) ? '' : ` · ${a.project}`}` : 'Harness')} · ${esc(ago(e.ts))}</span></span>
+      ${verdictHTML(verdictOf(e))}
+    </button></li>`;
+  }).join('')}</ul>`;
+}
+
+function homeChart() {
+  const N = 30;
+  const step = 2 * 60 * 1000;
+  const end = Math.ceil(Date.now() / step) * step;
+  const start = end - N * step;
+  const b = Array.from({ length: N }, () => ({ n: 0, warn: 0, bad: 0 }));
+  for (const e of state.events) {
+    if (e.kind === 'system' || e.ts < start || e.ts >= end) continue;
+    const x = b[Math.floor((e.ts - start) / step)];
+    x.n++;
+    if (!e.baseline && RANK[e.risk] >= 3) x.bad++;
+    else if (!e.baseline && RANK[e.risk] >= 2) x.warn++;
+  }
+  const total = b.reduce((n, x) => n + x.n, 0);
+  const max = Math.max(4, ...b.map((x) => x.n));
+  const bars = b.map((x, i) => {
+    const at = new Date(start + i * step).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const tip = `${at} · ${plural(x.n, 'event')}${x.bad ? `, ${x.bad} risky` : ''}${x.warn ? `, ${x.warn} worth a look` : ''}`;
+    if (!x.n) return `<span class="hb empty" title="${esc(tip)}"></span>`;
+    return `<span class="hb${x.bad ? ' bad' : x.warn ? ' warn' : ''}" style="height:${Math.max(8, Math.round((x.n / max) * 100))}%" title="${esc(tip)}"></span>`;
+  }).join('');
+  return `${homeHead('The last hour', `<span class="h-note">${plural(total, 'event')}</span>`)}
+    <div class="hbars" role="img" aria-label="${esc(`${plural(total, 'event')} in the last hour`)}">${bars}</div>`;
+}
+
+function homeFoot() {
+  const lvl = state.settings.autoProtect ?? 'off';
+  const bad = state.degraded;
+  const health = bad.length
+    ? `<span class="hf"><span class="sdot warn"></span>${esc(bad.map((d) => d.message || `${d.label} isn’t working`).join('. '))}</span>`
+    : `<span class="hf"><span class="sdot"></span>${state.monitors ? `All ${plural(state.monitors, 'monitor')} running` : 'Monitors running'}</span>`;
+  const protect = `<span class="sdot ${lvl === 'off' ? 'idle' : lvl === 'risky' ? 'paused' : ''}"></span>Auto-protect ${esc((PROTECT[lvl] ?? PROTECT.off).word.toLowerCase())}`;
+  if (state.remote) return `<span class="hf">${protect}</span>${health}<span class="hf">Viewing from your phone</span>`;
+  const p = state.phone;
+  return `<button type="button" class="hf" data-prefs>${protect}</button>${health}
+    <button type="button" class="hf" data-prefs="phone">${p?.enabled ? '<span class="sdot"></span>Phone access on' : 'Set up phone access'}</button>`;
+}
+
+const HOME_PARTS = { 'hc-score': homeScore, 'hc-stats': homeStats, 'hc-agents': homeAgents, 'hc-recent': homeRecent, 'hc-chart': homeChart, 'hc-foot': homeFoot };
+
+function renderHome() {
+  const on = state.view === 'home';
+  $('#home').hidden = !on;
+  $('#table').hidden = on;
+  $('#inspector').hidden = on;
+  const win = $('#win');
+  win.dataset.view = state.view;
+  win.classList.toggle('has-sel', !!state.sel);
+  if (!on || !state.ready) return;
+  for (const [id, fn] of Object.entries(HOME_PARTS)) setHTML($(`#${id}`), fn());
 }
 
 /* ---------------- Render: details panel ---------------- */
@@ -600,6 +753,7 @@ function insAgent(a) {
       ${a.alive ? endButton(a, '', 'End Session') : ''}
       <button type="button" class="pbtn" data-explain="${esc(a.id)}" ${ex?.loading ? 'disabled' : ''}>${icon('sparkles')}Explain</button>
       <a class="pbtn" href="/api/report.md?agent=${encodeURIComponent(a.id)}" download>${icon('download')}Report</a>
+      ${!a.alive && !state.remote ? `<button type="button" class="pbtn" data-clear-agents="${esc(a.id)}" title="Take this finished session off the list. Its activity stays in the log.">${icon('x')}Remove</button>` : ''}
     </div>`;
 }
 
@@ -634,7 +788,7 @@ function insEvent(e) {
   const a = state.agents.get(e.agentId);
   const v = verdictOf(e);
   return `
-    <div><div class="ins-title">${esc(e.title)}</div><div class="ins-sub">${a ? esc(`${a.label}${isWhole(a) ? '' : ` in ${a.project}`}`) : 'No agent'} · ${esc(new Date(e.ts).toLocaleString())}</div></div>
+    <div><div class="ins-title">${esc(e.title)}</div><div class="ins-sub">${a ? esc(`${a.label}${isWhole(a) ? '' : ` in ${a.project}`}`) : e.agentId ? 'A session you cleared' : 'Harness'} · ${esc(new Date(e.ts).toLocaleString())}</div></div>
     ${kv([
       ['Verdict', v ? vText(v) : 'Routine'],
       ['Server', e.host ? `<span class="mono">${esc(e.host)}</span>` : ''],
@@ -678,6 +832,7 @@ function renderInspector() {
   else if (r?.hostRow) html = insHost(r);
   else if (state.view === 'agent' && state.agents.get(state.agentId)) html = insAgent(state.agents.get(state.agentId));
   else html = insOverview();
+  if (r) html = `<button type="button" class="sheet-close" data-close-sel aria-label="Close details">${icon('x')}</button>${html}`;
   setHTML(el, html);
 }
 
@@ -691,6 +846,7 @@ function renderStatus() {
     text = `${plural(liveAgents().length, 'agent')} running · ${plural(state.events.filter(isNotable).length, 'thing')} worth noting`;
   }
   $('#status-left').textContent = state.connected ? text : `${text} · Reconnecting`;
+  if (state.os) $('#display-legend').textContent = state.os === 'Windows' ? 'System tray icon' : 'Menu bar item';
 }
 
 /* ---------------- Settings dialog ---------------- */
@@ -788,8 +944,8 @@ function render() {
     renderProtect();
     renderToolbar();
     renderBanner();
-    renderList();
-    renderInspector();
+    renderHome();
+    if (state.view !== 'home') { renderList(); renderInspector(); }
     renderStatus();
     renderPrefs();
   });
@@ -802,7 +958,7 @@ function go({ view, agentId = null, tab, sel = null, quiet = false }) {
   if (tab) state.tab = tab;
   else if (changed) state.tab = 'processes';
   state.sel = sel;
-  if (changed) { state.search = ''; $('#search').value = ''; $('#rows').scrollTop = 0; }
+  if (changed) { state.search = ''; $('#search').value = ''; $('#rows').scrollTop = 0; $('#home').scrollTop = 0; }
   if (!quiet) render();
   if (sel) requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`[data-row="${CSS.escape(sel)}"]`)?.scrollIntoView({ block: 'nearest' })));
 }
@@ -828,6 +984,17 @@ async function agentAction(action, agentId, btn) {
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+/** Take finished sessions off the list: one by id, or all of them. Their activity stays in the log. */
+async function clearAgents(agentId) {
+  const r = await post('/api/agents/clear', agentId ? { agentId } : {}).catch(() => null);
+  const j = await r?.json().catch(() => ({}));
+  if (!r?.ok) { toast(j?.error ?? 'Couldn’t clear those'); return; }
+  for (const id of j.cleared ?? []) state.agents.delete(id);
+  if (state.view === 'agent' && !state.agents.has(state.agentId)) go({ view: 'home', quiet: true });
+  toast(j.cleared?.length ? `Cleared ${plural(j.cleared.length, 'finished session')}.` : 'Nothing to clear.');
+  render();
 }
 
 async function explain(agentId) {
@@ -968,6 +1135,10 @@ document.addEventListener('click', (e) => {
   }
   const act = t.closest('[data-act]');
   if (act) { agentAction(act.dataset.act, act.dataset.id, act); return; }
+  if (t.closest('[data-pause-all]')) { pauseAll(); return; }
+  const clear = t.closest('[data-clear-agents]');
+  if (clear) { clearAgents(clear.dataset.clearAgents || null); return; }
+  if (t.closest('[data-close-sel]')) { state.sel = null; render(); return; }
   const row = t.closest('[data-row]');
   if (row) { state.sel = row.dataset.row === state.sel ? null : row.dataset.row; render(); return; }
   const nav = t.closest('[data-nav]');
@@ -988,24 +1159,29 @@ document.addEventListener('click', (e) => {
   const unbase = t.closest('[data-unbase]');
   if (unbase) { unmarkNormal(unbase.dataset.unbase); return; }
   if (t.closest('[data-demo]')) { $('#prefs').close?.(); runDemo(); return; }
-  if (t.closest('[data-prefs]')) {
+  const prefs = t.closest('[data-prefs]');
+  if (prefs) {
     const d = $('#prefs');
     if (!state.remote) phoneCall();
-    if (typeof d.showModal === 'function') d.showModal();
+    if (typeof d.showModal === 'function' && !d.open) d.showModal();
+    if (prefs.dataset.prefs === 'phone') requestAnimationFrame(() => $('#phone').scrollIntoView({ block: 'start' }));
   }
 });
 
 $('#cmd-toggle').addEventListener('click', () => setCommands(!state.showCommands));
 $('#search').addEventListener('input', (e) => { state.search = e.target.value; render(); });
 
-$('#protect-seg').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-level]');
-  if (!b) return;
+async function setProtect(level) {
+  if (!PROTECT[level] || level === state.settings.autoProtect) return;
   const prev = state.settings.autoProtect;
-  state.settings = { ...state.settings, autoProtect: b.dataset.level };
-  renderProtect();
-  const r = await post('/api/settings', { autoProtect: b.dataset.level }).catch(() => null);
-  if (!r?.ok) { state.settings = { ...state.settings, autoProtect: prev }; renderProtect(); toast('Couldn’t change auto-protect'); }
+  state.settings = { ...state.settings, autoProtect: level };
+  render();
+  const r = await post('/api/settings', { autoProtect: level }).catch(() => null);
+  if (!r?.ok) { state.settings = { ...state.settings, autoProtect: prev }; render(); toast('Couldn’t change auto-protect'); }
+}
+$('#protect-seg').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-level]');
+  if (b) setProtect(b.dataset.level);
 });
 $('#display-seg').addEventListener('click', (e) => {
   const b = e.target.closest('[data-display]');
@@ -1055,6 +1231,7 @@ async function phoneCall(action) {
     const p = await r.json();
     state.phone = p;
     renderPhone(p);
+    render();
     if (action === 'reset') toast('Every phone is signed out. Scan the new code to pair again.');
   } catch {
     if (action) toast('Couldn’t change phone access');
@@ -1092,7 +1269,8 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (typing || meta || e.altKey) return;
-  if (e.key === '/') { e.preventDefault(); $('#search').focus(); return; }
+  if (e.key === '/' && state.view !== 'home') { e.preventDefault(); $('#search').focus(); return; }
+  if (e.key === '1' || e.key === '2' || e.key === '3') { go({ view: ['home', 'activity', 'alerts'][+e.key - 1] }); return; }
   if (e.key === 'd' || e.key === 'D') { runDemo(); return; }
   if (e.key === 'c' || e.key === 'C') { setCommands(!state.showCommands); return; }
   if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key) && lastRows.length) {
@@ -1130,12 +1308,16 @@ async function load() {
     if (s.settings) state.settings = { ...state.settings, ...s.settings };
     if (s.baselines) state.baselines = s.baselines;
     state.degraded = (s.health ?? []).filter((m) => m.state !== 'ok');
+    state.monitors = (s.health ?? []).length;
+    state.os = s.os ?? '';
+    state.failedLoad = false;
     if (s.remote && !state.remote) {
       state.remote = true;
       document.documentElement.classList.add('remote');
       $('#foot-text').textContent = 'Viewing Harness from your phone. Settings can only be changed on your computer.';
     }
     if (!state.ready) {
+      if (!s.remote) phoneCall(); // for the Home card
       // Don't jump to a pause that happened before this window opened.
       state.autoNavAt = Math.max(0, ...s.agents.map((a) => a.pausedAt ?? 0));
       state.dismissedAlert = 0;
@@ -1143,6 +1325,7 @@ async function load() {
     state.ready = true;
     $('#conn-error').hidden = true;
   } catch {
+    state.failedLoad = true;
     $('#conn-error').hidden = false;
     $('#live').classList.remove('on');
     $('#live-text').textContent = 'Reconnecting';
@@ -1170,7 +1353,10 @@ function connect() {
   };
   es.addEventListener('agent', (m) => {
     const a = JSON.parse(m.data);
-    state.agents.set(a.id, { ...state.agents.get(a.id), ...a });
+    const had = state.agents.get(a.id);
+    if (state.ready && !had && a.alive) pugReact('greet');
+    else if (had?.alive && !a.alive) pugReact('bye');
+    state.agents.set(a.id, { ...had, ...a });
     render();
   });
   es.addEventListener('event', (m) => {
@@ -1180,6 +1366,8 @@ function connect() {
     else {
       state.events.push(e);
       if (e.risk === 'critical' && !e.baseline) announce(`Dangerous. ${e.title}`);
+      if (e.prevented || e.gate === 'deny') pugReact('bark');
+      else if (!e.baseline && e.risk === 'medium') pugReact('notice');
     }
     if (state.events.length > 5000) state.events.splice(0, state.events.length - 4500);
     render();
@@ -1191,8 +1379,13 @@ function connect() {
       try { new Notification('Harness', { body: `${n.title}. ${n.body}` }); } catch {}
     }
   });
-  es.addEventListener('health', (m) => { state.degraded = JSON.parse(m.data).filter((x) => x.state !== 'ok'); render(); });
+  es.addEventListener('health', (m) => { const h = JSON.parse(m.data); state.monitors = h.length; state.degraded = h.filter((x) => x.state !== 'ok'); render(); });
   es.addEventListener('reset', () => { state.events = []; state.sel = null; render(); });
+  es.addEventListener('cleared', (m) => {
+    for (const id of JSON.parse(m.data).ids ?? []) state.agents.delete(id);
+    if (state.view === 'agent' && !state.agents.has(state.agentId)) go({ view: 'home', quiet: true });
+    render();
+  });
   es.addEventListener('settings', (m) => { state.settings = { ...state.settings, ...JSON.parse(m.data) }; render(); });
   es.addEventListener('demo', (m) => {
     const d = JSON.parse(m.data);
