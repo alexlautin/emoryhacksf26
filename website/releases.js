@@ -15,3 +15,4 @@ export const RELEASES = {
     comingSoon: false,
   },
 };
+export const DEVPOST_URL = 'https://devpost.com/software/harness-1rhedk';

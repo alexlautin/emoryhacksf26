@@ -137,10 +137,10 @@ test('markdown escapes html, keeps safe links, and slugs headings', () => {
   assert.match(html, /<pre><code>curl -X POST<\/code><\/pre>/);
 });
 
-test('the white paper renders the sections the site links to', () => {
-  const md = fs.readFileSync(new URL('./whitepaper.md', import.meta.url), 'utf8');
+test('the about page render the sections the site links to', () => {
+  const md = fs.readFileSync(new URL('./about.md', import.meta.url), 'utf8');
   const html = renderMarkdown(md);
-  for (const id of ['the-problem', 'threat-model', 'how-harness-observes', 'rules', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'roadmap']) {
+  for (const id of ['at-a-glance', 'the-problem', 'threat-model', 'what-it-watches', 'rules-and-the-score', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'whats-next']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /<script/);

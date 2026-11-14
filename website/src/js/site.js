@@ -19,10 +19,13 @@ if (root) {
 function renderDownloads(root, plan) {
   root.replaceChildren();
 
-  const note = document.createElement('p');
-  note.className = 'os-note';
-  note.textContent = plan.note;
-  root.append(note);
+  // The "This computer" badge already says it. Keep the note for devices Harness can't run on.
+  if (!plan.items.some((entry) => entry.yours)) {
+    const note = document.createElement('p');
+    note.className = 'os-note';
+    note.textContent = plan.note;
+    root.append(note);
+  }
 
   const row = document.createElement('div');
   row.className = 'dl-row';
@@ -42,19 +45,34 @@ function card(entry) {
     art.append(yours);
   }
 
+  const head = document.createElement('div');
+  head.className = 'dl-head';
   const title = document.createElement('h3');
   title.textContent = entry.title;
-  art.append(title);
+  head.append(title);
+
+  // The fine print lives in a tooltip so the card stays short.
+  const status = document.createElement('p');
+  status.className = 'dl-tip';
+  status.id = `status-${entry.id}`;
+  status.setAttribute('role', 'tooltip');
+  status.textContent = entry.status;
+  const info = document.createElement('button');
+  info.type = 'button';
+  info.className = 'dl-info';
+  info.textContent = 'i';
+  info.setAttribute('aria-label', `About the ${entry.title} download`);
+  info.setAttribute('aria-describedby', status.id);
+  head.append(info);
+  art.append(head);
 
   const detail = document.createElement('p');
   detail.className = 'dl-detail';
   detail.textContent = entry.detail;
   art.append(detail);
-
-  const status = document.createElement('p');
-  status.className = 'dl-status';
-  status.id = `status-${entry.id}`;
-  status.textContent = entry.status;
+  art.append(status);
+  const actions = document.createElement('div');
+  actions.className = 'dl-actions';
 
   const control = entry.href ? document.createElement('a') : document.createElement('button');
   control.className = entry.href
@@ -72,23 +90,27 @@ function card(entry) {
     control.addEventListener('click', (event) => event.preventDefault());
   }
 
-  art.append(control);
+  actions.append(control);
+  art.append(actions);
+
+  // Secondary choices sit in one text row so both cards have the same shape.
+  const links = document.createElement('p');
+  links.className = 'dl-links';
   if (entry.alternate) {
     const alternate = document.createElement('a');
-    alternate.className = 'btn btn-secondary';
     alternate.href = entry.alternate.href;
-    alternate.textContent = entry.alternate.button;
+    alternate.textContent = 'Intel Mac version';
+    alternate.title = entry.alternate.button;
     alternate.setAttribute('aria-describedby', status.id);
-    art.append(alternate);
+    links.append(alternate);
   }
-  art.append(status);
   if (entry.href) {
     const help = document.createElement('a');
-    help.className = 'dl-help';
     help.href = entry.id === 'mac' ? '#install-mac' : '#install-windows';
-    help.textContent = entry.id === 'mac' ? 'How to open on macOS →' : 'Windows installation help →';
-    art.append(help);
+    help.textContent = 'How to open →';
+    links.append(help);
   }
+  if (links.childElementCount) art.append(links);
   return art;
 }
 

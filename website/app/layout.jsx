@@ -1,6 +1,7 @@
 import '../src/site.css';
 import './demo.css';
 import Brand from './_components/brand.jsx';
+import { DEVPOST_URL } from '../releases.js';
 
 export const metadata = {
   title: 'Harness — Let your coding agent run. Keep it on a harness.',
@@ -22,7 +23,7 @@ export default function Layout({ children }) {
               <a href="/#scenario">How it works</a>
               <a href="/#watch">What it catches</a>
               <a href="/demo">Live demo</a>
-              <a href="/whitepaper">White paper</a>
+              <a href="/about">About</a>
             </nav>
             <a className="btn btn-ink btn-sm" href="/#download">Download</a>
           </div>
@@ -32,13 +33,14 @@ export default function Layout({ children }) {
           <div className="wrap foot-in">
             <div>
               <Brand />
-              <p>A local monitor for AI coding agents.<br />Built at Emory Hacks, fall 2026.</p>
+              <p>A local monitor for AI coding agents.<br />Built at Emory Hacks, Fall 2026.</p>
             </div>
             <nav aria-label="Footer">
               <a href="/#scenario">How it works</a>
               <a href="/demo">Live demo</a>
-              <a href="/whitepaper">White paper</a>
+              <a href="/about">About</a>
               <a href={GITHUB}>Source on GitHub</a>
+              <a href={DEVPOST_URL}>Devpost</a>
               <a href="/ui/index.html">Brand kit</a>
             </nav>
           </div>

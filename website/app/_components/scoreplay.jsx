@@ -25,7 +25,7 @@ export default function ScorePlay() {
           <i style={{ left: `${score}%` }} />
           <span style={{ flex: 40 }}>Act</span><span style={{ flex: 30 }}>Review</span><span style={{ flex: 20 }}>Steady</span><span style={{ flex: 10 }}>Clear</span>
         </div>
-        <p className="sp-hint">Try it. Each of these is something an agent session can do.</p>
+        <p className="sp-hint">Try it. Tap what an agent might do:</p>
         <div className="sp-chips">
           {EVENTS.map((e) => (
             <button key={e.id} type="button" aria-pressed={picked.includes(e.id)} className={`chip risk-${e.risk}`} onClick={() => toggle(e.id)}>{e.label}</button>
@@ -39,11 +39,32 @@ export default function ScorePlay() {
             <li key={f.id} className={lost ? 'is-hit' : ''}>
               <span className="sp-f-name">{f.name}</span>
               <span className="sp-f-bar" style={{ '--cap': f.cap / 70 }}><i style={{ width: `${(lost / f.cap) * 100}%` }} /></span>
-              <span className="sp-f-num">{lost ? `−${lost}` : '0'}<small> / {f.cap}</small></span>
+              <span className="sp-f-num"><em>{lost ? `−${lost}` : '0'}</em><small>/ {f.cap}</small></span>
             </li>
           );
         })}
       </ul>
+      <details className="sp-how">
+        <summary>How the number is calculated</summary>
+        <div className="sp-how-body">
+          <p>In short: 100, minus what each group has cost, never below 0.</p>
+          <ol>
+            <li>Every event gets a risk (low to critical) and lands in one of six groups.</li>
+            <li>The group charges points by risk, per the table.</li>
+            <li>Each group has a cap, so one noisy category can’t sink the score alone.</li>
+            <li>Costs halve every 12 hours, so old events fade out.</li>
+          </ol>
+          <table>
+            <thead><tr><th scope="col">Group</th><th scope="col">Critical</th><th scope="col">High</th><th scope="col">Medium</th><th scope="col">Low</th><th scope="col">Cap</th></tr></thead>
+            <tbody>
+              {FACTORS.map((f) => (
+                <tr key={f.id}><th scope="row">{f.name}</th><td>{f.cost.critical}</td><td>{f.cost.high}</td><td>{f.cost.medium}</td><td>{f.cost.low}</td><td>{f.cap}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="sp-how-foot">Labels: 90+ Clear, 70+ Steady, 40+ Review, below 40 Act. The chips above use the app’s own scoring code. Exact formula: 100 − Σ min(cap, Σ cost × 0.5^(age ÷ 12h)).</p>
+        </div>
+      </details>
     </div>
   );
 }

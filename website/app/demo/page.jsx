@@ -15,7 +15,7 @@ export default function Demo() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [source, setSource] = useState('');
-  const end = useRef(null);
+  const hood = useRef(null);
   const view = replayState(events, count, protect);
   const done = events.length > 0 && (view.paused || count >= events.length);
 
@@ -24,7 +24,13 @@ export default function Demo() {
     const timer = setTimeout(() => setCount((n) => n + 1), count === 0 ? 350 : STEP_MS);
     return () => clearTimeout(timer);
   }, [playing, count, events.length, view.paused]);
-  useEffect(() => { if (count > 1) end.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [count]);
+  // Follow the newest step inside the panel. Never scroll the page itself.
+  useEffect(() => {
+    const el = hood.current;
+    if (!el || count < 1) return;
+    const timer = setTimeout(() => { el.scrollTop = el.scrollHeight; }, 60);
+    return () => clearTimeout(timer);
+  }, [count, view.paused, done]);
 
   function load(list, from) { setEvents(list); setCount(0); setSource(from); setError(''); setPlaying(true); }
   async function generate() {
@@ -83,8 +89,9 @@ export default function Demo() {
               <p className="pane-tag">What the agent’s window shows{hidden > 0 ? ` · ${hidden} step${hidden > 1 ? 's' : ''} it left out` : ''}</p>
             </div>
 
-            <div className="demo-meter">
+            <div className={`demo-meter lv-${view.level.cls}`}>
               <p className={`meter lv-${view.level.cls}`}><b>{view.score}</b><span>/ 100</span><em>{view.level.name}</em></p>
+              <div className="demo-bar" aria-hidden="true"><i style={{ width: `${view.score}%` }} /></div>
               <p className="demo-status" role="status">{status}</p>
               {view.factors.length > 0 && <ul>{view.factors.map((f) => <li key={f.id}><span>{f.name}</span><b>−{f.lost}</b></li>)}</ul>}
               {events.length > 0 && <p className="demo-source">{source}</p>}
@@ -92,7 +99,7 @@ export default function Demo() {
             </div>
           </div>
 
-          <div className="hood on demo-hood" aria-live="polite">
+          <div className="hood on demo-hood" aria-live="polite" ref={hood}>
             <div className="hood-top"><p className="pane-tag pane-tag-teal">What Harness sees</p><p className="demo-count">{view.events.length} of {events.length || '–'}</p></div>
             {!events.length && <div className="demo-empty"><Pug size={92} /><p>Every process the agent starts will appear here, with the ones its window never mentioned.</p></div>}
             <ol className="demo-chain">
@@ -109,15 +116,14 @@ export default function Demo() {
             {view.paused && <div className="verdict demo-verdict"><Pug size={46} /><div><p className="verdict-h">Harness paused the session before the next step.</p><p className="verdict-b">A Dangerous event stops the agent and everything under it. Turn Auto-protect off to see how far this session would have gone.</p></div></div>}
             {done && !view.paused && worst && <div className="verdict demo-verdict"><Pug size={46} /><div><p className="verdict-h">Flagged, not paused.</p><p className="verdict-b">{protect ? 'Auto-protect pauses on Dangerous events only. Risky ones are reported and cost points, and the Claude Code hook would ask you first.' : 'Auto-protect is off, so the session ran to the end. The score shows what it cost.'}</p></div></div>}
             {done && !view.paused && !worst && <div className="verdict demo-verdict"><Pug size={46} /><div><p className="verdict-h">Nothing to report.</p><p className="verdict-b">Most sessions look like this. Harness stays out of the way.</p></div></div>}
-            <span ref={end} />
           </div>
         </div>
       </section>
 
-      <section className="wrap demo-notes">
+      <div className="demo-notes-band"><section className="wrap demo-notes">
         <p><b>What is real here.</b> The risk levels and the score come from Harness’s rules, running in your browser. Gemini only writes the story, so sessions vary, and a command the rules have never seen can pass as Clear.</p>
-        <p><b>What is not.</b> Nothing runs and nothing on your computer is read. Your choice of scenario goes to Google Gemini. The installed app never does that. <a href="/whitepaper#known-limits">Read the real monitor’s limits</a></p>
-      </section>
+        <p><b>What is not.</b> Nothing runs and nothing on your computer is read. Your choice of scenario goes to Google Gemini. The installed app never does that. <a href="/about#known-limits">Read the real monitor’s limits</a></p>
+      </section></div>
     </div>
   );
 }

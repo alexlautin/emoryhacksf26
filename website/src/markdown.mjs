@@ -1,4 +1,4 @@
-// Small markdown renderer for the white paper. Headings, lists, fences, links, bold, code.
+// Small markdown renderer for the technical notes. Headings, lists, fences, links, bold, code.
 // Anything it does not understand stays as a paragraph, escaped.
 
 function escapeHtml(s) {
