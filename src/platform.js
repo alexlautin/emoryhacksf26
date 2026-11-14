@@ -43,7 +43,7 @@ async function macProcesses() {
 
 // On Windows, starting PowerShell for every poll is slow, so one PowerShell process keeps
 // printing a JSON snapshot of all processes, separated by a marker line.
-const MARK = '<<lookout-snapshot>>';
+const MARK = '<<harness-snapshot>>';
 let winLatest = null;
 let winWaiters = [];
 let winPs = null;
@@ -149,10 +149,10 @@ export async function listConnections(pids) {
 
 // ---------- pause / resume / stop ----------
 
-const NT = `Add-Type -Namespace Lookout -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);'`;
+const NT = `Add-Type -Namespace Harness -Name Nt -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h); [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);'`;
 
 async function winEach(pids, call) {
-  const script = `${NT}; foreach ($id in @(${pids.join(',')})) { try { $p = [Diagnostics.Process]::GetProcessById($id); [Lookout.Nt]::${call}($p.Handle) | Out-Null } catch {} }`;
+  const script = `${NT}; foreach ($id in @(${pids.join(',')})) { try { $p = [Diagnostics.Process]::GetProcessById($id); [Harness.Nt]::${call}($p.Handle) | Out-Null } catch {} }`;
   await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], { windowsHide: true });
 }
 

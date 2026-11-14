@@ -14,15 +14,15 @@ import { SENSITIVE_DIRS } from '../platform.js';
 import { DATA_DIR, DEMO_DIR } from '../paths.js';
 
 const HOME = os.homedir();
-export const BAIT_DIR = path.join(HOME, '.lookout', 'bait');
-const LEGACY_BAIT_DIR = path.join(HOME, '.seatbelt', 'bait');
+export const BAIT_DIR = path.join(HOME, '.harness', 'bait');
+const LEGACY_BAIT_DIRS = ['.lookout', '.seatbelt'].map(name => path.join(HOME, name, 'bait'));
 
 // Each decoy embeds a random marker made at install time (kept in data/bait-markers.json), so the
 // values are unique to this computer and can be recognised wherever they show up later.
 const BAIT_FILES = {
-  'aws_credentials': (m) => `# Lookout decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${m}\naws_secret_access_key = lk-decoy/${m}${m.toLowerCase().slice(0, 12)}\n`,
-  'passwords.txt': (m) => `Lookout decoy file. Nothing real here.\nbank: ${m}-decoy\nemail: ${m.toLowerCase()}-decoy\n`,
-  'id_ed25519_backup': (m) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${Buffer.from(`Lookout decoy key. Not real. ${m}`).toString('base64')}\n${m}\n-----END OPENSSH PRIVATE KEY-----\n`,
+  'aws_credentials': (m) => `# Harness decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${m}\naws_secret_access_key = hr-decoy/${m}${m.toLowerCase().slice(0, 12)}\n`,
+  'passwords.txt': (m) => `Harness decoy file. Nothing real here.\nbank: ${m}-decoy\nemail: ${m.toLowerCase()}-decoy\n`,
+  'id_ed25519_backup': (m) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${Buffer.from(`Harness decoy key. Not real. ${m}`).toString('base64')}\n${m}\n-----END OPENSSH PRIVATE KEY-----\n`,
 };
 const MARKERS_FILE = path.join(DATA_DIR, 'bait-markers.json');
 // The demo's .env is rebuilt by demo/reset.js with fixed values; this string is in all of them.
@@ -35,7 +35,7 @@ function newMarker() {
 const DEMO_ENV = path.join(DEMO_DIR, 'victim-project', '.env');
 
 const lastAtime = new Map();
-const quiet = new Map(); // dir -> until (ms): Lookout's own writes, not the agent's
+const quiet = new Map(); // dir -> until (ms): Harness's own writes, not the agent's
 
 export function ignoreWrites(dir, ms = 4000) {
   quiet.set(dir, Date.now() + ms);
@@ -43,7 +43,7 @@ export function ignoreWrites(dir, ms = 4000) {
 
 function isOwned(body) {
   // The SSH decoy hides the wording in the base64 line. The others say it in plain text.
-  return /Lookout decoy|Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body);
+  return /Harness decoy|Lookout decoy|Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body);
 }
 
 /** The random value already written into one of our decoys, if the file still has it. */
@@ -73,7 +73,7 @@ function setupBait(baitDir, markersFile) {
     // Write the decoy if it's missing, or upgrade an older decoy that has no marker yet.
     // Never overwrite a file that isn't one of ours.
     // Rewrite old "Seatbelt decoy" wording in place, keeping the same marker.
-    const legacyWording = owned && marker && body.includes(marker) && /Seatbelt decoy/i.test(body);
+    const legacyWording = owned && marker && body.includes(marker) && /Lookout decoy|Seatbelt decoy/i.test(body);
     if (body === null || (owned && !(marker && body.includes(marker))) || legacyWording) {
       if (!marker) marker = newMarker();
       fs.writeFileSync(p, render(marker), { mode: 0o600 });
@@ -113,10 +113,10 @@ function registerLegacyBait(legacyDir) {
 }
 
 /** Plant the decoys, copy an old bait folder once, and remember every marker in either place. */
-export function prepareBait({ baitDir = BAIT_DIR, legacyDir = LEGACY_BAIT_DIR, markersFile = MARKERS_FILE } = {}) {
-  migrateBaitDir(baitDir, legacyDir);
+export function prepareBait({ baitDir = BAIT_DIR, legacyDir, legacyDirs = legacyDir ? [legacyDir] : LEGACY_BAIT_DIRS, markersFile = MARKERS_FILE } = {}) {
+  for (const dir of legacyDirs) migrateBaitDir(baitDir, dir);
   setupBait(baitDir, markersFile);
-  registerLegacyBait(legacyDir);
+  for (const dir of legacyDirs) registerLegacyBait(dir);
 }
 
 function refreshDemoBait() {
@@ -160,7 +160,7 @@ function pollBait() {
         kind: 'file',
         risk: 'critical',
         reasons: [
-          'opened a decoy secret Lookout planted on purpose. No honest task needs it, so this is a strong sign something went rogue',
+          'opened a decoy secret Harness planted on purpose. No honest task needs it, so this is a strong sign something went rogue',
           agent ? `happened while ${agent.label} was the active program` : 'happened while no agent was active, so it may have been something else on this computer',
         ],
         title: agent ? `Something under ${agent.label} opened a decoy secret: ${path.basename(p)}` : `Something opened a decoy secret: ${path.basename(p)}`,

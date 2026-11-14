@@ -1,9 +1,9 @@
-// Lookout: a local sentinel for AI agents. Dashboard at http://localhost:4100
+// Harness: a local sentinel for AI agents. Dashboard at http://localhost:4100
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { subscribe, listAgents, listEvents, clearAll, upsertAgent, addEvent } from './store.js';
+import { subscribe, listAgents, listEvents, clearAll, upsertAgent, addEvent, getAgent, reviseEvents, onEvent, broadcast } from './store.js';
 import { startProcessMonitor } from './monitor/processes.js';
 import { startNetworkMonitor } from './monitor/network.js';
 import { startFileMonitor, rearmBait, ignoreWrites, BAIT_DIR } from './monitor/files.js';
@@ -17,7 +17,12 @@ import { IS_MAC, IS_WIN, OS_NAME } from './platform.js';
 import { handleHook } from './hooks.js';
 import { ROOT, DEMO_DIR, prepareDemoDir } from './paths.js';
 import { iconSprite, FONT_FILE } from './icons.js';
-import { IS_DESKTOP, fixPath, startDesktopBridge } from './desktop.js';
+import { IS_DESKTOP, fixPath, startDesktopBridge, pushNotice } from './desktop.js';
+import { addBaseline, listBaselines, removeBaseline } from './baselines.js';
+import { applyBaseline, baselineFromEvent, revertBaseline } from '../public/baseline.js';
+import { incidentReport } from '../public/report.js';
+import { takeNotice } from '../public/notice.js';
+import { deliverNotice } from './notify.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
@@ -26,6 +31,22 @@ const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const demoClients = new Set();
+
+function reapplyBaselines() {
+  const baselines = listBaselines();
+  const changed = [];
+  for (const e of listEvents({ limit: 5000 })) {
+    let next = e;
+    if (e.baseline && !baselines.some((b) => b.id === e.baselineId)) next = revertBaseline(e);
+    if (!next.baseline) {
+      const applied = applyBaseline(next, baselines, getAgent(next.agentId));
+      if (applied.baseline) next = applied;
+    }
+    if (next !== e) changed.push(next);
+  }
+  reviseEvents(changed);
+  return changed.length;
+}
 
 function json(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json' });
@@ -41,7 +62,7 @@ async function readBody(req) {
 let demoRunning = false;
 let demoChild = null;
 
-/** End any demo agent that is still around (for example one Lookout paused) and wait for it to exit. */
+/** End any demo agent that is still around (for example one Harness paused) and wait for it to exit. */
 async function stopDemo() {
   if (!demoRunning || !demoChild) return;
   const exited = new Promise((r) => { demoChild.once('exit', r); setTimeout(r, 4000); });
@@ -54,13 +75,13 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/hooks/') && req.method === 'POST') {
-      // Claude Code hook (via hooks/lookout-hook.sh). Answers before the tool call runs.
+      // Claude Code hook (via hooks/harness-hook.sh). Answers before the tool call runs.
       const event = url.pathname.slice('/hooks/'.length);
-      const project = req.headers['x-lookout-project'] || req.headers['x-seatbelt-project'] || '';
+      const project = req.headers['x-harness-project'] || req.headers['x-lookout-project'] || req.headers['x-seatbelt-project'] || '';
       return json(res, 200, handleHook(event, await readBody(req), project));
     }
     if (url.pathname === '/api/state') {
-      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning });
+      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning, baselines: listBaselines() });
     }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -86,6 +107,34 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         return json(res, 409, { error: err.message });
       }
+    }
+    if (url.pathname === '/api/report.md' && req.method === 'GET') {
+      const agentId = url.searchParams.get('agent') || '';
+      const agents = listAgents().filter((a) => !agentId || a.id === agentId);
+      const events = listEvents({ limit: 5000 }).filter((e) => !agentId || e.agentId === agentId);
+      const md = incidentReport({ agents, events, os: OS_NAME });
+      const name = agentId ? `harness-${agentId}.md` : 'harness-report.md';
+      res.writeHead(200, {
+        'content-type': 'text/markdown; charset=utf-8',
+        'content-disposition': `attachment; filename="${name.replace(/[^a-zA-Z0-9._-]/g, '_')}"`,
+      });
+      return res.end(md);
+    }
+    if (url.pathname === '/api/baseline' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (body.action === 'remove') {
+        if (!body.id) return json(res, 400, { error: 'Missing id' });
+        removeBaseline(body.id);
+        reapplyBaselines();
+        return json(res, 200, { baselines: listBaselines() });
+      }
+      const event = listEvents({ limit: 5000 }).find((e) => e.id === body.eventId);
+      if (!event) return json(res, 404, { error: 'That event is gone' });
+      const made = baselineFromEvent(event, getAgent(event.agentId));
+      if (made.error) return json(res, 400, made);
+      addBaseline(made);
+      reapplyBaselines();
+      return json(res, 200, { baselines: listBaselines() });
     }
     if (url.pathname === '/api/reset' && req.method === 'POST') {
       await stopDemo();
@@ -138,7 +187,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // The pretend "attacker" for the demo. It only counts bytes; it never stores what it receives.
-// If Lookout ends the upload partway, the request is cut off; report what got through.
+// If Harness ends the upload partway, the request is cut off; report what got through.
 const attacker = http.createServer(async (req, res) => {
   let bytes = 0;
   let cutOff = false;
@@ -152,7 +201,7 @@ const attacker = http.createServer(async (req, res) => {
   res.end('ok');
 });
 
-// The desktop app asks for 4100 (where Claude Code hooks look for Lookout) but takes any free
+// The desktop app asks for 4100 (where Claude Code hooks look for Harness) but takes any free
 // port if something else already has it, such as a `pnpm start` in a terminal.
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE' && IS_DESKTOP && server.address() === null) {
@@ -164,13 +213,21 @@ server.on('listening', () => {
   const port = server.address().port;
   process.env.PORT = String(port); // the demo agent reports back to this port
   startDesktopBridge(port);
-  console.log(`\n  Lookout is watching. Dashboard: http://localhost:${port}\n`);
+  console.log(`\n  Harness is watching. Dashboard: http://localhost:${port}\n`);
   console.log(`  Decoy secrets planted in ${shortPath(BAIT_DIR)}`);
   if (process.argv.includes('--eslogger') && !IS_MAC) console.log('  Deep mode needs macOS; running in standard mode.');
   console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : IS_WIN ? '  Mode: standard (no admin rights needed).' : '  Mode: standard.');
 });
 server.listen(PORT, '127.0.0.1');
 attacker.listen(4199, '127.0.0.1').on('error', () => console.log('  (demo attacker port 4199 busy; demo upload will fail)'));
+
+onEvent((e) => {
+  const notice = takeNotice(e, e.agentId ? getAgent(e.agentId) : null);
+  if (!notice) return;
+  broadcast('notice', notice);
+  if (IS_DESKTOP) pushNotice(notice);
+  else deliverNotice(notice);
+});
 
 startProcessMonitor();
 startNetworkMonitor();

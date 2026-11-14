@@ -36,7 +36,7 @@ test('reading a .env file is high', () => {
 });
 
 test('a decoy path is critical, including the old bait folder', () => {
-  const fresh = '/tmp/lookout-bait-aws';
+  const fresh = '/tmp/harness-bait-aws';
   const legacy = '/tmp/seatbelt-bait-aws';
   baitPaths.add(fresh);
   baitPaths.add(legacy);
@@ -45,7 +45,7 @@ test('a decoy path is critical, including the old bait folder', () => {
     const b = analyzeCommand(`cat ${legacy}`);
     assert.equal(a.risk, 'critical');
     assert.equal(b.risk, 'critical');
-    assert.match(a.reasons.join(' '), /decoy secret Lookout planted/);
+    assert.match(a.reasons.join(' '), /decoy secret Harness planted/);
   } finally {
     baitPaths.delete(fresh);
     baitPaths.delete(legacy);
@@ -61,7 +61,7 @@ test('a startup file write is high', () => {
 test('an unknown server is medium and a known one is not', () => {
   const bad = analyzeDestination({ host: 'evil.example', ip: '1.2.3.4', port: 443, isAgentItself: false });
   assert.equal(bad.risk, 'medium');
-  assert.match(bad.reasons[0], /Lookout doesn't recognize \(evil\.example:443\)/);
+  assert.match(bad.reasons[0], /Harness doesn't recognize \(evil\.example:443\)/);
 
   const good = analyzeDestination({ host: 'api.github.com', ip: '140.82.112.3', port: 443, isAgentItself: false });
   assert.equal(good.risk, 'info');

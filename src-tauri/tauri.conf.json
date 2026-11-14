@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Lookout",
+  "productName": "Harness",
   "version": "0.1.0",
-  "identifier": "dev.lookout.monitor",
+  "identifier": "dev.harness.monitor",
   "build": {
     "frontendDist": "loading",
     "beforeDevCommand": "node scripts/stage-desktop.mjs",

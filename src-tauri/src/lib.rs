@@ -1,4 +1,4 @@
-// Lookout desktop app: a menu bar (macOS) / system tray (Windows) app around the Lookout server.
+// Harness desktop app: a menu bar (macOS) / system tray (Windows) app around the Harness server.
 //
 // The server is the same Node program as `pnpm start`. The app ships its own Node binary
 // (a Tauri "sidecar"), starts the server on a free port, and reads one-line JSON messages it
@@ -21,11 +21,11 @@ use tauri_plugin_positioner::{Position, WindowExt};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-const TRAY_ID: &str = "lookout";
+const TRAY_ID: &str = "harness";
 const PANEL: &str = "panel";
 const DASHBOARD: &str = "dashboard";
 const MAX_RESTARTS: u32 = 3;
-/// Claude Code hooks (`pnpm protect`) look for Lookout here. The server falls back to a free
+/// Claude Code hooks (`pnpm protect`) look for Harness here. The server falls back to a free
 /// port if something else is using it.
 const PREFERRED_PORT: &str = "4100";
 const LEVELS: [(&str, &str); 3] = [("off", "Off"), ("dangerous", "Dangerous only"), ("risky", "Anything risky")];
@@ -126,7 +126,7 @@ fn show_dashboard(app: &AppHandle) {
     }
     let Some(u) = url(app, "/") else { return };
     let _ = WebviewWindowBuilder::new(app, DASHBOARD, u)
-        .title("Lookout")
+        .title("Harness")
         .inner_size(1200.0, 860.0)
         .min_inner_size(420.0, 500.0)
         .build();
@@ -170,7 +170,7 @@ fn on_ready(app: &AppHandle, port: u16) {
     }
     let Some(u) = url(app, "/?view=panel") else { return };
     let _ = WebviewWindowBuilder::new(app, PANEL, u)
-        .title("Lookout")
+        .title("Harness")
         .inner_size(280.0, 480.0)
         .resizable(false)
         .decorations(false)
@@ -179,7 +179,7 @@ fn on_ready(app: &AppHandle, port: u16) {
         .visible(false)
         .build();
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some("Lookout is watching"));
+        let _ = tray.set_tooltip(Some("Harness is watching"));
     }
 }
 
@@ -232,12 +232,12 @@ fn on_status(app: &AppHandle, msg: &Value) {
         n => format!("{n} agents running"),
     };
     let extra = if alerts > 0 { format!(", {alerts} alerts") } else { String::new() };
-    let _ = tray.set_tooltip(Some(format!("Lookout: {score} / 100, {sessions}{extra}")));
+    let _ = tray.set_tooltip(Some(format!("Harness: {score} / 100, {sessions}{extra}")));
 }
 
 fn handle_line(app: &AppHandle, line: &str) {
     let trimmed = line.trim();
-    let Some(json) = trimmed.strip_prefix("@@lookout ").or_else(|| trimmed.strip_prefix("@@seatbelt ")) else { return };
+    let Some(json) = trimmed.strip_prefix("@@harness ").or_else(|| trimmed.strip_prefix("@@lookout ")).or_else(|| trimmed.strip_prefix("@@seatbelt ")) else { return };
     let Ok(msg) = serde_json::from_str::<Value>(json) else { return };
     match msg["type"].as_str() {
         Some("ready") => {
@@ -250,7 +250,7 @@ fn handle_line(app: &AppHandle, line: &str) {
             let _ = app
                 .notification()
                 .builder()
-                .title(msg["title"].as_str().unwrap_or("Lookout"))
+                .title(msg["title"].as_str().unwrap_or("Harness"))
                 .body(msg["body"].as_str().unwrap_or(""))
                 .show();
         }
@@ -258,7 +258,7 @@ fn handle_line(app: &AppHandle, line: &str) {
     }
 }
 
-/// Start the Lookout server with the bundled Node, and restart it a few times if it dies.
+/// Start the Harness server with the bundled Node, and restart it a few times if it dies.
 fn start_server(app: &AppHandle) -> tauri::Result<()> {
     let (script, data_dir) = if cfg!(debug_assertions) {
         // `tauri dev`: run straight from the repo, like `pnpm start`.
@@ -274,10 +274,10 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
         .sidecar("node")
         .map_err(|e| tauri::Error::Anyhow(e.into()))?
         .arg(script)
-        .env("LOOKOUT_DESKTOP", "1")
+        .env("HARNESS_DESKTOP", "1")
         .env("PORT", PREFERRED_PORT);
     if let Some(dir) = data_dir {
-        cmd = cmd.env("LOOKOUT_DATA_DIR", dir);
+        cmd = cmd.env("HARNESS_DATA_DIR", dir);
     }
     let (mut rx, child) = cmd.spawn().map_err(|e| tauri::Error::Anyhow(e.into()))?;
     *app.state::<Monitor>().child.lock().unwrap() = Some(child);
@@ -301,14 +301,14 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
                     if *state.quitting.lock().unwrap() {
                         return;
                     }
-                    eprintln!("Lookout server stopped ({:?})", status.code);
+                    eprintln!("Harness server stopped ({:?})", status.code);
                     let tries = {
                         let mut r = state.restarts.lock().unwrap();
                         *r += 1;
                         *r
                     };
                     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-                        let _ = tray.set_tooltip(Some("Lookout stopped watching"));
+                        let _ = tray.set_tooltip(Some("Harness stopped watching"));
                     }
                     if tries <= MAX_RESTARTS {
                         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -317,8 +317,8 @@ fn start_server(app: &AppHandle) -> tauri::Result<()> {
                         let _ = app
                             .notification()
                             .builder()
-                            .title("Lookout stopped watching")
-                            .body("Its monitor keeps crashing. Quit and reopen Lookout.")
+                            .title("Harness stopped watching")
+                            .body("Its monitor keeps crashing. Quit and reopen Harness.")
                             .show();
                     }
                     return;
@@ -340,7 +340,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         app.autolaunch().is_enabled().unwrap_or(false),
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Lookout", true, Some("CmdOrCtrl+Q"))?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Harness", true, Some("CmdOrCtrl+Q"))?;
 
     let mut levels = Vec::new();
     for (id, label) in LEVELS {
@@ -370,7 +370,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON_OK)?)
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("Lookout is starting…")
+        .tooltip("Harness is starting…")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -449,9 +449,9 @@ pub fn run() {
             _ => {}
         })
         .build(tauri::generate_context!())
-        .expect("error while building Lookout")
+        .expect("error while building Harness")
         .run(|app, event| match event {
-            // Closing windows never quits a tray app; only "Quit Lookout" does.
+            // Closing windows never quits a tray app; only "Quit Harness" does.
             RunEvent::ExitRequested { code: None, api, .. } => api.prevent_exit(),
             RunEvent::Exit => stop_server(app),
             _ => {}

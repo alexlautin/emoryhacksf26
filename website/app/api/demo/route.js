@@ -1,4 +1,4 @@
-import { SCENARIOS, validateEvents } from '../../../lib/demo.js';
+import { SCENARIOS, SYSTEM_PROMPT, RESPONSE_SCHEMA, validateEvents } from '../../../lib/demo.js';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 const cache = new Map();
@@ -12,13 +12,11 @@ async function generate(scenario, key) {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     signal: AbortSignal.timeout(25000),
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: `Create a fictional coding-agent activity trace for an educational Lookout demo. Output JSON only: {"events":[{"title":"short step","command":"illustrative command","explanation":"plain English","risk":"info|low|medium|high|critical","reasons":["classification reason"]}]}. Use 3-8 events in chronological order, starting with a routine command. Never execute commands. Use fake files and example.invalid for destinations. For installs use risk low and reason "installed packages". A credential upload is ONE critical event with reasons "touched a decoy secret" and "uploaded data". Do not split the credential read into a separate event. The prior install plus this event should score 19. End with a separate upload-completion event so auto-protect can stop before completion. For persistence use high and reason "run automatically". Safe commands have risk info and empty reasons. Do not claim this is an actual monitored session.` }] },
-      contents: [{ role: 'user', parts: [{ text: SCENARIOS[scenario] }] }],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts: [{ text: SCENARIOS[scenario].prompt }] }],
       generationConfig: {
-        responseMimeType: 'application/json',
-        // A valid trace is at most 8 events of 600-character fields. Flash also spends this budget on thinking, which cuts the JSON off.
-        maxOutputTokens: 16384,
-        temperature: 0.4,
+        responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA,
+        maxOutputTokens: 16384, temperature: 0.7,
         thinkingConfig: { thinkingBudget: 0 },
       },
     }),

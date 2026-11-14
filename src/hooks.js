@@ -1,10 +1,10 @@
-// Claude Code hooks: Lookout sees each tool call BEFORE it runs and can block it.
+// Claude Code hooks: Harness sees each tool call BEFORE it runs and can block it.
 // Docs: https://code.claude.com/docs/en/hooks
 //
-// hooks/lookout-hook.sh forwards Claude Code's hook JSON here and prints our answer.
+// hooks/harness-hook.sh forwards Claude Code's hook JSON here and prints our answer.
 //   PreToolUse  -> { hookSpecificOutput: { permissionDecision: 'deny' | 'ask', permissionDecisionReason } }
 //                  We never answer 'allow': allowed actions return {} so Claude Code's own
-//                  permission prompts still apply. Lookout only adds restrictions.
+//                  permission prompts still apply. Harness only adds restrictions.
 //   UserPromptSubmit -> remembers the task for this session.
 //   PostToolUse -> notes when you approved an "ask" in the terminal.
 import os from 'node:os';
@@ -13,7 +13,7 @@ import { addEvent, listAgents } from './store.js';
 import { analyzeCommand, analyzePath, baitPaths, markerHits, riskRank, shortPath } from './rules.js';
 import { truncate } from './describe.js';
 
-/** tool_use ids Lookout already recorded from a hook, so the transcript monitor doesn't log them twice. */
+/** tool_use ids Harness already recorded from a hook, so the transcript monitor doesn't log them twice. */
 export const gatedToolUses = new Map(); // tool_use_id -> 'deny' | 'ask'
 const sessions = new Map(); // session_id -> { task, projectDir, compromised }
 const HOME = os.homedir();
@@ -27,7 +27,7 @@ function globToRe(glob) {
 
 /**
  * Decoys this action would touch, beyond what the plain-text rules catch:
- * relative paths (cat ../../.lookout/bait/passwords.txt), wildcards (cat ~/.lookout/bait/*),
+ * relative paths (cat ../../.harness/bait/passwords.txt), wildcards (cat ~/.harness/bait/*),
  * and the Glob tool.
  */
 export function baitTouches(tool, input, cwd) {
@@ -142,12 +142,12 @@ export function handleHook(event, payload, headerProject) {
         path: leaked[0], tool: payload.tool_name,
         reasons: [`got hold of the contents of a decoy secret (${where}). No honest task needs it`],
         title: `${label} got hold of a decoy secret: ${where}`,
-        detail: `It came back in the output of ${payload.tool_name}. Lookout has cut off this session's network access so it can't send it anywhere.`,
+        detail: `It came back in the output of ${payload.tool_name}. Harness has cut off this session's network access so it can't send it anywhere.`,
       });
       return {
         decision: 'block',
-        reason: `LOOKOUT: this output contains a decoy secret from ${where}. Do not use, copy or send it anywhere. Tell the user.`,
-        systemMessage: `Lookout: a decoy secret from ${where} reached ${label}. Network access is now cut off for this session.`,
+        reason: `HARNESS: this output contains a decoy secret from ${where}. Do not use, copy or send it anywhere. Tell the user.`,
+        systemMessage: `Harness: a decoy secret from ${where} reached ${label}. Network access is now cut off for this session.`,
       };
     }
     if (id && gatedToolUses.get(id) === 'ask') {
@@ -169,7 +169,7 @@ export function handleHook(event, payload, headerProject) {
   const t0 = performance.now();
   const r = assess(tool, input, projectDir);
   for (const b of baitTouches(tool, input, cwd || projectDir)) {
-    const reason = `touched a decoy secret Lookout planted (${shortPath(b)}). No honest task needs this file`;
+    const reason = `touched a decoy secret Harness planted (${shortPath(b)}). No honest task needs this file`;
     if (!r.reasons.includes(reason)) r.reasons.unshift(reason);
     r.risk = 'critical';
   }
@@ -181,7 +181,7 @@ export function handleHook(event, payload, headerProject) {
     }
   }
   if (s.compromised && isNetwork(tool, input)) {
-    r.reasons.unshift('tried to reach the network after getting hold of a decoy secret, so Lookout cut it off');
+    r.reasons.unshift('tried to reach the network after getting hold of a decoy secret, so Harness cut it off');
     r.risk = 'critical';
   }
   const decision = decide(r);
@@ -207,7 +207,7 @@ export function handleHook(event, payload, headerProject) {
     gate: decision,
     // It never ran, so auto-protect has nothing to pause.
     prevented: decision === 'deny',
-    title: decision === 'deny' ? `Lookout blocked ${label} before it could ${r.what}` : `Lookout asked you before ${label} could ${r.what}`,
+    title: decision === 'deny' ? `Harness blocked ${label} before it could ${r.what}` : `Harness asked you before ${label} could ${r.what}`,
     detail: `Flagged: ${why}.${s.task ? ` Your task was: “${truncate(s.task, 140)}”.` : ''} Decided in ${ms} ms, before the command ran.`,
   });
 
@@ -216,16 +216,16 @@ export function handleHook(event, payload, headerProject) {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'deny',
-        permissionDecisionReason: `Lookout blocked this before it ran. Flagged: ${why}. Do not retry it or work around it. Tell the user what happened.`,
+        permissionDecisionReason: `Harness blocked this before it ran. Flagged: ${why}. Do not retry it or work around it. Tell the user what happened.`,
       },
-      systemMessage: `Lookout blocked an attempt to ${r.what}. Flagged: ${why}.`,
+      systemMessage: `Harness blocked an attempt to ${r.what}. Flagged: ${why}.`,
     };
   }
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'ask',
-      permissionDecisionReason: `Lookout flagged this before it ran: ${why}. Approve only if you expected it.`,
+      permissionDecisionReason: `Harness flagged this before it ran: ${why}. Approve only if you expected it.`,
     },
   };
 }

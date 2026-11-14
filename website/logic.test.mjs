@@ -76,9 +76,9 @@ test('?os= overrides the browser, and a half-set Windows url still does not link
   assert.equal(plan.items[0].href, null);
 
   const edited = {
-    macos: { url: 'http://example.com/Lookout.dmg', published: true, comingSoon: false },
+    macos: { url: 'http://example.com/Harness.dmg', published: true, comingSoon: false },
     windows: {
-      url: 'https://example.com/Lookout-setup.exe',
+      url: 'https://example.com/Harness-setup.exe',
       published: true,
       comingSoon: true,
     },
@@ -88,13 +88,13 @@ test('?os= overrides the browser, and a half-set Windows url still does not link
   assert.equal(macPlan.items[1].href, null);
 
   const ready = downloadPlan({
-    macos: { url: 'https://example.com/Lookout.dmg', published: true, comingSoon: false },
+    macos: { url: 'https://example.com/Harness.dmg', published: true, comingSoon: false },
     windows: { url: 'javascript:alert(1)', published: true, comingSoon: false },
   }, { id: 'windows', kind: 'windows', forced: false });
   assert.equal(ready.items[0].action, 'soon');
   assert.equal(ready.items[0].href, null);
   assert.equal(ready.items[1].action, 'download');
-  assert.equal(ready.items[1].href, 'https://example.com/Lookout.dmg');
+  assert.equal(ready.items[1].href, 'https://example.com/Harness.dmg');
 });
 
 test('markdown escapes html, keeps safe links, and slugs headings', () => {
@@ -128,16 +128,16 @@ test('markdown escapes html, keeps safe links, and slugs headings', () => {
 test('the white paper renders the sections the site links to', () => {
   const md = fs.readFileSync(new URL('./whitepaper.md', import.meta.url), 'utf8');
   const html = renderMarkdown(md);
-  for (const id of ['the-problem', 'threat-model', 'how-lookout-observes', 'rules', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'roadmap']) {
+  for (const id of ['the-problem', 'threat-model', 'how-harness-observes', 'rules', 'the-score', 'acting-on-a-finding', 'privacy', 'known-limits', 'roadmap']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /<script/);
   assert.match(html, /0 to 100/);
-  assert.match(html, /~\/\.lookout\/bait/);
+  assert.match(html, /~\/\.harness\/bait/);
 });
 
 test('fragment jumps leave room for the sticky header', () => {
   const css = fs.readFileSync(new URL('./src/site.css', import.meta.url), 'utf8');
-  assert.match(css, /scroll-padding-top:\s*10\.5rem/);
-  assert.match(css, /scroll-padding-top:\s*5\.5rem/);
+  assert.match(css, /scroll-padding-top:\s*calc\(var\(--nav-h\) \+ 16px\)/);
+  assert.match(css, /--nav-h:\s*68px/);
 });
