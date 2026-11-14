@@ -1,0 +1,155 @@
+// Rules that turn raw activity into risk levels and plain-English reasons.
+// Ordered from most to least severe. Each rule: { test, risk, reason }.
+import os from 'node:os';
+
+const HOME = os.homedir();
+const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+
+// Decoy secrets planted by Seatbelt (filled in by files.js at startup).
+export const baitPaths = new Set();
+
+export const SENSITIVE = [
+  { re: /\.ssh(\/|\b)/, what: 'your SSH keys (used to log into servers and GitHub)' },
+  { re: /\.aws(\/|\b)/, what: 'your AWS cloud credentials' },
+  { re: /(^|[\/\s'"=])\.env(\.[\w-]+)?($|[\s'"])/, what: 'a .env file (where apps keep passwords and API keys)' },
+  { re: /Library\/Keychains|security\s+(find|dump)-\w+/, what: "your Mac's Keychain (saved passwords)" },
+  { re: /(Chrome|Chromium|BraveSoftware|Arc|Edge)\/.*(Cookies|Login Data|Local State)|Safari\/|Firefox\/Profiles|Cookies\.binarycookies/, what: "your browser's saved logins and cookies" },
+  { re: /\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.docker\/config\.json|\.kube\/config|gh\/hosts\.yml/, what: 'saved access tokens for developer tools' },
+  { re: /\.(zsh|bash)_history/, what: 'your terminal history (can contain passwords)' },
+  { re: /Library\/(Messages|Mail)\b/, what: 'your messages or email' },
+];
+
+const COMMAND_RULES = [
+  { re: /\brm\s+-[a-zA-Z]*(rf|fr)[a-zA-Z]*\s+(~|\/|\$HOME)(\s|\/?$|\/\*)/, risk: 'critical', reason: 'tried to delete your whole home folder or disk' },
+  { re: /\bsecurity\s+(find-generic-password|find-internet-password|dump-keychain)/, risk: 'critical', reason: 'tried to pull saved passwords out of your Keychain' },
+  { re: /\bcurl\b[^|;&]*\|\s*(sudo\s+)?(ba|z)?sh\b|\bwget\b[^|;&]*\|\s*(ba|z)?sh\b/, risk: 'high', reason: 'downloaded a script from the internet and ran it immediately' },
+  { re: /\bcurl\b[^;&|]*(\s-d\b|\s--data|\s-F\b|\s--form|\s-T\b|\s--upload-file|-X\s*(POST|PUT))/, risk: 'high', reason: 'uploaded data to a server' },
+  { re: /\bwget\b[^;&|]*--post-(data|file)/, risk: 'high', reason: 'uploaded data to a server' },
+  { re: /(^|[\s;&|(])(nc|ncat|netcat|socat)\s/, risk: 'high', reason: 'opened a raw network connection (a common way to sneak data out)' },
+  { re: /launchctl\s+(load|bootstrap|submit|enable)|LaunchAgents|LaunchDaemons|(^|[\s;&|])crontab\s/, risk: 'high', reason: 'set something up to run automatically in the background, even after a restart' },
+  { re: />>?\s*\S*\.(zshrc|bashrc|zprofile|bash_profile|profile)\b/, risk: 'high', reason: 'changed your terminal startup file (runs every time you open a terminal)' },
+  { re: /\bscreencapture\b/, risk: 'high', reason: 'took a screenshot of your screen' },
+  { re: /\bscp\s|\brsync\b[^;&|]*\s\S+:/, risk: 'medium', reason: 'copied files to another computer' },
+  { re: /(^|[\s;&|])sudo\s/, risk: 'medium', reason: 'asked for administrator access' },
+  { re: /\bosascript\b/, risk: 'medium', reason: 'controlled other apps using AppleScript' },
+  { re: /\brm\s+-[a-zA-Z]*(rf|fr)/, risk: 'medium', reason: 'deleted a folder and everything inside it' },
+  { re: /\bgit\s+push\b[^;&|]*(--force|-f\b)/, risk: 'medium', reason: 'force-pushed code, which can overwrite history on GitHub' },
+  { re: /\b(npm|pnpm|yarn|bun)\s+(i|install|add|ci)\b|\bpip3?\s+install\b|\buv\s+(add|pip\s+install)\b/, risk: 'low', reason: 'installed packages (packages can run their own setup code)' },
+  { re: /\bgit\s+push\b/, risk: 'low', reason: 'pushed code to GitHub' },
+  { re: /\bchmod\s+(\+x|[0-7]*7[0-7]*\s)/, risk: 'low', reason: 'made a file runnable or open to everyone' },
+];
+
+export function maxRisk(a, b) {
+  return RANK[a] >= RANK[b] ? a : b;
+}
+
+export function riskRank(r) {
+  return RANK[r] ?? 0;
+}
+
+function expandHome(s) {
+  return s.replaceAll('$HOME', HOME).replace(/(^|[\s'"=])~(?=\/)/g, `$1${HOME}`);
+}
+
+/** Which sensitive things does a command line or path mention? */
+export function sensitiveHits(text) {
+  const expanded = expandHome(text);
+  const hits = [];
+  for (const p of baitPaths) {
+    if (expanded.includes(p) || expanded.includes(p.replace(HOME, '~'))) {
+      hits.push({ risk: 'critical', reason: `touched a decoy secret Seatbelt planted (${shortPath(p)}). No honest task needs this file` });
+    }
+  }
+  for (const s of SENSITIVE) {
+    if (s.re.test(expanded) && !hits.some((h) => h.what === s.what)) {
+      hits.push({ risk: 'high', what: s.what, reason: `accessed ${s.what}` });
+    }
+  }
+  // A bait .env also matches the generic .env rule; keep only the stronger signal.
+  if (hits.some((h) => h.risk === 'critical')) return hits.filter((h) => h.risk === 'critical' || !/\.env/.test(h.what ?? ''));
+  return hits;
+}
+
+/** Analyze one command line. Returns { risk, reasons }. */
+export function analyzeCommand(cmd) {
+  let risk = 'info';
+  const reasons = [];
+  for (const r of COMMAND_RULES) {
+    if (r.re.test(cmd)) {
+      risk = maxRisk(risk, r.risk);
+      if (!reasons.includes(r.reason)) reasons.push(r.reason);
+    }
+  }
+  // Sending data to a program on this same computer (a local dev server) is usually fine.
+  // Port 4199 is the demo's pretend attacker, so it's treated as if it were far away.
+  if (reasons.includes('uploaded data to a server')) {
+    const urls = [
+      ...[...cmd.matchAll(/https?:\/\/([^\/\s'"]+)/g)].map((m) => m[1]),
+      ...[...cmd.matchAll(/(?:^|\s)((?:localhost|127\.0\.0\.1)(?::\d+)?)(?=[\/\s'"]|$)/g)].map((m) => m[1]),
+    ];
+    if (urls.length && urls.every((u) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(u) && !u.endsWith(':4199'))) {
+      reasons.splice(reasons.indexOf('uploaded data to a server'), 1, 'sent data to a program on this computer');
+      risk = reasons.length > 1 ? risk : 'low';
+    }
+  }
+  const hits = sensitiveHits(cmd);
+  for (const h of hits) {
+    risk = maxRisk(risk, h.risk);
+    reasons.push(h.reason);
+  }
+  if (/base64|openssl\s+enc|\bxxd\b/.test(cmd) && hits.length) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('scrambled secret data so it would be harder to spot');
+  }
+  return { risk, reasons };
+}
+
+/** Analyze a file path an agent read or changed. */
+export function analyzePath(p, { write = false, projectDir = null } = {}) {
+  let risk = 'info';
+  const reasons = [];
+  for (const h of sensitiveHits(p)) {
+    risk = maxRisk(risk, h.risk);
+    reasons.push(h.reason);
+  }
+  if (write && /Library\/Launch(Agents|Daemons)\//.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('added something that will run automatically every time you log in');
+  }
+  if (write && /\/\.(zshrc|bashrc|zprofile|bash_profile|profile)$/.test(p)) {
+    risk = maxRisk(risk, 'high');
+    reasons.push('changed your terminal startup file');
+  }
+  if (write && projectDir && !p.startsWith(projectDir) && risk === 'info') {
+    risk = 'low';
+    reasons.push('changed a file outside the project it was working on');
+  }
+  return { risk, reasons };
+}
+
+const TRUSTED_HOSTS = [
+  'anthropic.com', 'claude.ai', 'claude.com', 'openai.com', 'chatgpt.com', 'oaistatic.com',
+  'github.com', 'githubusercontent.com', 'npmjs.org', 'npmjs.com', 'yarnpkg.com',
+  'pypi.org', 'pythonhosted.org', 'apple.com', 'icloud.com', 'googleapis.com', 'google.com',
+  'sentry.io', 'statsig.com', 'datadoghq.com',
+];
+
+/** Classify a network destination. */
+export function analyzeDestination({ host, ip, port, isAgentItself }) {
+  const name = host || ip;
+  if (/^(127\.|::1$|localhost$|\[::1\])/.test(ip || '') || host === 'localhost') {
+    if (port === 4199) {
+      return { risk: 'high', where: 'the pretend attacker server (demo, port 4199)', trusted: false, local: true, reasons: ['sent data to a server that is standing in for an attacker in this demo'] };
+    }
+    return { risk: isAgentItself ? 'info' : 'low', where: `a program on this computer (port ${port})`, trusted: false, local: true, reasons: [] };
+  }
+  const trusted = !!host && TRUSTED_HOSTS.some((t) => host === t || host.endsWith('.' + t));
+  if (isAgentItself || trusted) {
+    return { risk: 'info', where: name, trusted, local: false, reasons: [] };
+  }
+  return { risk: 'medium', where: name, trusted: false, local: false, reasons: [`connected to a server Seatbelt doesn't recognize (${name}:${port})`] };
+}
+
+export function shortPath(p) {
+  return p.startsWith(HOME) ? '~' + p.slice(HOME.length) : p;
+}
