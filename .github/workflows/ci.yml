@@ -6,9 +6,11 @@ on:
     branches:
       - main
 
-# A new push to the same branch replaces the run that is already going.
+# A new push replaces the run already going for that same pull request or branch.
+# github.ref is refs/pull/<number>/merge on a pull request, so two forks that both
+# use a branch named patch-1 do not cancel each other.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
