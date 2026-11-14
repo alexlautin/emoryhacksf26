@@ -14,12 +14,18 @@ async function generate(scenario, key) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: 'user', parts: [{ text: SCENARIOS[scenario].prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, maxOutputTokens: 4000, temperature: 0.7 },
+      generationConfig: {
+        responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA,
+        maxOutputTokens: 16384, temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   });
   if (!response.ok) throw new Error('Gemini unavailable');
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
+  const parts = data.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts) ? parts.filter(p => p && !p.thought && typeof p.text === 'string').map(p => p.text).join('') : '';
+  if (!text || data.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new Error('Incomplete model reply');
   return validateEvents(JSON.parse(text).events);
 }
 export async function POST(request) {
