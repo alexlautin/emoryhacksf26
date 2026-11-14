@@ -733,8 +733,17 @@ function renderCoach() {
   if (state.scrollCoach) {
     state.scrollCoach = false;
     // The section was hidden until this paint. Scroll on the next frame, after it has a box.
-    requestAnimationFrame(() => el.scrollIntoView({ behavior: 'auto', block: 'start' }));
+    requestAnimationFrame(() => revealCoach(el));
   }
+}
+
+function revealCoach(el) {
+  const bar = Math.ceil($('.top')?.getBoundingClientRect().height || 0);
+  const rect = el.getBoundingClientRect();
+  const gap = 12;
+  if (rect.top >= bar + gap && rect.bottom <= window.innerHeight - 8) return;
+  const y = rect.top + window.scrollY - bar - gap;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'auto' });
 }
 
 function openCoach() {
