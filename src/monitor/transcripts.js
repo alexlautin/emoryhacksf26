@@ -10,6 +10,7 @@ import { addEvent, listAgents, upsertAgent } from '../store.js';
 import { analyzePath, shortPath } from '../rules.js';
 import { truncate } from '../describe.js';
 import { projectName } from './processes.js';
+import { gatedToolUses } from '../hooks.js';
 
 const HOME = os.homedir();
 const CLAUDE_DIR = path.join(HOME, '.claude', 'projects');
@@ -129,6 +130,7 @@ function handleClaude(d) {
   if (d.type !== 'assistant') return;
   for (const block of d.message?.content ?? []) {
     if (block.type !== 'tool_use') continue;
+    if (gatedToolUses.has(block.id)) continue; // already recorded (and blocked or asked) by the hook
     toolEvent(agent, block.name, block.input ?? {});
   }
 }

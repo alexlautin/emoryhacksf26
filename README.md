@@ -19,6 +19,28 @@ Then open http://localhost:4100. Any Claude Code or Codex session already runnin
 
 Works on macOS and Windows 10/11. On Windows, run it from PowerShell or Windows Terminal. It doesn't need admin rights on either system.
 
+## Blocking actions before they run (Claude Code)
+
+The monitors below see what happened. Claude Code hooks let Seatbelt check each action **before** it runs:
+
+```bash
+pnpm protect path/to/your-project     # adds Seatbelt's hooks to .claude/settings.json
+pnpm unprotect path/to/your-project   # removes only Seatbelt's entries
+```
+
+Restart Claude Code in that folder (or run `/hooks`) afterwards. Then every tool call goes through
+`hooks/seatbelt-hook.sh` to `POST /hooks/pre-tool` and is checked with the same rules as everything else:
+
+- Decoy secrets, saved keys and passwords, home-folder wipes: **blocked**. Claude Code is told why and not to retry.
+- Uploads, downloads piped into a shell, force-pushes, startup-file changes, `sudo`: **Claude Code asks you first**,
+  with Seatbelt's reason in the prompt.
+- Everything else: no objection, so Claude Code's own permission prompts work as usual. Seatbelt never answers "allow".
+
+Decisions take about 10 ms. If Seatbelt isn't running, the hook blocks every action in protected folders until
+you start it (set `SEATBELT_FAIL_OPEN=1` to change that). Blocked actions never run, so Auto-protect doesn't
+pause the agent over them. Tested with a real Claude Code session (v2.1.170): reading a decoy file was blocked
+and Claude reported it instead of retrying.
+
 ## Demo
 
 Click "Run demo attack". A scripted stand-in agent is asked to set up a project in `demo/victim-project`, so it runs `npm install`. One dependency, `color-helpers`, has a malicious install script that reads `.env` and a fake AWS key, base64-encodes them, and POSTs them to a local "attacker" server on port 4199.
@@ -64,7 +86,7 @@ The dashboard in `public/` is plain HTML and JavaScript, updated live over Serve
 
 - Programs that start and finish in under about half a second can be missed by polling. The decoy files still catch secret reads. On macOS, `pnpm deep` uses Apple's `eslogger` to see every launch and file open, but it needs sudo and Full Disk Access, and we haven't tested it yet.
 - Access times don't say which process read a file, so a decoy read is credited to the agent that was most recently active. If more than one agent is active, Seatbelt warns you but won't pause anyone over it.
-- Auto-protect reacts to what it sees. It can't stop a command that finishes before the next poll. Blocking ahead of time would need a Claude Code `PreToolUse` hook.
+- Auto-protect reacts to what it sees. It can't stop a command that finishes before the next poll. For Claude Code, `pnpm protect` adds a `PreToolUse` hook that blocks ahead of time; other agents only get Auto-protect.
 - The Windows support hasn't been run on real Windows yet. Some things we know about:
   - Windows can't easily report a process's working folder, so an agent's project is filled in from its session log.
   - Pausing takes a second or two longer because PowerShell has to start.
@@ -73,7 +95,7 @@ The dashboard in `public/` is plain HTML and JavaScript, updated live over Serve
 
 ## What's next
 
-- Collectors: finish and test `eslogger` mode, add a blocking Claude Code hook, and test on Windows.
+- Collectors: finish and test `eslogger` mode, and test on Windows (including the hook script under Git Bash).
 - Rules: fewer false alarms, better prompts for the local model, and learning what's normal for each project.
 - Dashboard: a timeline view, a menu bar or tray icon, and notifications.
 - Demo: a run with a real agent, a backup video, and slides.

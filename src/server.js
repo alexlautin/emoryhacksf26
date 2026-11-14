@@ -15,6 +15,7 @@ import { shortPath } from './rules.js';
 import { resetDemo } from '../demo/reset.js';
 import { startGuard, getSettings, setSettings, pauseAgent, resumeAgent, endAgent } from './guard.js';
 import { IS_MAC, OS_NAME } from './platform.js';
+import { handleHook } from './hooks.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -80,6 +81,11 @@ async function stopDemo() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
+    if (url.pathname.startsWith('/hooks/') && req.method === 'POST') {
+      // Claude Code hook (via hooks/seatbelt-hook.sh). Answers before the tool call runs.
+      const event = url.pathname.slice('/hooks/'.length);
+      return json(res, 200, handleHook(event, await readBody(req), req.headers['x-seatbelt-project'] || ''));
+    }
     if (url.pathname === '/api/state') {
       return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning });
     }
