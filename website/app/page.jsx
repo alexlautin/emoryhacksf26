@@ -2,6 +2,7 @@ import Scenario from './_components/scenario.jsx';
 import ScorePlay from './_components/scoreplay.jsx';
 import Downloads from './downloads.jsx';
 import { Pug } from './_components/brand.jsx';
+import { RELEASE_PAGE, CHECKSUMS_URL } from '../releases.js';
 
 const AGENTS = ['Claude Code', 'Codex', 'Gemini CLI', 'Cursor', 'Copilot', 'opencode', 'Amp'];
 const FEED = ['git status', 'pnpm test', 'node build.mjs', 'git diff --stat', 'rg "TODO" src', 'pnpm lint', 'git add -A', 'tsc --noEmit'];
@@ -189,7 +190,7 @@ const FAQ = [
   ['Does anything leave my computer?', 'No. The log is a file on your disk, and summaries come from a local model. The one exception is the demo on this website, which is a separate thing: it asks Google Gemini to write a fictional session and never touches your machine.'],
   ['Can it actually stop a command?', 'In Claude Code, yes: the action is refused before it starts. For other agents Harness pauses the process tree once it sees a dangerous event, which usually lands before an upload completes but is not guaranteed to.'],
   ['What can it miss?', 'A process that starts and finishes in under about half a second can slip between checks. The decoy files still record that they were read. The white paper lists every limit we know about.'],
-  ['Does it need admin rights?', 'No. It runs as you. The desktop build is not signed with an Apple Developer ID yet, so macOS asks you to confirm the first time you open it.'],
+  ['Does it need admin rights?', 'Harness runs as you and does not need administrator rights to monitor your agents. macOS may ask you to authenticate when approving this unnotarized preview in Privacy & Security. See the first-open steps below.'],
 ];
 
 export default function Home() {
@@ -222,6 +223,39 @@ export default function Home() {
           <p className="lead">Free, with the source on GitHub. Lives in your Mac menu bar or Windows system tray.</p>
           <div id="downloads" />
           <noscript><p>Downloads are listed on <a href="https://github.com/alexlautin/harness/releases/latest">GitHub Releases</a>.</p></noscript>
+          <section className="install-guide" aria-labelledby="install-title">
+            <p className="eyebrow">Preview installation</p>
+            <h3 id="install-title">A little help with the first open.</h3>
+            <p>Node is included. You do not need a developer account or a separate Node installation.</p>
+            <section id="install-mac" aria-labelledby="install-mac-title">
+              <h4 id="install-mac-title">On a Mac</h4>
+              <p>In Apple menu → About This Mac, look for <strong>Chip</strong> (Apple silicon) or <strong>Processor</strong> (Intel) to choose your download.</p>
+              <ol>
+                <li>Open the downloaded DMG and drag <strong>Harness</strong> to <strong>Applications</strong>.</li>
+                <li>Open Harness from Applications. This preview is not notarized, so macOS may show <strong>“Harness” Not Opened</strong> and say Apple could not verify it is free of malware. Click <strong>Done</strong>.</li>
+                <li>Open <strong>System Settings → Privacy &amp; Security</strong>. Scroll to the message about Harness and click <strong>Open Anyway</strong>.</li>
+                <li>Authenticate if asked, then confirm <strong>Open</strong>. Look for Harness in your <strong>menu bar</strong>; click it to open the dashboard.</li>
+              </ol>
+              <p>macOS saves your approval for this copy of the app. A new download may need approval again. Only approve a build you intentionally downloaded from this project’s GitHub release.</p>
+              <details>
+                <summary>Still cannot open it?</summary>
+                <p>If Open Anyway is missing, try opening Harness from Applications again, then return to Privacy &amp; Security. On older macOS versions, look in System Preferences → Security &amp; Privacy → General. A managed Mac may require help from your administrator.</p>
+                <p>If macOS says the app is damaged or contains malware, stop and download a fresh copy from the release page. If the message persists, report the exact wording and your macOS version. Avoid disabling Gatekeeper or clearing security attributes as a routine installation step.</p>
+                <p><a href="https://support.apple.com/102445">Apple’s guide to opening downloaded apps</a> · <a href="https://github.com/alexlautin/harness/issues">Report an installation issue</a></p>
+              </details>
+            </section>
+            <section id="install-windows" aria-labelledby="install-windows-title">
+              <h4 id="install-windows-title">On Windows</h4>
+              <p>Run the 64-bit installer. This preview is unsigned, so SmartScreen may show “Windows protected your PC.” For a build you intentionally downloaded from this project’s release, choose <strong>More info → Run anyway</strong> if available. If your organization blocks it or Windows reports malware, stop and check with your administrator or report the message.</p>
+              <p>WebView2 is installed if needed. After installation, look for Harness in the <strong>system tray</strong>, including the hidden icons menu.</p>
+            </section>
+            <p className="install-source"><a href={RELEASE_PAGE}>Release notes and source</a> · <a href={CHECKSUMS_URL}>SHA-256 checksums</a></p>
+            <details>
+              <summary>How do I check the download?</summary>
+              <p>Download SHA256SUMS.txt from the same release. On macOS, run <code>shasum -a 256</code> followed by a space and the downloaded DMG’s path in Terminal. On Windows, use <code>Get-FileHash</code> followed by the installer’s path in PowerShell. Quote paths containing spaces. Compare the result with the entry for that exact filename.</p>
+              <p>A matching checksum confirms that your file matches the published download. It does not replace Apple notarization or a malware scan.</p>
+            </details>
+          </section>
         </div>
       </section>
       <Downloads />

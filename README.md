@@ -12,6 +12,21 @@ It runs locally. Nothing is sent anywhere.
 
 Get the [latest release](https://github.com/alexlautin/harness/releases/latest): a DMG for Apple silicon or Intel Macs, or a 64-bit installer for Windows 10/11. Node is included. See the release notes for first-open instructions for these unsigned preview builds.
 
+### First open on macOS
+
+This free preview is signed ad hoc, without an Apple Developer ID, and is not notarized by Apple. macOS may block the first open with **“Harness” Not Opened** and say Apple could not verify it is free of malware.
+
+1. Choose the DMG for your Mac: Apple menu → About This Mac shows **Chip** for Apple silicon or **Processor** for Intel.
+2. Open the DMG, drag Harness to **Applications**, then open it from Applications.
+3. If that warning appears, click **Done**. Go to **System Settings → Privacy & Security**, scroll to the message about Harness, and click **Open Anyway**.
+4. Authenticate if asked and confirm **Open**. Harness appears in the **menu bar**; click its icon to open the dashboard.
+
+Only approve a build you intentionally downloaded from this project's release. macOS saves approval for this copy; a new download may require approval again. If Open Anyway is missing, try launching the app again and return to Privacy & Security. On older macOS versions, use **System Preferences → Security & Privacy → General**. Organization-managed Macs may require administrator help. See [Apple's instructions](https://support.apple.com/102445).
+
+If macOS reports the app as damaged or containing malware, download a fresh copy from the official release. If the message persists, [report it](https://github.com/alexlautin/harness/issues) with your macOS version and the exact wording. Do not disable Gatekeeper or clear security attributes as a routine installation step.
+
+Each release includes `SHA256SUMS.txt`. On macOS, run `shasum -a 256` followed by the downloaded DMG's path; on Windows, use `Get-FileHash` followed by the installer's path in PowerShell. Quote paths containing spaces. Compare the hash with the entry for that filename in the same release. A match verifies the published file, not its safety.
+
 ## Running it
 
 You need Node 22 or newer and pnpm.
@@ -51,7 +66,7 @@ pnpm desktop          # run it in development, straight from this folder
 pnpm desktop:build    # Harness.app and a .dmg in src-tauri/target/release/bundle
 ```
 
-Builds are for the platform you build on. The app is signed ad hoc, not with an Apple Developer ID, so macOS warns about it when it's opened from a download: right-click the app and choose Open. If macOS says it's damaged, run `xattr -cr /Applications/Harness.app` once. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
+Builds are for the platform you build on. Downloaded Mac builds use the approval steps under **First open on macOS** above. GitHub Actions builds native installers for Apple silicon, Intel Macs, and Windows x64. Windows installers are unsigned and may trigger SmartScreen; interactive testing on personal Windows machines is still limited.
 
 ## Blocking actions before they run (Claude Code)
 

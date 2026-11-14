@@ -82,5 +82,12 @@ function card(entry) {
     art.append(alternate);
   }
   art.append(status);
+  if (entry.href) {
+    const help = document.createElement('a');
+    help.className = 'dl-help';
+    help.href = entry.id === 'mac' ? '#install-mac' : '#install-windows';
+    help.textContent = entry.id === 'mac' ? 'How to open on macOS →' : 'Windows installation help →';
+    art.append(help);
+  }
   return art;
 }
