@@ -51,7 +51,7 @@
 .demo-hood .hood-top { position: sticky; top: 0; z-index: 1; padding: 1.1em 0 0.8em; background: var(--night-2); }
 .demo-count { font-size: 0.8em; color: var(--night-dim); }
 .demo-empty { display: grid; justify-items: center; gap: 16px; padding: 48px 24px; text-align: center; font-family: var(--sans); color: var(--night-dim); }
-.demo-empty .pug { background: #f6f4ee; border-radius: 50%; padding: 14px; width: 104px; height: 104px; object-fit: contain; }
+.demo-empty .pug { background: radial-gradient(circle closest-side, #f6f4ee calc(100% - 0.5px), transparent 100%); padding: 18px; width: 104px; height: 104px; object-fit: contain; }
 .demo-empty p { max-width: 24em; }
 .demo-chain { display: grid; gap: 8px; margin-top: 0.4em; }
 .demo-chain > li { margin-left: calc(var(--i) * 22px); padding: 14px 16px; border-radius: var(--h-radius-card); background: var(--night-3); border: 1px solid transparent; animation: demo-in 0.55s var(--ease) both; }
