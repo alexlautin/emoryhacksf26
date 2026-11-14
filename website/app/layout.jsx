@@ -1,6 +1,52 @@
+import { Figtree, Geist_Mono } from 'next/font/google';
 import '../src/site.css';
 import './demo.css';
-export const metadata = { title: 'Lookout — See what your coding agent runs', description: 'Follow the chain behind an agent command. Try an interactive Gemini-powered simulation.', icons: { icon: '/favicon.svg' } };
+import Brand from './_components/brand.jsx';
+
+const sans = Figtree({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
+
+export const metadata = {
+  title: 'Harness — Let your coding agent run. Keep it on a harness.',
+  description: 'Harness watches everything Claude Code, Codex and other coding agents do on your computer, including what their window leaves out, and pauses them before something risky finishes.',
+};
+export const viewport = { themeColor: '#fbfaf7' };
+
+const GITHUB = 'https://github.com/alexlautin/emoryhacksf26';
+
 export default function Layout({ children }) {
-  return <html lang="en"><body><a className="skip" href="#main">Skip to content</a><header className="site-header"><div className="wrap header-inner"><a className="brand" href="/">◈ Lookout</a><nav className="site-nav" aria-label="Primary"><a href="/#how">How it works</a><a href="/demo">Try the demo</a><a href="/whitepaper">White paper</a><a href="/#download">Download</a></nav></div></header><main id="main" tabIndex={-1}>{children}</main><footer className="site-footer"><div className="wrap"><p className="footer-name">Lookout</p><p>A local monitor for AI coding agents. Built at Emory Hacks.</p><a href="https://github.com/alexlautin/emoryhacksf26">Source on GitHub</a> · <a href="/whitepaper">White paper</a></div></footer></body></html>;
+  return (
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <body>
+        <a className="skip" href="#main">Skip to content</a>
+        <header className="nav">
+          <div className="wrap nav-in">
+            <Brand />
+            <nav className="nav-links" aria-label="Primary">
+              <a href="/#scenario">How it works</a>
+              <a href="/#watch">What it catches</a>
+              <a href="/demo">Live demo</a>
+              <a href="/whitepaper">White paper</a>
+            </nav>
+            <a className="btn btn-ink btn-sm" href="/#download">Download</a>
+          </div>
+        </header>
+        <main id="main" tabIndex={-1}>{children}</main>
+        <footer className="foot">
+          <div className="wrap foot-in">
+            <div>
+              <Brand />
+              <p>A local monitor for AI coding agents.<br />Built at Emory Hacks, fall 2026.</p>
+            </div>
+            <nav aria-label="Footer">
+              <a href="/#scenario">How it works</a>
+              <a href="/demo">Live demo</a>
+              <a href="/whitepaper">White paper</a>
+              <a href={GITHUB}>Source on GitHub</a>
+            </nav>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
 }

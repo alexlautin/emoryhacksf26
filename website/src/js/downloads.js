@@ -4,10 +4,10 @@
 const NOTES = {
   macos: 'This computer is a Mac.',
   windows: 'This computer runs Windows. The app build is not ready.',
-  linux: 'This computer runs Linux. Lookout does not support Linux.',
-  ios: 'This is an iPhone. Lookout is a desktop app.',
-  ipad: 'This is an iPad. Lookout is a desktop app.',
-  android: 'This is an Android device. Lookout is a desktop app.',
+  linux: 'This computer runs Linux. Harness does not support Linux.',
+  ios: 'This is an iPhone. Harness is a desktop app.',
+  ipad: 'This is an iPad. Harness is a desktop app.',
+  android: 'This is an Android device. Harness is a desktop app.',
   unknown: 'This does not look like macOS or Windows.',
 };
 
@@ -59,7 +59,7 @@ export function downloadPlan(releases, os) {
     comingSoon: releases.macos?.comingSoon === true,
     button: 'Download for Mac',
     soon: 'No Mac build is configured in releases.js.',
-    placeholder: 'Placeholder. No file is hosted at this address yet. In releases.js, point url at the real .dmg and set published to true.',
+    placeholder: 'Placeholder link: the Mac build is not published yet. Until it is, build it from the source on GitHub.',
     ready: 'macOS 12 or later. The app is signed ad hoc, so the first open takes a right-click, then Open.',
   });
   const win = item({

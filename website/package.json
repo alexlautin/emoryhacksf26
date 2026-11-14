@@ -1,8 +1,8 @@
 {
-  "name": "lookout-website",
+  "name": "harness-website",
   "private": true,
   "type": "module",
-  "description": "Static site for Lookout. No dependencies.",
+  "description": "Harness website and Gemini demo (Next.js, deployed on Vercel).",
   "scripts": {
     "dev": "node prepare.mjs && next dev --hostname 127.0.0.1",
     "build": "node prepare.mjs && next build",
