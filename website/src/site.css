@@ -78,9 +78,48 @@ main:focus { outline: none; }
 .hero-note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
 
 .panel-wrap { position: relative; padding-top: 96px; justify-self: end; width: min(100%, 400px); }
-.panel-pug { position: absolute; top: 0; right: 28px; width: 132px; z-index: 1; animation: pug-in 0.9s var(--ease) 0.25s both; }
+.pug-rig { --pug-w: 132px; position: absolute; bottom: calc(100% + 1px - var(--pug-w) * 0.076); right: 28px; width: var(--pug-w); pointer-events: none; translate: 0 0; will-change: translate; transition: translate 1.1s cubic-bezier(.33,0,.2,1); animation: pug-in 0.9s var(--ease) 0.25s both; }
+.pug-rig.is-split { translate: calc(var(--pug-w) * -1.4) 0; transition: translate 2.6s cubic-bezier(.5,.05,.3,1) 0.4s; }
 @keyframes pug-in { from { opacity: 0; transform: translateY(-14px); } }
+.stack { position: relative; }
 .panel { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-lg); box-shadow: 0 1px 0 rgba(13,16,18,0.03), 0 30px 60px -28px rgba(13,16,18,0.22); padding: 6px 20px 16px; font-size: 14px; animation: rise 0.9s var(--ease) 0.1s both; }
+
+/* Hero panel: the card breaks in two when the agent does something risky. */
+.stack { position: relative; --pop: cubic-bezier(.2,1.35,.3,1); --red-line: color-mix(in srgb, var(--red) 50%, var(--line)); }
+.panel-a { border-radius: var(--h-radius-lg) var(--h-radius-lg) 0 0; padding-bottom: 6px; position: relative; z-index: 1; box-shadow: none; }
+.panel-b { border-top: 0; border-radius: 0 0 var(--h-radius-lg) var(--h-radius-lg); padding: 0 20px 16px; animation-delay: 0.25s; }
+.panel-a, .panel-b { transition: transform 0.8s var(--pop), border-radius 0.5s, border-color 0.4s, box-shadow 0.5s; will-change: transform; }
+.seam { position: relative; height: 0; z-index: 2; pointer-events: none; transition: transform 0.8s var(--pop); }
+.seam i { position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: var(--red); transform: scaleX(0); opacity: 0; box-shadow: 0 0 14px 2px color-mix(in srgb, var(--red) 55%, transparent); transition: transform 0.5s var(--ease) 0.1s, opacity 0.3s; }
+.seam span { position: absolute; left: 50%; top: 0; font: 600 11px/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; background: var(--red); color: #fff; padding: 6px 12px; border-radius: 99px; white-space: nowrap; opacity: 0; transform: translate(-50%, -50%) scale(0.6); transition: opacity 0.3s 0.25s, transform 0.6s var(--pop) 0.25s; }
+.is-alert .panel-a { animation: shake 0.5s both; border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent); }
+.is-alert .panel-b { border-color: var(--red-line); }
+.is-split .panel-a { transform: translate(-8px, -8px) rotate(-1.5deg); border-radius: var(--h-radius-lg); border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 30px 60px -28px rgba(13,16,18,0.22); }
+.is-split .panel-b { transform: translate(10px, 28px) rotate(1.8deg); border-radius: var(--h-radius-lg); border-top: 1px solid var(--red-line); border-color: var(--red-line); padding-top: 14px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 40px 60px -26px rgba(193,53,42,0.35); }
+.is-split .seam { transform: translateY(10px); }
+.is-split .seam i { transform: scaleX(1); opacity: 1; }
+.is-split .seam span { opacity: 1; transform: translate(-50%, -50%); }
+.panel-feed { transition: background 0.5s; }
+.is-split .panel-feed, .is-alert .panel-feed { background: var(--red-wash); }
+.panel-b { box-shadow: 0 1px 0 rgba(13,16,18,0.03), 0 30px 60px -28px rgba(13,16,18,0.22); }
+.is-split .ring { animation: ringpulse 1.2s ease-in-out infinite; }
+.ring { transition: background 0.5s; }
+.panel-feed li { animation: line-in 0.35s var(--ease) both; }
+@keyframes line-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes ringpulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--red) 16%, transparent); } }
+@keyframes shake { 15% { transform: translateX(-5px); } 30% { transform: translateX(5px) rotate(0.4deg); } 45% { transform: translateX(-4px); } 60% { transform: translateX(3px); } 80% { transform: translateX(-1px); } }
+@media (max-width: 900px) { .is-split .panel-a { transform: translate(-4px, -5px) rotate(-1deg); } .is-split .panel-b { transform: translate(5px, 20px) rotate(1deg); } .is-split .seam { transform: translateY(7px); } }
+@media (min-width: 901px) { .panel-wrap { margin-top: -56px; } }
+
+/* The pug reacts to the score: breathes when calm, startles, braces, then relaxes. */
+.pug-rig .pug { display: block; width: 100%; height: auto; transform-origin: 50% 92%; animation: pug-breathe 4s ease-in-out infinite; }
+.pug-rig.is-alert .pug { animation: pug-startle 0.8s var(--ease) both; }
+.pug-rig.is-split .pug { animation: pug-brace 0.7s var(--ease) both, pug-fidget 2.6s ease-in-out 0.7s infinite; }
+.pug-rig.is-rejoin .pug { animation: pug-relief 1s var(--ease) both, pug-breathe 4s ease-in-out 1s infinite; }
+@keyframes pug-startle { 0% { transform: none; } 15% { transform: scale(1.05, 0.92); } 42% { transform: translateY(-20px) scale(0.96, 1.07); } 70% { transform: translateY(0) scale(1.04, 0.95); } 100% { transform: translateY(0) scale(1) rotate(0.001deg); } }
+@keyframes pug-brace { to { transform: scale(1.02, 0.95); } }
+@keyframes pug-fidget { 0%, 100% { transform: scale(1.02, 0.95); } 50% { transform: scale(1.015, 0.96); } }
+@keyframes pug-relief { 0% { transform: scale(1.02, 0.95); } 35% { transform: translateY(-12px) scale(0.97, 1.05); } 65% { transform: scale(1.04, 0.96); } 100% { transform: none; } }
 @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
 .panel-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .panel-top b { font-weight: 700; letter-spacing: -0.02em; }
@@ -88,7 +127,8 @@ main:focus { outline: none; }
 .live i, .panel-sessions em::before { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 0 rgba(47,198,177,0.5); animation: pulse 2.2s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(47,198,177,0); } 100% { box-shadow: 0 0 0 0 rgba(47,198,177,0); } }
 .panel-score { display: flex; align-items: center; gap: 16px; padding: 18px 0; }
-.ring { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; background: radial-gradient(closest-side, var(--card) 82%, transparent 83%), conic-gradient(var(--teal) 0 100%); }
+.ring { display: grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; background: radial-gradient(closest-side, var(--card) 82%, transparent 83%), conic-gradient(var(--ring-c, var(--teal)) 0 var(--p, 100%), var(--line) 0); transition: background 0.4s; }
+.ring.lv-review { --ring-c: var(--amber); } .ring.lv-act { --ring-c: var(--red); } .ring.lv-act b { color: var(--red); }
 .ring b { font-size: 21px; font-weight: 700; letter-spacing: -0.04em; }
 .panel-score p b { display: block; font-size: 19px; letter-spacing: -0.02em; }
 .panel-score p span { color: var(--ink-2); font-size: 13.5px; }
@@ -98,8 +138,9 @@ main:focus { outline: none; }
 .panel-sessions em { display: inline-flex; align-items: center; gap: 7px; font-style: normal; font-size: 12.5px; color: var(--ink-2); }
 .panel-sessions em::before { content: ""; }
 .panel-feed { height: 78px; overflow: hidden; margin-top: 6px; padding: 8px 12px; border-radius: var(--h-radius-card); background: var(--tint); font-family: var(--mono); font-size: 12px; mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
-.panel-feed ol { animation: feed 18s steps(8) infinite; }
+.panel-feed ol { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
 .panel-feed li { height: 21px; line-height: 21px; white-space: nowrap; color: var(--ink); }
+.panel-feed li.is-bad { color: var(--red); font-weight: 600; } .panel-feed li.is-bad span { color: var(--red); opacity: 0.6; }
 .panel-feed li span { color: var(--ink-3); margin-right: 10px; }
 @keyframes feed { to { transform: translateY(-168px); } }
 
@@ -109,7 +150,7 @@ main:focus { outline: none; }
 @media (max-width: 900px) {
   .hero-grid { grid-template-columns: 1fr; }
   .panel-wrap { justify-self: start; padding-top: 84px; }
-  .panel-pug { width: 116px; }
+  .pug-rig { --pug-w: 116px; }
 }
 
 /* Scenario: a tall section with a pinned stage. scenario.jsx sets data-step and --p. */
@@ -445,6 +486,7 @@ main:focus { outline: none; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; transition-delay: 0s !important; }
   .panel-feed ol { animation: none; }
+  .panel-a, .panel-b, .seam { transition: none; }
   .type { width: 38ch; }
 }
 
