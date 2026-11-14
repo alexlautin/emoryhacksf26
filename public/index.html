@@ -27,21 +27,7 @@
         <span id="live" class="live" role="status"><span class="dot"></span><span id="live-text">Connecting</span></span>
       </div>
       <div class="top-actions">
-        <div class="seg" role="tablist" aria-label="View">
-          <button id="view-simple" class="on" role="tab" aria-selected="true">Simple</button>
-          <button id="view-advanced" role="tab" aria-selected="false">Advanced</button>
-        </div>
-        <div class="seg icons" role="radiogroup" aria-label="Theme" id="theme-seg">
-          <button data-theme="system" role="radio" aria-label="Match system" title="Match system"><svg class="i" aria-hidden="true"><use href="#monitor"/></svg></button>
-          <button data-theme="light" role="radio" aria-label="Light" title="Light"><svg class="i" aria-hidden="true"><use href="#sun"/></svg></button>
-          <button data-theme="dark" role="radio" aria-label="Dark" title="Dark"><svg class="i" aria-hidden="true"><use href="#moon"/></svg></button>
-        </div>
-        <button id="contrast" class="btn ghost" type="button" aria-pressed="false">Contrast</button>
-        <button id="help-open" class="btn ghost" type="button" aria-label="Keyboard shortcuts">Shortcuts</button>
-        <button id="prefs-open" class="btn icon" title="Preferences" aria-label="Preferences"><svg class="i" aria-hidden="true"><use href="#settings"/></svg></button>
-        <button id="reset" class="btn ghost" title="Clear the activity and start the score over">Reset</button>
-        <button id="coach-open" class="btn ghost" type="button">Walk through the demo</button>
-        <button id="demo" class="btn primary">Run demo attack</button>
+        <button id="prefs-open" class="btn ghost" type="button"><svg class="i" aria-hidden="true"><use href="#settings"/></svg> Settings</button>
         <button id="open-dash" class="btn primary" hidden>Open dashboard</button>
       </div>
     </div>
@@ -50,211 +36,88 @@
   <main id="main">
     <p id="conn-error" class="conn-error" hidden role="status">Can’t reach Harness. Trying again.</p>
 
-    <section id="coach" class="coach" hidden aria-labelledby="coach-title">
-      <div class="coach-kicker"><span>Demo walkthrough</span> <span id="coach-count">1 of 5</span></div>
-      <h2 id="coach-title"></h2>
-      <p id="coach-body"></p>
-      <p id="coach-note" class="hint"></p>
-      <div class="coach-actions">
-        <button id="coach-start" class="btn primary" type="button">Run the demo</button>
-        <button id="coach-close" class="btn ghost" type="button">Close</button>
-      </div>
-    </section>
-
     <section id="alert" class="alert" hidden role="status" aria-live="polite"></section>
 
-    <section class="report">
-      <div class="score-col">
-        <div class="label">Safety score</div>
-        <div class="score-line" id="score-live">
-          <span id="score-num" class="score-num">--</span>
-          <span class="score-of">/ 100</span>
-        </div>
-        <p id="score-level" class="level-word">Loading</p>
-        <p id="score-blurb" class="score-blurb">Getting the latest activity.</p>
-        <details class="plain">
-          <summary>What this number means</summary>
-          <p>100 means Harness has not seen a risky action yet. Points come off for secrets, uploads, things that keep running later, risky commands, unknown servers, and package installs. Clear, Steady, Review, and Act are names for ranges of that number.</p>
-        </details>
-        <div class="meter" aria-hidden="true">
-          <div class="meter-track"><div id="meter-fill" class="meter-fill"></div></div>
-          <div class="meter-ends"><span>0</span><span>100</span></div>
-        </div>
-        <p id="score-basis" class="basis"></p>
+    <section class="report" id="score-live">
+      <div class="score-line">
+        <span id="score-num" class="score-num">--</span>
+        <span class="score-of">/ 100</span>
       </div>
-
-      <div class="factors-col">
-        <div class="col-head">
-          <h2>What’s affecting the score</h2>
-          <button id="factor-clear" class="link" hidden>Show everything</button>
-        </div>
-        <ul id="factors" class="factors"></ul>
-      </div>
-    </section>
-
-    <section class="protect" id="protect">
-      <span class="tile protect-tile"><svg class="i" aria-hidden="true"><use id="protect-icon" href="#shield-check"/></svg></span>
-      <div class="protect-text">
-        <h2>Auto-protect <span id="protect-state" class="state-word">On</span></h2>
-        <p id="protect-desc"></p>
-      </div>
-      <div class="seg" role="radiogroup" aria-label="Auto-protect level" id="protect-seg">
-        <button data-level="off" role="radio">Off</button>
-        <button data-level="dangerous" role="radio">Dangerous only</button>
-        <button data-level="risky" role="radio">Anything risky</button>
+      <h2 id="score-level" class="level-word">Loading</h2>
+      <p id="score-blurb" class="score-blurb">Getting the latest activity.</p>
+      <div class="meter" aria-hidden="true">
+        <div class="meter-track"><div id="meter-fill" class="meter-fill"></div></div>
       </div>
     </section>
 
     <section>
-      <div class="section-head">
-        <h2>Active sessions <span id="active-count" class="count">0</span></h2>
-        <span class="hint" id="agent-hint">Click a session to see only its activity</span>
-      </div>
+      <h2 class="section-title">Your agents</h2>
       <div id="agents" class="agents"></div>
-      <details id="earlier" class="earlier" hidden>
-        <summary>Earlier sessions <span id="earlier-count" class="count">0</span></summary>
-        <div id="earlier-list" class="earlier-list"></div>
-      </details>
     </section>
 
-    <section id="detail" class="detail" hidden aria-labelledby="detail-title">
-      <div class="section-head">
-        <h2 id="detail-title">This session</h2>
-        <div class="detail-actions">
-          <button id="detail-play" class="btn small" type="button">Play the chain</button>
-          <button id="detail-md" class="btn small" type="button">Download report</button>
-          <button id="detail-print" class="btn small" type="button">Print</button>
-        </div>
-      </div>
-      <p id="detail-touch"></p>
-      <div id="detail-chain"></div>
-      <p id="detail-chain-note" class="hint"></p>
-      <div id="detail-lists" class="detail-lists"></div>
-      <ol id="detail-replay" class="replay"></ol>
-      <p class="hint">Print opens the browser’s dialog. Choose Save as PDF there if you want a PDF. Harness does not build a PDF file itself. A command or server you marked as normal for this project stays in the report and is labeled.</p>
-    </section>
-
-    <section id="explain" class="explain" hidden>
-      <div class="col-head">
-        <h3 id="explain-title">Summary</h3>
-        <button class="btn ghost small" id="explain-close">Close</button>
-      </div>
-      <div id="explain-body" class="explain-body"></div>
-      <div id="explain-src" class="hint"></div>
-    </section>
-
-    <section id="simple" class="simple">
-      <div class="section-head">
-        <h2 id="feed-title">Activity</h2>
-        <label class="toggle"><input type="checkbox" id="show-routine" /> <span>Show routine activity</span></label>
-      </div>
+    <details id="simple" class="log">
+      <summary>What happened</summary>
       <ol id="feed" class="feed"></ol>
       <p id="feed-empty" class="empty">Connecting…</p>
-    </section>
-
-    <section id="advanced" class="advanced" hidden>
-      <div class="section-head">
-        <h2>Everything Harness saw</h2>
-        <div class="filters">
-          <input id="q" type="search" placeholder="Filter by command, file, server" aria-label="Filter activity" />
-          <select id="risk-filter" aria-label="Minimum level">
-            <option value="0">All levels</option>
-            <option value="1">Low and up</option>
-            <option value="2">Medium and up</option>
-            <option value="3">High and up</option>
-          </select>
-          <select id="kind-filter" aria-label="Kind">
-            <option value="">All kinds</option>
-            <option value="process">Programs</option>
-            <option value="network">Network</option>
-            <option value="file">Files</option>
-            <option value="tool">Agent tools</option>
-            <option value="task">Tasks</option>
-            <option value="system">System</option>
-          </select>
-        </div>
-      </div>
-      <p id="table-note" class="hint table-note" hidden></p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Time</th><th>Agent</th><th>Kind</th><th>Level</th><th>What happened</th><th>Raw detail</th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
-    </section>
+    </details>
   </main>
 
   <footer class="foot">
-    <p>Nothing leaves this computer. Decoy files are in <code id="bait-dir">~/.harness/bait</code>.</p>
-    <p id="mode"></p>
-    <p><a href="/ui/index.html">Brand &amp; UI kit</a></p>
+    <p>Nothing leaves this computer.</p>
   </footer>
 
   <dialog id="prefs" aria-labelledby="prefs-title">
     <form method="dialog">
       <header class="prefs-head">
-        <h2 id="prefs-title">Preferences</h2>
+        <h2 id="prefs-title">Settings</h2>
         <button class="btn icon" id="prefs-close" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
       </header>
+      <fieldset class="protect" id="protect" data-level="dangerous">
+        <legend>Auto-protect <span id="protect-state" class="state-word">On</span></legend>
+        <p class="hint" id="protect-desc"></p>
+        <svg class="i" hidden aria-hidden="true"><use id="protect-icon" href="#shield-check"/></svg>
+        <div class="seg" role="radiogroup" aria-label="Auto-protect level" id="protect-seg">
+          <button type="button" data-level="off" role="radio">Off</button>
+          <button type="button" data-level="dangerous" role="radio">On</button>
+          <button type="button" data-level="risky" role="radio">Strict</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Appearance</legend>
+        <div class="seg" role="radiogroup" aria-label="Theme" id="theme-seg">
+          <button type="button" data-theme="system" role="radio">Match system</button>
+          <button type="button" data-theme="light" role="radio">Light</button>
+          <button type="button" data-theme="dark" role="radio">Dark</button>
+        </div>
+        <p><button type="button" class="btn" id="prefs-contrast" aria-pressed="false">Higher contrast</button></p>
+      </fieldset>
       <fieldset>
         <legend>Menu bar item</legend>
-        <p class="hint">What shows next to the Harness icon. The menu itself always has the score, the agents, and the latest alert.</p>
         <div class="choice-list" role="radiogroup" aria-label="Menu bar item" id="display-seg">
           <button type="button" data-display="score" role="radio">Score</button>
           <button type="button" data-display="icon" role="radio">Icon only</button>
           <button type="button" data-display="agents" role="radio">Agent count</button>
           <button type="button" data-display="alerts" role="radio">Alert count</button>
         </div>
-        <p id="prefs-preview" class="hint"></p>
-      </fieldset>
-      <fieldset>
-        <legend>Reading the page</legend>
-        <p class="hint">Higher contrast uses black and white and underlines the score words, so the color is not the only signal. The same switch is in the header.</p>
-        <button type="button" class="btn" id="prefs-contrast" aria-pressed="false">Higher contrast</button>
       </fieldset>
       <fieldset>
         <legend>Alerts</legend>
-        <p class="hint" id="notify-hint">Dangerous events always show a banner on this page. On a Mac, Harness also posts a system notification when you run it in a terminal. The menu bar app uses the system notification. Browser alerts stay off until you allow them.</p>
+        <p class="hint" id="notify-hint">Dangerous events always show a banner here. Browser alerts stay off until you allow them.</p>
         <button type="button" class="btn" id="prefs-notify">Allow browser alerts</button>
       </fieldset>
       <fieldset>
         <legend>Normal for a project</legend>
-        <p class="hint">Mark a low or medium action from the activity list. Harness does not learn this on its own. It will not hide a decoy read, or anything Risky or Dangerous. Removing a mark puts the points back.</p>
+        <p class="hint">Actions you marked as normal. Removing one puts its points back.</p>
         <ul id="baseline-list" class="baseline-list"></ul>
       </fieldset>
-    </form>
-  </dialog>
-
-  <dialog id="intro" aria-labelledby="intro-title">
-    <form method="dialog">
-      <header class="prefs-head">
-        <h2 id="intro-title">Harness watches the agent, not just its window</h2>
-      </header>
-      <p>Claude Code and Codex can start programs that never show up in their chat: a shell, npm, a package’s install script, then curl. Harness follows that chain on this computer and scores it from 0 to 100.</p>
-      <p>Nothing is sent anywhere. The demo uses fake secrets and a pretend server on this machine.</p>
-      <div class="coach-actions">
-        <button class="btn primary" id="intro-demo" type="button" value="demo">Walk through the demo</button>
-        <button class="btn" id="intro-skip" type="submit" value="skip">I’ll look around</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="help" aria-labelledby="help-title">
-    <form method="dialog">
-      <header class="prefs-head">
-        <h2 id="help-title">Keyboard shortcuts</h2>
-        <button class="btn icon" value="cancel" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
-      </header>
-      <ul class="shortcut-list">
-        <li><kbd>1</kbd> Simple view</li>
-        <li><kbd>2</kbd> Advanced view</li>
-        <li><kbd>D</kbd> Run the demo</li>
-        <li><kbd>W</kbd> Walk through the demo</li>
-        <li><kbd>/</kbd> Filter activity</li>
-        <li><kbd>?</kbd> This list</li>
-        <li><kbd>Esc</kbd> Close a dialog, or clear the selected session</li>
-      </ul>
-      <p class="hint">Shortcuts stay quiet while you are typing in a field.</p>
+      <fieldset>
+        <legend>Try it</legend>
+        <p class="hint">Run a pretend attack to see how Harness reacts. It uses fake secrets and a server on this computer.</p>
+        <div class="coach-actions">
+          <button type="button" class="btn" data-demo>Run demo attack</button>
+          <button type="button" class="btn ghost" id="reset" title="Clear the activity and start the score over">Reset activity</button>
+        </div>
+      </fieldset>
     </form>
   </dialog>
 
@@ -277,20 +140,11 @@
     <button type="button" class="mp-row" id="mp-pause" role="menuitem">Pause</button>
     <button type="button" class="mp-row" id="mp-demo" role="menuitem">Run demo attack</button>
     <div class="mp-sep" role="separator"></div>
-    <div class="mp-label"><span>Menu bar shows</span><span id="mp-preview"></span></div>
-    <div id="mp-display" role="group" aria-label="Menu bar shows">
-      <button type="button" class="mp-row mp-radio" data-display="score" role="menuitemradio"><span class="mp-tick" aria-hidden="true">✓</span><span>Score</span></button>
-      <button type="button" class="mp-row mp-radio" data-display="icon" role="menuitemradio"><span class="mp-tick" aria-hidden="true">✓</span><span>Icon only</span></button>
-      <button type="button" class="mp-row mp-radio" data-display="agents" role="menuitemradio"><span class="mp-tick" aria-hidden="true">✓</span><span>Agent count</span></button>
-      <button type="button" class="mp-row mp-radio" data-display="alerts" role="menuitemradio"><span class="mp-tick" aria-hidden="true">✓</span><span>Alert count</span></button>
-    </div>
-    <div class="mp-sep" role="separator"></div>
     <button type="button" class="mp-row" id="mp-quit" role="menuitem">Quit Harness <kbd id="mp-quit-key">⌘Q</kbd></button>
   </div>
 
   <div id="announce" class="sr" role="status" aria-live="assertive"></div>
-  <div id="print-root"></div>
-  <div id="toast" class="toast" hidden role="status"></div>
+    <div id="toast" class="toast" hidden role="status"></div>
   <script src="/app.js" type="module"></script>
 </body>
 </html>
