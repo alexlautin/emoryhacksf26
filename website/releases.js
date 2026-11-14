@@ -1,5 +1,5 @@
 // Published asset names are kept stable by .github/workflows/release.yml.
-const base = 'https://github.com/alexlautin/harness/releases/download/v0.1.1';
+const base = 'https://github.com/alexlautin/harness/releases/download/v0.1.2';
 export const RELEASE_PAGE = base.replace('/download/', '/tag/');
 export const CHECKSUMS_URL = `${base}/SHA256SUMS.txt`;
 export const RELEASES = {

@@ -1,6 +1,6 @@
 [package]
 name = "harness"
-version = "0.1.1"
+version = "0.1.2"
 description = "Harness: watches what AI coding agents do on your computer"
 edition = "2021"
 
