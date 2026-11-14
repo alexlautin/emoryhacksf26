@@ -12,7 +12,7 @@ function Hero() {
     <section className="hero">
       <div className="wrap hero-grid">
         <div className="hero-copy">
-          <h1>Let your agent run.<br /><span>Keep it on a harness.</span></h1>
+          <h1>Let your agent run.<br /><span>Keep it on a <span className="h1-end">harness.</span></span></h1>
           <p className="lead">Harness watches everything your coding agent does on your computer, including the parts its window leaves out, and pauses it before something risky finishes.</p>
           <p className="hero-cta">
             <a className="btn btn-ink" href="#download">Download for macOS or Windows</a>
@@ -26,6 +26,7 @@ function Hero() {
         <ul className="agents" aria-label="Agents Harness recognizes">
           <li className="agents-label">Recognizes</li>
           {AGENTS.map((a) => <li key={a}>{a}</li>)}
+          <li className="agents-more"><a href="#scenario" aria-label="Scroll to see the walkthrough"><span>Scroll</span><i aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2.5v11M3.5 9L8 13.5 12.5 9" /></svg></i></a></li>
         </ul>
       </div>
     </section>

@@ -32,6 +32,7 @@ export default function HeroPanel() {
   const hits = BAD.filter((b) => t >= b.at);
   const score = hits.length ? hits[hits.length - 1].score : 100;
   const phase = t >= 10200 ? 'rejoin' : t >= 4700 ? 'split' : t >= BAD[0].at ? 'alert' : 'calm';
+  const paused = phase === 'split' || phase === 'rejoin';
   const level = LEVELS.find((l) => score >= l.min);
   const normal = [];
   for (let i = 0, n = Math.floor(t / TICK) + 4; i < n; i++) normal.push({ id: 'n' + i, cmd: FEED[i % FEED.length], at: i * TICK });
@@ -48,7 +49,7 @@ export default function HeroPanel() {
             <p><b>{level.name}</b><span>{level.blurb}</span></p>
           </div>
           <ul className="panel-sessions">
-            <li><b>Claude Code</b><span>my-app</span><em>active</em></li>
+            <li className={paused ? 'is-paused' : ''}><b>Claude Code</b><span>my-app</span><em>{paused ? 'paused' : 'active'}</em></li>
             <li><b>Codex</b><span>api-server</span><em>active</em></li>
           </ul>
         </div>
