@@ -1,4 +1,4 @@
-// Seatbelt: a local sentinel for AI agents. Dashboard at http://localhost:4100
+// Lookout: a local sentinel for AI agents. Dashboard at http://localhost:4100
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +13,7 @@ import { summarize, ollamaStatus } from './llm.js';
 import { shortPath } from './rules.js';
 import { resetDemo } from '../demo/reset.js';
 import { startGuard, getSettings, setSettings, pauseAgent, resumeAgent, endAgent } from './guard.js';
-import { IS_MAC, OS_NAME } from './platform.js';
+import { IS_MAC, IS_WIN, OS_NAME } from './platform.js';
 import { handleHook } from './hooks.js';
 import { ROOT, DEMO_DIR, prepareDemoDir } from './paths.js';
 import { iconSprite, FONT_FILE } from './icons.js';
@@ -41,7 +41,7 @@ async function readBody(req) {
 let demoRunning = false;
 let demoChild = null;
 
-/** End any demo agent that is still around (for example one Seatbelt paused) and wait for it to exit. */
+/** End any demo agent that is still around (for example one Lookout paused) and wait for it to exit. */
 async function stopDemo() {
   if (!demoRunning || !demoChild) return;
   const exited = new Promise((r) => { demoChild.once('exit', r); setTimeout(r, 4000); });
@@ -54,9 +54,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/hooks/') && req.method === 'POST') {
-      // Claude Code hook (via hooks/seatbelt-hook.sh). Answers before the tool call runs.
+      // Claude Code hook (via hooks/lookout-hook.sh). Answers before the tool call runs.
       const event = url.pathname.slice('/hooks/'.length);
-      return json(res, 200, handleHook(event, await readBody(req), req.headers['x-seatbelt-project'] || ''));
+      const project = req.headers['x-lookout-project'] || req.headers['x-seatbelt-project'] || '';
+      return json(res, 200, handleHook(event, await readBody(req), project));
     }
     if (url.pathname === '/api/state') {
       return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning });
@@ -137,7 +138,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // The pretend "attacker" for the demo. It only counts bytes; it never stores what it receives.
-// If Seatbelt ends the upload partway, the request is cut off; report what got through.
+// If Lookout ends the upload partway, the request is cut off; report what got through.
 const attacker = http.createServer(async (req, res) => {
   let bytes = 0;
   let cutOff = false;
@@ -151,7 +152,7 @@ const attacker = http.createServer(async (req, res) => {
   res.end('ok');
 });
 
-// The desktop app asks for 4100 (where Claude Code hooks look for Seatbelt) but takes any free
+// The desktop app asks for 4100 (where Claude Code hooks look for Lookout) but takes any free
 // port if something else already has it, such as a `pnpm start` in a terminal.
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE' && IS_DESKTOP && server.address() === null) {
@@ -163,10 +164,10 @@ server.on('listening', () => {
   const port = server.address().port;
   process.env.PORT = String(port); // the demo agent reports back to this port
   startDesktopBridge(port);
-  console.log(`\n  Seatbelt is watching. Dashboard: http://localhost:${port}\n`);
+  console.log(`\n  Lookout is watching. Dashboard: http://localhost:${port}\n`);
   console.log(`  Decoy secrets planted in ${shortPath(BAIT_DIR)}`);
   if (process.argv.includes('--eslogger') && !IS_MAC) console.log('  Deep mode needs macOS; running in standard mode.');
-  console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : '  Mode: standard (no admin rights needed).');
+  console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : IS_WIN ? '  Mode: standard (no admin rights needed).' : '  Mode: standard.');
 });
 server.listen(PORT, '127.0.0.1');
 attacker.listen(4199, '127.0.0.1').on('error', () => console.log('  (demo attacker port 4199 busy; demo upload will fail)'));

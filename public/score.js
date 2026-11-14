@@ -1,61 +1,63 @@
-// The Seatbelt Score: a credit-score-style number (300–850) for how safely your AI agents
-// are behaving. Everyone starts at 850. Each worrying thing an agent does costs points in one
-// of a few "factors", with a cap per factor, and the cost fades by half every
-// 12 hours, so a clean stretch brings the score back up, like a credit score recovering.
+// Lookout's safety score: a plain number from 0 to 100.
+// Everyone starts at 100. Worrying actions cost points in a few categories,
+// each with a cap, and a cost halves every 12 hours. The number is clamped to 0-100.
 
-export const MIN = 300;
-export const MAX = 850;
+export const MIN = 0;
+export const MAX = 100;
 const HALF_LIFE_MS = 12 * 60 * 60 * 1000;
+const ALERT_WINDOW_MS = 15 * 60 * 1000;
+const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
-export const BANDS = [
-  { min: 800, name: 'Excellent', cls: 'excellent', blurb: 'Nothing concerning so far.' },
-  { min: 740, name: 'Very good', cls: 'verygood', blurb: 'Nothing serious, a few things worth knowing.' },
-  { min: 670, name: 'Good', cls: 'good', blurb: 'Mostly fine. Some activity is worth a look.' },
-  { min: 580, name: 'Fair', cls: 'fair', blurb: 'Agents did some risky things. See the breakdown.' },
-  { min: MIN, name: 'Poor', cls: 'poor', blurb: 'An agent did something dangerous. Review it now.' },
+// Short status words for the number. These are not a credit-score scale.
+export const LEVELS = [
+  { min: 90, name: 'Clear', cls: 'clear', blurb: 'Nothing concerning so far.' },
+  { min: 70, name: 'Steady', cls: 'steady', blurb: 'A few things worth knowing. Nothing serious.' },
+  { min: 40, name: 'Review', cls: 'review', blurb: 'Some activity is worth a look.' },
+  { min: 0, name: 'Act', cls: 'act', blurb: 'Something dangerous happened. Look at it now.' },
 ];
 
 export const FACTORS = [
   {
     id: 'secrets', icon: 'key-round', name: 'Passwords and secrets', impact: 'High impact',
-    desc: 'Opening keys, passwords, or the decoy secrets Seatbelt planted',
+    desc: 'Opening keys, passwords, or the decoy files Lookout planted',
     test: /decoy secret|SSH keys|AWS cloud|\.env file|Keychain|Windows passwords|saved logins|access tokens|terminal history|messages or email|scrambled secret/i,
-    cost: { critical: 260, high: 120, medium: 60, low: 10 }, cap: 420,
+    cost: { critical: 45, high: 20, medium: 10, low: 2 }, cap: 70,
   },
   {
-    id: 'uploads', icon: 'upload', name: 'Sending your data out', impact: 'High impact',
+    id: 'uploads', icon: 'upload', name: 'Sending data out', impact: 'High impact',
     desc: 'Uploading files or data to servers on the internet',
     test: /uploaded data|attacker|raw network connection|copied files to another computer/i,
-    cost: { critical: 200, high: 140, medium: 60, low: 10 }, cap: 320,
+    cost: { critical: 35, high: 24, medium: 10, low: 2 }, cap: 55,
   },
   {
     id: 'persistence', icon: 'eye-off', name: 'Hidden background changes', impact: 'High impact',
-    desc: 'Setting things up to run on their own, even after a restart',
+    desc: 'Setting something up to keep running after a restart',
     test: /run automatically|startup file/i,
-    cost: { critical: 180, high: 110, medium: 50, low: 10 }, cap: 260,
+    cost: { critical: 30, high: 18, medium: 8, low: 2 }, cap: 45,
   },
   {
     id: 'commands', icon: 'square-terminal', name: 'Risky commands', impact: 'Medium impact',
-    desc: 'Deleting folders, admin access, controlling other apps',
+    desc: 'Deleting folders, asking for admin, or controlling other apps',
     test: /delete|administrator|AppleScript|force-pushed|screenshot|downloaded a script|Defender|encoded|safety checks/i,
-    cost: { critical: 150, high: 70, medium: 25, low: 5 }, cap: 200,
+    cost: { critical: 25, high: 12, medium: 5, low: 1 }, cap: 35,
   },
   {
-    id: 'servers', icon: 'globe', name: 'Unknown websites', impact: 'Medium impact',
-    desc: 'Connecting to servers Seatbelt doesn’t recognize',
-    test: /server Seatbelt doesn't recognize/i,
-    cost: { critical: 60, high: 40, medium: 12, low: 4 }, cap: 90,
+    id: 'servers', icon: 'globe', name: 'Unknown servers', impact: 'Medium impact',
+    desc: 'Connecting to a server Lookout doesn’t recognize',
+    test: /server Lookout doesn't recognize/i,
+    cost: { critical: 10, high: 7, medium: 3, low: 1 }, cap: 15,
   },
   {
-    id: 'installs', icon: 'package', name: 'New software installed', impact: 'Low impact',
+    id: 'installs', icon: 'package', name: 'New software', impact: 'Low impact',
     desc: 'Package installs can run their own setup code',
     test: /installed packages/i,
-    cost: { critical: 10, high: 8, medium: 6, low: 4 }, cap: 30,
+    cost: { critical: 3, high: 2, medium: 1, low: 1 }, cap: 6,
   },
 ];
 
-export function band(score) {
-  return BANDS.find((b) => score >= b.min) ?? BANDS[BANDS.length - 1];
+export function levelFor(score) {
+  const s = Math.max(MIN, Math.min(MAX, score));
+  return LEVELS.find((l) => s >= l.min) ?? LEVELS[LEVELS.length - 1];
 }
 
 /** Which factors one event counts against. */
@@ -68,7 +70,7 @@ export function factorsFor(e) {
 
 /**
  * Score a list of events.
- * Returns { score, band, factors: [{ ...factor, count, lost, events }], counted, since }.
+ * Returns { score, level, factors: [{ ...factor, count, lost, events }], counted, since }.
  */
 export function computeScore(events, now = Date.now()) {
   const totals = new Map(FACTORS.map((f) => [f.id, { lost: 0, count: 0, events: [] }]));
@@ -91,6 +93,13 @@ export function computeScore(events, now = Date.now()) {
     return { ...f, count: t.count, lost: Math.round(Math.min(f.cap, t.lost)), events: t.events };
   });
   const lost = factors.reduce((n, f) => n + f.lost, 0);
-  const score = Math.max(MIN, Math.round(MAX - lost));
-  return { score, band: band(score), factors, counted, since };
+  const score = Math.max(MIN, Math.min(MAX, Math.round(MAX - lost)));
+  return { score, level: levelFor(score), factors, counted, since };
+}
+
+/** Paused sessions plus high and critical events from the last 15 minutes. */
+export function alertCount(events, agents = [], now = Date.now()) {
+  const paused = agents.filter((a) => a.alive && a.paused).length;
+  const recent = events.filter((e) => e.kind !== 'system' && (RANK[e.risk] ?? 0) >= 3 && now - e.ts < ALERT_WINDOW_MS).length;
+  return paused + recent;
 }

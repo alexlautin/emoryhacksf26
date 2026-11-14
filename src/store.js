@@ -3,10 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './paths.js';
+import { computeScore } from '../public/score.js';
 
 const LOG_FILE = path.join(DATA_DIR, 'events.jsonl');
 
-const RISK_PENALTY = { info: 0, low: 0, medium: 8, high: 25, critical: 40 };
 const MAX_EVENTS = 5000;
 
 const events = [];
@@ -63,7 +63,7 @@ export function addEvent(e) {
     if (event.kind === 'file') agent.counts.files++;
     if (event.kind === 'network') agent.counts.network++;
     if (['high', 'critical'].includes(event.risk)) agent.counts.alerts++;
-    agent.score = Math.max(0, agent.score - (RISK_PENALTY[event.risk] ?? 0));
+    agent.score = computeScore(events.filter((e) => e.agentId === agent.id)).score;
     broadcast('agent', agent);
   }
   broadcast('event', event);
