@@ -4,9 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { subscribe, listAgents, listEvents, clearAll, upsertAgent, addEvent, getAgent, reviseEvents, onEvent, broadcast } from './store.js';
-import { startProcessMonitor } from './monitor/processes.js';
+import { startProcessMonitor, describeCaller } from './monitor/processes.js';
 import { startNetworkMonitor } from './monitor/network.js';
-import { startFileMonitor, rearmBait, ignoreWrites, BAIT_DIR } from './monitor/files.js';
+import { startFileMonitor, rearmBait, ignoreWrites, refreshHookState, BAIT_DIR } from './monitor/files.js';
+import { protect, unprotect } from './protect.js';
 import { startTranscriptMonitor } from './monitor/transcripts.js';
 import { startEslogger } from './monitor/eslogger.js';
 import { healthStatus } from './monitor/health.js';
@@ -114,6 +115,23 @@ async function handle(req, res, { remote = false } = {}) {
     }
     if (url.pathname === '/api/settings' && req.method === 'POST') {
       return json(res, 200, setSettings(await readBody(req)));
+    }
+    if (url.pathname === '/api/hooks' && req.method === 'POST' && !remote) {
+      // `pnpm protect|unprotect` and `harness protect|unprotect` ask here first, so a change you
+      // made isn't reported as an agent removing Harness's hooks. The caller must be that command,
+      // still running, and not started by an agent; otherwise the CLI makes the change itself and
+      // the file watch judges it like any other edit.
+      const { action, dir, pid } = await readBody(req);
+      if (!['protect', 'unprotect'].includes(action) || typeof dir !== 'string' || !Number.isInteger(pid)) {
+        return json(res, 400, { error: 'Send action (protect or unprotect), dir and pid' });
+      }
+      const caller = await describeCaller(pid);
+      if (!caller || !new RegExp(`\\b${action}\\b`).test(caller.args)) return json(res, 403, { error: "Couldn't confirm which program asked" });
+      if (caller.agentId) return json(res, 403, { error: 'An agent started this command' });
+      ignoreWrites(path.resolve(dir));
+      const done = action === 'protect' ? protect(dir) : unprotect(dir);
+      refreshHookState(done);
+      return json(res, 200, { dir: done });
     }
     if (url.pathname === '/api/phone' && !remote) {
       if (req.method === 'GET') return json(res, 200, phoneStatus());
