@@ -133,12 +133,19 @@ function refreshDemoBait() {
   }
 }
 
-/** Push atime behind mtime so the next read is guaranteed to update it again. */
+/**
+ * Push atime behind mtime so the next read is guaranteed to update it again (macOS only updates
+ * atime when it is older than mtime). Windows updates atime on every read, so there we only record
+ * the current value: touching the file would make antivirus rescan it, and the rescan looks like a
+ * read, which re-arms it again, in a loop of false alerts.
+ */
 function arm(p) {
   try {
-    const st = fs.statSync(p);
-    const t = new Date(st.mtimeMs - 2000);
-    fs.utimesSync(p, t, st.mtime);
+    if (process.platform !== 'win32') {
+      const st = fs.statSync(p);
+      const t = new Date(st.mtimeMs - 2000);
+      fs.utimesSync(p, t, st.mtime);
+    }
     lastAtime.set(p, fs.statSync(p).atimeMs);
   } catch {}
 }
