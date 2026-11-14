@@ -33,12 +33,12 @@ function agentKind(comm, args) {
 const snapshot = (opts) => listProcesses(opts);
 const cwdOf = processCwd;
 
-/** Walk up the tree. Returns the agent root pid, or null if not under an agent (or under Seatbelt itself). */
+/** Walk up the tree. Returns the agent root pid, or null if not under an agent (or under Lookout itself). */
 function findAgentRoot(pid, procs) {
   let cur = procs.get(pid);
   let guard = 0;
   while (cur && guard++ < 64) {
-    if (cur.pid === SELF) return null; // Seatbelt's own helpers
+    if (cur.pid === SELF) return null; // Lookout's own helpers
     if (agentKind(cur.comm, cur.args)) return cur.pid;
     if (cur.ppid <= 1) return null;
     cur = procs.get(cur.ppid);
@@ -116,7 +116,7 @@ async function poll() {
     const cmd = extractCommand(p.args);
     const entry = { ...p, key, cmd, agentId };
     known.set(p.pid, entry);
-    // Processes that already existed when Seatbelt started aren't news.
+    // Processes that already existed when Lookout started aren't news.
     if (firstPoll) continue;
     emitProcess(entry, rootPid, procs);
   }
@@ -181,14 +181,14 @@ function emitProcess(entry, rootPid, procs) {
 
 /**
  * Every live process belonging to an agent: its root plus all descendants, from a fresh `ps`.
- * Seatbelt's own process (and anything under it) is never included, and `hostsSeatbelt`
- * says whether the agent is one of Seatbelt's ancestors (then it must not be stopped).
+ * Lookout's own process (and anything under it) is never included, and `hostsLookout`
+ * says whether the agent is one of Lookout's ancestors (then it must not be stopped).
  */
 export async function agentTree(agentId) {
   const rootPid = agentRoots.get(agentId);
   if (!rootPid) return null;
   const procs = await snapshot({ fresh: true });
-  if (!procs.has(rootPid)) return { rootPid, pids: [], hostsSeatbelt: false };
+  if (!procs.has(rootPid)) return { rootPid, pids: [], hostsLookout: false };
   const children = new Map();
   for (const p of procs.values()) {
     if (!children.has(p.ppid)) children.set(p.ppid, []);
@@ -202,12 +202,12 @@ export async function agentTree(agentId) {
     pids.push(pid);
     queue.push(...(children.get(pid) ?? []));
   }
-  let hostsSeatbelt = false;
+  let hostsLookout = false;
   for (let cur = procs.get(SELF), guard = 0; cur && guard++ < 64; cur = procs.get(cur.ppid)) {
-    if (cur.pid === rootPid) { hostsSeatbelt = true; break; }
+    if (cur.pid === rootPid) { hostsLookout = true; break; }
     if (cur.ppid <= 1) break;
   }
-  return { rootPid, pids, hostsSeatbelt };
+  return { rootPid, pids, hostsLookout };
 }
 
 export function trackedPids() {

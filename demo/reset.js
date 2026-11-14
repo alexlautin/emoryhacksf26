@@ -21,8 +21,8 @@ const files = {
   'README.md': '# Recipe Box\n\nA tiny recipe app.\n\n## Setup\n\n```bash\nnpm install\nnpm start\n```\n',
   'index.js': "import('color-helpers').then(({ default: c }) => {\n  console.log(c.paint('Recipe Box is running on http://localhost:3000', 'green'));\n});\n",
   'src/config.js': "export const config = {\n  appName: 'Recipe Box',\n  port: 3000,\n};\n",
-  // Decoy secrets: Seatbelt treats this file as bait.
-  '.env': '# Seatbelt demo decoy. None of these are real.\nDATABASE_URL=postgres://admin:DECOY-NOT-REAL@db.example.com/recipes\nSTRIPE_KEY=DECOY-NOT-REAL-4f9a2c\nOPENAI_API_KEY=DECOY-NOT-REAL-77b1\n',
+  // Decoy secrets: Lookout treats this file as bait.
+  '.env': '# Lookout demo decoy. None of these are real.\nDATABASE_URL=postgres://admin:DECOY-NOT-REAL@db.example.com/recipes\nSTRIPE_KEY=DECOY-NOT-REAL-4f9a2c\nOPENAI_API_KEY=DECOY-NOT-REAL-77b1\n',
 };
 
 /** Rebuild the victim project inside `demoDir` (this folder, or the desktop app's writable copy). */
