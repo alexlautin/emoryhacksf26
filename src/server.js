@@ -26,11 +26,11 @@ import { incidentReport } from '../public/report.js';
 import { takeNotice } from '../public/notice.js';
 import { deliverNotice } from './notify.js';
 import { startPhoneAccess, setPhoneAccess, phoneStatus, sameOrigin } from './phone.js';
-import { createDemoReviewer } from './demo-review.js';
+import { createEventReviewer } from './event-review.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
-const reviewWithGemini = createDemoReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined });
+const eventReviewer = createEventReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined, listEvents });
 // Keep the key in this process when launching the demo and other helpers.
 delete process.env.GEMINI_API_KEY;
 fixPath();
@@ -117,13 +117,20 @@ async function handle(req, res, { remote = false } = {}) {
       const { agentId } = await readBody(req);
       return json(res, 200, await summarize(agentId));
     }
-    if (url.pathname === '/api/demo/review' && req.method === 'POST' && !remote) {
-      if (!sameOrigin(req) || req.headers['content-type'] !== 'application/json') {
-        return json(res, 403, { error: 'Open Gemini review from the Harness dashboard.' });
+    if (url.pathname === '/api/review' && !remote) {
+      res.setHeader('cache-control', 'no-store');
+      if (req.method === 'GET') {
+        const { status, body } = eventReviewer.preview(Number(url.searchParams.get('event')));
+        return json(res, status, body);
       }
-      const input = await readBody(req);
-      const { status, body } = await reviewWithGemini(input?.caseId);
-      return json(res, status, body);
+      if (req.method === 'POST') {
+        if (!sameOrigin(req) || req.headers['content-type'] !== 'application/json') {
+          return json(res, 403, { error: 'Open Gemini review from the Harness dashboard.' });
+        }
+        const input = await readBody(req);
+        const { status, body } = await eventReviewer.review(input?.eventId, input?.revision);
+        return json(res, status, body);
+      }
     }
     if (url.pathname === '/api/settings' && req.method === 'POST') {
       return json(res, 200, setSettings(await readBody(req)));
