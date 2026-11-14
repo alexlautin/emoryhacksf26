@@ -22,6 +22,11 @@ function agentKind(comm, args) {
   const base = exeName(comm);
   if (base === 'claude' || /@anthropic-ai[\\/]claude-code[\\/]/.test(args)) return 'claude';
   if (base === 'codex' || /@openai[\\/]codex[\\/]/.test(args)) return 'codex';
+  if (base === 'gemini' || /@google[\\/]gemini-cli[\\/]/.test(args)) return 'gemini';
+  if (base === 'cursor-agent' || /[\\/]cursor-agent[\\/]/.test(args)) return 'cursor';
+  if (base === 'copilot' || /@github[\\/]copilot[\\/]/.test(args)) return 'copilot';
+  if (base === 'opencode' || /[\\/]opencode-ai[\\/]/.test(args)) return 'opencode';
+  if (base === 'amp' || /@sourcegraph[\\/]amp[\\/]/.test(args)) return 'amp';
   return null;
 }
 

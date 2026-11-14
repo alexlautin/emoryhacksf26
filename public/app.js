@@ -138,8 +138,13 @@ function lastAction(a) {
   return e ? `${e.title} · ${ago(e.ts)}` : 'No activity yet';
 }
 
-function initialOf(a) {
-  return a.kind === 'claude' ? 'C' : a.kind === 'codex' ? '>_' : 'D';
+const BRAND_KINDS = new Set(['claude', 'codex', 'gemini', 'cursor', 'copilot', 'opencode', 'amp']);
+
+/** The agent's logo, or a generic bot icon for the demo and anything unknown. */
+function agentLogo(a) {
+  return BRAND_KINDS.has(a.kind)
+    ? `<svg class="brand" aria-hidden="true"><use href="/icons.svg#brand-${a.kind}"/></svg>`
+    : icon('bot');
 }
 
 function sessionCard(a) {
@@ -150,7 +155,7 @@ function sessionCard(a) {
   return `
     <article class="session ${st.cls} band-${sc.band.cls} ${state.selected === a.id ? 'selected' : ''}" data-id="${esc(a.id)}" tabindex="0">
       <header class="s-head">
-        <div class="avatar ${esc(a.kind)}">${initialOf(a)}</div>
+        <div class="avatar" title="${esc(a.label)}">${agentLogo(a)}</div>
         <div class="s-id">
           <div class="s-name">${esc(a.label)}</div>
           <div class="s-proj" title="${esc(a.cwd)}">in ${esc(a.project)}${a.startedAt ? ` · started ${ago(a.startedAt)}` : ''}</div>
@@ -196,7 +201,7 @@ function earlierRow(a) {
   const sc = computeScore(eventsOf(a.id));
   return `
     <button class="earlier-row ${state.selected === a.id ? 'selected' : ''}" data-id="${esc(a.id)}">
-      <span class="avatar sm ${esc(a.kind)}">${initialOf(a)}</span>
+      <span class="avatar sm">${agentLogo(a)}</span>
       <span class="e-name"><b>${esc(a.label)}</b> in ${esc(a.project)}</span>
       <span class="e-state ${st.cls}">${st.text}</span>
       <span class="s-score sm ${sc.band.cls}"><b>${sc.score}</b></span>
