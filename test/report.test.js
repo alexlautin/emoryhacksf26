@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { incidentMarkdown, incidentModel } from '../public/report.js';
+import { incidentMarkdown, incidentModel, incidentPrintHtml } from '../public/report.js';
 
 test('the report names the score, the chain, and the decoy', () => {
   const now = Date.UTC(2026, 5, 1, 12, 0, 0);
@@ -31,6 +31,26 @@ test('the report names the score, the chain, and the decoy', () => {
   assert.match(md, /Set up this project/);
   assert.match(md, /Save as PDF/);
   assert.doesNotMatch(md, /seamless|leverage|robust/);
+});
+
+test('print html keeps a heading between lists', () => {
+  const html = incidentPrintHtml([
+    '# Lookout report',
+    '',
+    '## Score',
+    '',
+    '- Secrets: -45 (1 event)',
+    '',
+    '### Commands',
+    '',
+    '- `npm install`',
+    '',
+    '### Files',
+    '',
+    '- .env <b>',
+  ].join('\n'));
+  assert.equal((html.match(/<ul>/g) || []).length, 3);
+  assert.match(html, /<h3>Commands<\/h3><ul><li>`npm install`<\/li><\/ul><h3>Files<\/h3><ul><li>\.env &lt;b&gt;<\/li><\/ul>/);
 });
 
 test('an empty report still explains itself', () => {

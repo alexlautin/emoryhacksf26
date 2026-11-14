@@ -38,7 +38,8 @@ test('a saved command downgrades the next match in that project only', () => {
   const back = revertBaseline(quiet);
   assert.equal(back.risk, 'medium');
   assert.equal(back.baseline, undefined);
-  assert.equal(back.reasons.some((r) => r.startsWith('you marked this as normal')), false);
+  assert.match(quiet.reasons.at(-1), /^this was marked as normal for this project/);
+  assert.equal(back.reasons.some((r) => /marked as normal for this project/.test(r)), false);
 });
 
 test('baselines are written to the data folder and can be removed', async () => {

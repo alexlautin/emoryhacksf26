@@ -73,13 +73,13 @@ export function applyBaseline(event, baselines, agent) {
     risk: 'info',
     baseline: true,
     baselineId: hit.id,
-    reasons: [...(event.reasons || []), 'you marked this as normal for this project, so it no longer changes the score'],
+    reasons: [...(event.reasons || []), 'this was marked as normal for this project, so it stays in the log and no longer changes the score'],
   };
 }
 
 export function revertBaseline(event) {
   if (!event?.baseline) return event;
-  const reasons = (event.reasons || []).filter((r) => !r.startsWith('you marked this as normal'));
+  const reasons = (event.reasons || []).filter((r) => !/marked as normal for this project/.test(r));
   const risk = event.originalRisk || 'info';
   const next = { ...event, risk, reasons };
   delete next.baseline;

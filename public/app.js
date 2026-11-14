@@ -2,7 +2,7 @@
 import { alertCount, computeScore, factorsFor } from './score.js';
 import { bestChain, replayItems } from './timeline.js';
 import { sessionTouch } from './touch.js';
-import { incidentMarkdown, incidentModel } from './report.js';
+import { incidentMarkdown, incidentModel, incidentPrintHtml } from './report.js';
 import { canBaseline } from './baseline.js';
 import { COACH_STEPS, coachCursor } from './coach.js';
 
@@ -85,6 +85,7 @@ const state = {
   connected: false,
   baselines: [],
   coachOn: false,
+  scrollCoach: false,
   playIndex: null,
   playAgent: null,
 };
@@ -311,6 +312,7 @@ function isNotable(e) {
   if (e.kind === 'task' || e.agentReported) return true;
   if (e.kind === 'file' && e.batch) return true;
   if (e.kind === 'network' && !e.isAgentItself && !e.trusted) return true;
+  if (e.baseline) return true;
   return false;
 }
 
@@ -326,10 +328,9 @@ function feedItem(e) {
         <div class="title">${esc(e.title)}</div>
         ${reasons.length ? `<div class="why">${reasons.length === 1 ? `${esc(sentence(reasons[0]))}.` : `<ul>${reasons.map((r) => `<li>${esc(sentence(r))}</li>`).join('')}</ul>`}</div>` : ''}
         ${e.guard && e.detail ? `<div class="why">${esc(e.detail)}</div>` : ''}
-        ${e.command && (RANK[e.risk] >= 1 || e.agentReported) ? `<div class="cmd mono" title="${esc(e.command)}">${esc(e.command)}</div>` : ''}
+        ${e.command && (RANK[e.risk] >= 1 || e.agentReported || e.baseline) ? `<div class="cmd mono" title="${esc(e.command)}">${esc(e.command)}</div>` : ''}
         ${e.kind === 'file' && e.batch && e.detail ? `<div class="why mono">${esc(e.detail)}</div>` : ''}
         ${tags ? `<div class="ftags">${tags}</div>` : ''}
-        ${e.baseline ? `<div class="why">Marked normal for this project. It stays in the log and no longer changes the score.</div>` : ''}
         ${canBaseline(e) ? `<div class="item-actions"><button type="button" class="link" data-base="${e.id}">Normal for this project</button></div>` : ''}
       </div>
       <div class="when">
@@ -729,16 +730,21 @@ function renderCoach() {
   const note = $('#coach-note');
   note.textContent = cursor > 0 ? 'This follows what is already on the page. Reset if you want to watch it from the start.' : '';
   $('#coach-start').hidden = cursor > 0;
+  if (state.scrollCoach) {
+    state.scrollCoach = false;
+    // The section was hidden until this paint. Scroll on the next frame, after it has a box.
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: 'auto', block: 'start' }));
+  }
 }
 
 function openCoach() {
   state.coachOn = true;
+  state.scrollCoach = true;
   if (!state.selected) {
     const demo = [...state.agents.values()].find((a) => a.kind === 'demo');
     if (demo) state.selected = demo.id;
   }
   render();
-  $('#coach')?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' });
 }
 
 function downloadReport() {
@@ -754,15 +760,7 @@ function downloadReport() {
 function printReport() {
   const model = incidentModel(reportScope());
   const md = incidentMarkdown(model);
-  const html = md.split('\n').map((line) => {
-    if (line.startsWith('# ')) return `<h1>${esc(line.slice(2))}</h1>`;
-    if (line.startsWith('## ')) return `<h2>${esc(line.slice(3))}</h2>`;
-    if (line.startsWith('### ')) return `<h3>${esc(line.slice(4))}</h3>`;
-    if (line.startsWith('- ')) return `<li>${esc(line.slice(2))}</li>`;
-    if (!line.trim()) return '';
-    return `<p>${esc(line)}</p>`;
-  }).join('');
-  $('#print-root').innerHTML = html.replace(/<\/li><li>/g, '</li><li>').replace(/(<li>.*<\/li>)+/g, (m) => `<ul>${m}</ul>`);
+  $('#print-root').innerHTML = incidentPrintHtml(md);
   document.body.classList.add('printing');
   window.print();
 }
@@ -903,7 +901,11 @@ $('#prefs-notify').onclick = async () => {
   const perm = await Notification.requestPermission();
   toast(perm === 'granted' ? 'Browser alerts are on for Dangerous events.' : 'Browser alerts stay off.');
 };
-$('#help-open').onclick = () => $('#help').showModal();
+function showHelp() {
+  const d = $('#help');
+  if (d && !d.open) d.showModal();
+}
+$('#help-open').onclick = () => showHelp();
 $('#intro-skip').onclick = () => localSet('intro', '1');
 $('#intro-demo').onclick = () => {
   localSet('intro', '1');
@@ -931,7 +933,7 @@ function typingTarget(e) {
 
 document.addEventListener('keydown', (e) => {
   if (!PANEL && !typingTarget(e) && !e.metaKey && !e.ctrlKey && !e.altKey) {
-    if (e.key === '?') { e.preventDefault(); $('#help').showModal(); }
+    if (e.key === '?') { e.preventDefault(); showHelp(); }
     else if (e.key === '1') setView('simple');
     else if (e.key === '2') setView('advanced');
     else if (e.key === 'd' || e.key === 'D') runDemo();
