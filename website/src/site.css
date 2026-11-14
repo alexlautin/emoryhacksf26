@@ -305,7 +305,8 @@ main:focus { outline: none; }
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
     [data-reveal] { animation: reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 55%; }
-    @keyframes reveal { from { opacity: 0; transform: translateY(28px); } }
+    /* Keep content at full contrast even when scrolling stops mid-reveal. */
+    @keyframes reveal { from { transform: translateY(28px); } to { transform: none; } }
   }
 }
 
