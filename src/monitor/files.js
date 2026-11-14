@@ -41,18 +41,37 @@ export function ignoreWrites(dir, ms = 4000) {
   quiet.set(dir, Date.now() + ms);
 }
 
-function setupBait() {
-  fs.mkdirSync(BAIT_DIR, { recursive: true });
+function isOwned(body) {
+  // The SSH decoy hides the wording in the base64 line. The others say it in plain text.
+  return /Lookout decoy|Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body);
+}
+
+/** The random value already written into one of our decoys, if the file still has it. */
+export function markerIn(body) {
+  if (!body) return null;
+  const key = body.match(/aws_access_key_id = AKIA([A-Z2-7]{16})/);
+  if (key) return key[1];
+  const bank = body.match(/bank: ([A-Z2-7]{16})-decoy/);
+  if (bank) return bank[1];
+  const line = body.match(/^([A-Z2-7]{16})$/m);
+  return line ? line[1] : null;
+}
+
+function setupBait(baitDir, markersFile) {
+  fs.mkdirSync(baitDir, { recursive: true });
   let saved = {};
-  try { saved = JSON.parse(fs.readFileSync(MARKERS_FILE, 'utf8')); } catch {}
+  try { saved = JSON.parse(fs.readFileSync(markersFile, 'utf8')); } catch {}
   for (const [name, render] of Object.entries(BAIT_FILES)) {
-    const p = path.join(BAIT_DIR, name);
+    const p = path.join(baitDir, name);
     let body = null;
     try { body = fs.readFileSync(p, 'utf8'); } catch {}
     let marker = saved[name];
+    const found = markerIn(body);
+    const owned = body !== null && isOwned(body);
+    // A copied decoy can hold a marker that isn't in the markers file yet. Keep that value.
+    if (owned && found && !(marker && body.includes(marker))) marker = found;
     // Write the decoy if it's missing, or upgrade an older decoy that has no marker yet.
     // Never overwrite a file that isn't one of ours.
-    const owned = body !== null && /Lookout decoy|Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body);
     // Rewrite old "Seatbelt decoy" wording in place, keeping the same marker.
     const legacyWording = owned && marker && body.includes(marker) && /Seatbelt decoy/i.test(body);
     if (body === null || (owned && !(marker && body.includes(marker))) || legacyWording) {
@@ -67,25 +86,37 @@ function setupBait() {
     }
     baitPaths.add(p);
   }
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(MARKERS_FILE, JSON.stringify(saved, null, 2), { mode: 0o600 });
-  registerLegacyBait();
+  fs.mkdirSync(path.dirname(markersFile), { recursive: true });
+  fs.writeFileSync(markersFile, JSON.stringify(saved, null, 2), { mode: 0o600 });
 }
 
 // Decoys from before the rename live in ~/.seatbelt/bait.
 // Copy them once, and keep watching the old files so a read there still counts.
-function migrateBaitDir() {
-  if (fs.existsSync(BAIT_DIR) || !fs.existsSync(LEGACY_BAIT_DIR)) return;
-  fs.mkdirSync(path.dirname(BAIT_DIR), { recursive: true });
-  fs.cpSync(LEGACY_BAIT_DIR, BAIT_DIR, { recursive: true });
+function migrateBaitDir(baitDir, legacyDir) {
+  if (fs.existsSync(baitDir) || !fs.existsSync(legacyDir)) return;
+  fs.mkdirSync(path.dirname(baitDir), { recursive: true });
+  fs.cpSync(legacyDir, baitDir, { recursive: true });
 }
 
-function registerLegacyBait() {
-  if (!fs.existsSync(LEGACY_BAIT_DIR)) return;
+function registerLegacyBait(legacyDir) {
+  if (!fs.existsSync(legacyDir)) return;
   for (const name of Object.keys(BAIT_FILES)) {
-    const p = path.join(LEGACY_BAIT_DIR, name);
-    if (fs.existsSync(p)) baitPaths.add(p);
+    const p = path.join(legacyDir, name);
+    let body = null;
+    try { body = fs.readFileSync(p, 'utf8'); } catch {}
+    if (body === null) continue;
+    baitPaths.add(p);
+    // The old file can still hold a value the new file no longer has. Remember it.
+    const marker = isOwned(body) ? markerIn(body) : null;
+    if (marker && !baitMarkers.has(marker)) baitMarkers.set(marker, p);
   }
+}
+
+/** Plant the decoys, copy an old bait folder once, and remember every marker in either place. */
+export function prepareBait({ baitDir = BAIT_DIR, legacyDir = LEGACY_BAIT_DIR, markersFile = MARKERS_FILE } = {}) {
+  migrateBaitDir(baitDir, legacyDir);
+  setupBait(baitDir, markersFile);
+  registerLegacyBait(legacyDir);
 }
 
 function refreshDemoBait() {
@@ -245,8 +276,7 @@ function watchSensitive() {
 }
 
 export function startFileMonitor() {
-  migrateBaitDir();
-  setupBait();
+  prepareBait();
   refreshDemoBait();
   watchSensitive();
   setInterval(pollBait, 700);

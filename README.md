@@ -97,7 +97,7 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 `src/monitor/network.js` lists open connections for those processes (`lsof` on macOS, `netstat -ano` on Windows) and names the server with reverse DNS or the URL in the command.
 
-`src/monitor/files.js` plants decoy secrets in `~/.lookout/bait` and notices when they're read by checking access times. If `~/.seatbelt/bait` is still there from before the rename, those files are copied over once and a read of the old path still counts. Each decoy embeds a random marker made on first run (saved in `data/bait-markers.json`); any rule that sees a marker in a command line treats it as a decoy being used. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
+`src/monitor/files.js` plants decoy secrets in `~/.lookout/bait` and notices when they're read by checking access times. If `~/.seatbelt/bait` is still there from before the rename, those files are copied over once and a read of the old path still counts. The random value inside an old decoy is kept, so a command that already contains it still counts. Each decoy embeds a random marker made on first run (saved in `data/bait-markers.json`); any rule that sees a marker in a command line treats it as a decoy being used. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
 
 `src/monitor/transcripts.js` reads the session logs in `~/.claude/projects` and `~/.codex/sessions` to see what the agent was asked to do and which tools it used.
 
