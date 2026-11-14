@@ -22,9 +22,9 @@ const OURS = {
 // HARNESS_PROTECTED_FILE lets tests keep their folders out of the real list.
 const registry = () => process.env.HARNESS_PROTECTED_FILE || path.join(DATA_DIR, 'protected-folders.json');
 
-export function protectedFolders() {
+export function protectedFolders(file = registry()) {
   try {
-    const list = JSON.parse(fs.readFileSync(registry(), 'utf8'));
+    const list = JSON.parse(fs.readFileSync(file, 'utf8'));
     return Array.isArray(list) ? list.filter((d) => typeof d === 'string') : [];
   } catch {
     return [];
