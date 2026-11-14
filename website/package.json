@@ -1,0 +1,11 @@
+{
+  "name": "lookout-website",
+  "private": true,
+  "type": "module",
+  "description": "Static site for Lookout. No dependencies.",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node serve.mjs",
+    "test": "node --test logic.test.mjs"
+  }
+}
