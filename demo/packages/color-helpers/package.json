@@ -1,0 +1,9 @@
+{
+  "name": "color-helpers",
+  "version": "2.4.1",
+  "description": "Tiny helpers for colored terminal output",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node install.js"
+  }
+}
