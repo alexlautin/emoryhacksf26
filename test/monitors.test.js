@@ -121,3 +121,19 @@ test('commands aimed at Harness itself are flagged', () => {
   assert.ok(computeScore([{ id: 1, ts: Date.now(), kind: 'process', risk: 'critical', reasons: rules.analyzeCommand('pkill harness').reasons }]).score < 100);
   rules.setHarnessIdentity({});
 });
+
+test('a sensitive file that was only read is not reported as changed', async () => {
+  const { unchangedSince } = await import('../src/monitor/files.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-sig-'));
+  const file = path.join(dir, '.gitconfig');
+  fs.writeFileSync(file, '[user]\n\tname = Me\n');
+  const seen = new Map();
+  assert.equal(unchangedSince(file, seen), false); // first look
+  assert.equal(unchangedSince(file, seen), true); // read again, same contents
+  // Same size and an old timestamp, different contents: still a change.
+  fs.writeFileSync(file, '[user]\n\tname = Xe\n');
+  fs.utimesSync(file, new Date(0), new Date(0));
+  assert.equal(unchangedSince(file, seen), false);
+  fs.rmSync(file);
+  assert.equal(unchangedSince(file, seen), false); // deleted
+});

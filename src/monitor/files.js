@@ -363,6 +363,43 @@ function flushProjects() {
 const sensitiveWatchers = new Map(); // dir -> FSWatcher
 const lastReported = new Map(); // path -> ms, so one save (several fs events) is one entry
 const REPEAT_MS = 3000;
+/**
+ * path -> what the file held when last looked at. Windows also reports a "change" when a file was
+ * only read (git reading ~/.gitconfig on every command, for one), so a change counts only if the
+ * contents differ. Compared by contents, not timestamps, because a program can set those back.
+ */
+const lastContents = new Map();
+
+export function fileSignature(full) {
+  try {
+    const st = fs.statSync(full);
+    if (!st.isFile()) return 'dir';
+    if (st.size > 1024 * 1024) return `big:${st.size}:${st.mtimeMs}`;
+    return crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex');
+  } catch {
+    return 'gone';
+  }
+}
+
+/** True when the file is the same as last time. The first look at a file never counts as the same. */
+export function unchangedSince(full, seen = lastContents) {
+  const sig = fileSignature(full);
+  const same = seen.get(full) === sig && sig !== 'dir';
+  seen.set(full, sig);
+  if (seen.size > 2000) seen.delete(seen.keys().next().value);
+  return same;
+}
+
+function rememberContents(dir, only) {
+  try {
+    for (const name of fs.readdirSync(dir).slice(0, 300)) {
+      if (only && !only.test(name)) continue;
+      const full = path.join(dir, name);
+      const sig = fileSignature(full);
+      if (sig !== 'dir') lastContents.set(full, sig);
+    }
+  } catch {}
+}
 
 /**
  * The event for a change in a sensitive place. With no agent active it's still recorded, at a
@@ -402,6 +439,7 @@ function onSensitiveChange(dir, only, name) {
   if (/^known_hosts/.test(base)) return; // ssh updates this on every new server
   const full = path.join(dir, rel);
   const now = Date.now();
+  if (unchangedSince(full)) return; // only read, or saved with the same contents
   if (now - (lastReported.get(full) ?? 0) < REPEAT_MS) return;
   lastReported.set(full, now);
   if (lastReported.size > 500) lastReported.delete(lastReported.keys().next().value);
@@ -420,6 +458,7 @@ function watchSensitive() {
     if (sensitiveWatchers.has(dir) || !fs.existsSync(dir)) continue;
     try {
       if (only?.test('settings.json')) seedHookState(path.dirname(dir));
+      rememberContents(dir, only);
       const w = fs.watch(dir, { recursive: !!recursive }, (_ev, name) => onSensitiveChange(dir, only, name));
       w.on('error', (err) => {
         monitorFailed('files', new Error(`watching ${shortPath(dir)}: ${err.message}`));
