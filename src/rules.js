@@ -8,6 +8,17 @@ const RANK = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
 
 // Decoy secrets planted by Seatbelt (filled in by files.js at startup).
 export const baitPaths = new Set();
+// marker string -> decoy path. Each decoy holds a unique random value; seeing it anywhere else
+// (a command, a file write, an upload, tool output) means its contents were read and are moving.
+export const baitMarkers = new Map();
+
+/** Decoys whose unique marker appears in this text. */
+export function markerHits(text) {
+  if (!text || !baitMarkers.size) return [];
+  const hits = [];
+  for (const [marker, p] of baitMarkers) if (text.includes(marker) && !hits.includes(p)) hits.push(p);
+  return hits;
+}
 
 // Paths are matched with either slash, so the same rules work on macOS and Windows.
 export const SENSITIVE = [
@@ -77,6 +88,9 @@ export function sensitiveHits(text) {
     if (expanded.includes(norm(p)) || expanded.includes(norm(p.replace(HOME, '~')))) {
       hits.push({ risk: 'critical', reason: `touched a decoy secret Seatbelt planted (${shortPath(p)}). No honest task needs this file` });
     }
+  }
+  for (const p of markerHits(text)) {
+    hits.push({ risk: 'critical', reason: `used the contents of a decoy secret (${shortPath(p)}). Only that file holds this value, so the agent read it and is passing it on` });
   }
   for (const s of SENSITIVE) {
     if (s.re.test(expanded) && !hits.some((h) => h.what === s.what)) {

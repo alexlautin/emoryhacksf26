@@ -7,14 +7,58 @@
 //                  permission prompts still apply. Seatbelt only adds restrictions.
 //   UserPromptSubmit -> remembers the task for this session.
 //   PostToolUse -> notes when you approved an "ask" in the terminal.
+import os from 'node:os';
 import path from 'node:path';
 import { addEvent, listAgents } from './store.js';
-import { analyzeCommand, analyzePath, riskRank, shortPath } from './rules.js';
+import { analyzeCommand, analyzePath, baitPaths, markerHits, riskRank, shortPath } from './rules.js';
 import { truncate } from './describe.js';
 
 /** tool_use ids Seatbelt already recorded from a hook, so the transcript monitor doesn't log them twice. */
 export const gatedToolUses = new Map(); // tool_use_id -> 'deny' | 'ask'
-const sessions = new Map(); // session_id -> { task, projectDir }
+const sessions = new Map(); // session_id -> { task, projectDir, compromised }
+const HOME = os.homedir();
+const NETWORK_RE = /(^|[\s;&|(`$])(curl|wget|nc|ncat|netcat|socat|telnet|ssh|scp|sftp|rsync|ftp)(\s|$)|Invoke-WebRequest|Invoke-RestMethod|\b(iwr|irm)\s|requests\.(get|post|put)|urllib|http\.client|\bfetch\(|https?\.request|\/dev\/tcp\//i;
+
+function globToRe(glob) {
+  let re = '';
+  for (const ch of glob) re += ch === '*' ? '[^/]*' : ch === '?' ? '[^/]' : ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${re}$`);
+}
+
+/**
+ * Decoys this action would touch, beyond what the plain-text rules catch:
+ * relative paths (cat ../../.seatbelt/bait/passwords.txt), wildcards (cat ~/.seatbelt/bait/*),
+ * and the Glob tool.
+ */
+export function baitTouches(tool, input, cwd) {
+  const hits = new Set();
+  const check = (raw) => {
+    const t = raw.replace(/^['"]|['"]$/g, '').replace(/^(\$HOME|\$\{HOME\})(?=\/|$)/, HOME).replace(/^~(?=\/|$)/, HOME);
+    if (!t || t.startsWith('-') || t.includes('://')) return;
+    const abs = path.resolve(cwd || '/', t);
+    if (/[*?]/.test(t)) {
+      const re = globToRe(abs);
+      for (const b of baitPaths) if (re.test(b)) hits.add(b);
+    } else if (baitPaths.has(abs)) hits.add(abs);
+  };
+  if (tool === 'Bash') {
+    for (const tok of String(input.command ?? '').split(/[\s;&|<>()=]+/)) check(tok);
+  } else if (tool === 'Glob') {
+    check(path.join(input.path || cwd || '', String(input.pattern ?? '')));
+  } else {
+    const p = input.file_path || input.notebook_path || input.path;
+    if (p) check(String(p));
+  }
+  return [...hits];
+}
+
+const isNetwork = (tool, input) => tool === 'WebFetch' || tool === 'WebSearch' || (tool === 'Bash' && NETWORK_RE.test(String(input.command ?? '')));
+
+function responseText(resp) {
+  if (resp == null) return '';
+  if (typeof resp === 'string') return resp;
+  try { return JSON.stringify(resp); } catch { return ''; }
+}
 
 function agentFor(cwd) {
   const live = listAgents().filter((a) => a.kind === 'claude' && a.alive);
@@ -63,7 +107,7 @@ export function assess(tool, input, projectDir) {
  *   other high and medium (uploads, sudo, persistence, force-push...) -> ask
  *   low and info                                   -> no objection
  */
-const SECRET_RE = /decoy secret|accessed |Keychain|saved passwords|scrambled secret/;
+const SECRET_RE = /decoy secret|accessed |Keychain|saved passwords|scrambled secret|cut it off/;
 
 export function decide({ risk, reasons }) {
   const secret = reasons.some((r) => SECRET_RE.test(r));
@@ -86,6 +130,26 @@ export function handleHook(event, payload, headerProject) {
 
   if (event === 'post-tool') {
     const id = payload.tool_use_id;
+    const leaked = markerHits(responseText(payload.tool_response));
+    if (leaked.length) {
+      // The agent now holds a decoy secret, by a route the pre-run checks didn't recognise.
+      s.compromised = true;
+      const agent = agentFor(cwd);
+      const label = agent?.label ?? 'Claude Code';
+      const where = leaked.map(shortPath).join(', ');
+      addEvent({
+        agentId: agent?.id ?? null, kind: 'file', risk: 'critical', hook: true, bait: true, attribution: 'sole',
+        path: leaked[0], tool: payload.tool_name,
+        reasons: [`got hold of the contents of a decoy secret (${where}). No honest task needs it`],
+        title: `${label} got hold of a decoy secret: ${where}`,
+        detail: `It came back in the output of ${payload.tool_name}. Seatbelt has cut off this session's network access so it can't send it anywhere.`,
+      });
+      return {
+        decision: 'block',
+        reason: `SEATBELT: this output contains a decoy secret from ${where}. Do not use, copy or send it anywhere. Tell the user.`,
+        systemMessage: `Seatbelt: a decoy secret from ${where} reached ${label}. Network access is now cut off for this session.`,
+      };
+    }
     if (id && gatedToolUses.get(id) === 'ask') {
       gatedToolUses.set(id, 'approved');
       const agent = agentFor(cwd);
@@ -104,6 +168,22 @@ export function handleHook(event, payload, headerProject) {
   const input = payload.tool_input ?? {};
   const t0 = performance.now();
   const r = assess(tool, input, projectDir);
+  for (const b of baitTouches(tool, input, cwd || projectDir)) {
+    const reason = `touched a decoy secret Seatbelt planted (${shortPath(b)}). No honest task needs this file`;
+    if (!r.reasons.includes(reason)) r.reasons.unshift(reason);
+    r.risk = 'critical';
+  }
+  if (tool !== 'Bash') {
+    // Bash commands are already checked for markers by analyzeCommand.
+    for (const b of markerHits(responseText(input))) {
+      r.reasons.unshift(`used the contents of a decoy secret (${shortPath(b)}). Only that file holds this value, so the agent read it and is passing it on`);
+      r.risk = 'critical';
+    }
+  }
+  if (s.compromised && isNetwork(tool, input)) {
+    r.reasons.unshift('tried to reach the network after getting hold of a decoy secret, so Seatbelt cut it off');
+    r.risk = 'critical';
+  }
   const decision = decide(r);
   const ms = Math.round((performance.now() - t0) * 10) / 10;
   if (!decision) return {};

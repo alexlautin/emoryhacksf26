@@ -65,6 +65,11 @@ Restart Claude Code in that folder (or run `/hooks`) afterwards. Then every tool
   with Seatbelt's reason in the prompt.
 - Everything else: no objection, so Claude Code's own permission prompts work as usual. Seatbelt never answers "allow".
 
+Decoys are checked exactly here too: relative paths and wildcards (`cat ~/.seatbelt/bait/*`) that reach a decoy are
+blocked. Each decoy also holds a random value unique to your computer. If that value shows up in a command or a file
+the agent writes, Seatbelt blocks it. If it shows up in a tool's output, the agent has the secret: Claude is told not to
+use it, and that session can't reach the network for the rest of its run.
+
 Decisions take about 10 ms. If Seatbelt isn't running, the hook blocks every action in protected folders until
 you start it (set `SEATBELT_FAIL_OPEN=1` to change that). Blocked actions never run, so Auto-protect doesn't
 pause the agent over them. Tested with a real Claude Code session (v2.1.170): reading a decoy file was blocked
@@ -99,7 +104,7 @@ Then ask it to set up and run the project. We haven't tested this with a real ag
 
 `src/monitor/network.js` lists open connections for those processes (`lsof` on macOS, `netstat -ano` on Windows) and names the server with reverse DNS or the URL in the command.
 
-`src/monitor/files.js` plants decoy secrets in `~/.seatbelt/bait` and notices when they're read by checking access times. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
+`src/monitor/files.js` plants decoy secrets in `~/.seatbelt/bait` and notices when they're read by checking access times. Each decoy embeds a random marker made on first run (saved in `data/bait-markers.json`); any rule that sees a marker in a command line treats it as a decoy being used. It also watches the project folder, `~/.ssh`, shell startup files, and the places programs use to start at login (LaunchAgents on macOS, the Startup folder on Windows).
 
 `src/monitor/transcripts.js` reads the session logs in `~/.claude/projects` and `~/.codex/sessions` to see what the agent was asked to do and which tools it used.
 
