@@ -3,14 +3,14 @@
 // undone, so a false alarm costs one click.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { addEvent, upsertAgent, getAgent, onEvent, broadcast } from './store.js';
 import { agentTree } from './monitor/processes.js';
 import { riskRank } from './rules.js';
 import { suspend, resume, terminate } from './platform.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SETTINGS_FILE = path.join(ROOT, 'data', 'settings.json');
+import { DATA_DIR } from './paths.js';
+
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 /** autoProtect: 'off' | 'dangerous' (critical only) | 'risky' (high and critical) */
 const DEFAULTS = { autoProtect: 'dangerous' };

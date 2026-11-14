@@ -7,6 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%230f9d63'/><path d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>" />
   <script>
     // Apply the saved theme before first paint so the page doesn't flash.
+    // The desktop app's menu bar panel loads this page with ?view=panel: a compact version.
+    if (new URLSearchParams(location.search).get('view') === 'panel') document.documentElement.classList.add('panel');
     try { const t = localStorage.getItem('seatbelt.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
   </script>
   <link rel="stylesheet" href="/styles.css" />
@@ -25,12 +27,13 @@
           <button id="view-advanced" role="tab">Advanced</button>
         </div>
         <div class="seg icons" role="radiogroup" aria-label="Theme" id="theme-seg">
-          <button data-theme="system" role="radio" title="Match system"><svg class="i" aria-hidden="true"><use href="/icons.svg#monitor"/></svg></button>
-          <button data-theme="light" role="radio" title="Light"><svg class="i" aria-hidden="true"><use href="/icons.svg#sun"/></svg></button>
-          <button data-theme="dark" role="radio" title="Dark"><svg class="i" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+          <button data-theme="system" role="radio" title="Match system"><svg class="i" aria-hidden="true"><use href="#monitor"/></svg></button>
+          <button data-theme="light" role="radio" title="Light"><svg class="i" aria-hidden="true"><use href="#sun"/></svg></button>
+          <button data-theme="dark" role="radio" title="Dark"><svg class="i" aria-hidden="true"><use href="#moon"/></svg></button>
         </div>
         <button id="reset" class="btn ghost" title="Clear the activity and start the score over">Reset</button>
         <button id="demo" class="btn primary">Run demo attack</button>
+        <button id="open-dash" class="btn primary" hidden>Open dashboard</button>
       </div>
     </div>
   </header>
@@ -65,7 +68,7 @@
     </section>
 
     <section class="protect" id="protect">
-      <span class="tile protect-tile"><svg class="i" aria-hidden="true"><use id="protect-icon" href="/icons.svg#shield-check"/></svg></span>
+      <span class="tile protect-tile"><svg class="i" aria-hidden="true"><use id="protect-icon" href="#shield-check"/></svg></span>
       <div class="protect-text">
         <h2>Auto-protect <span id="protect-state" class="state-word">On</span></h2>
         <p id="protect-desc"></p>

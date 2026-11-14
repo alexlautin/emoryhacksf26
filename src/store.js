@@ -2,11 +2,8 @@
 // Everything stays on this machine. Events are also appended to data/events.jsonl.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATA_DIR } from './paths.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DATA_DIR = path.join(ROOT, 'data');
-fs.mkdirSync(DATA_DIR, { recursive: true });
 const LOG_FILE = path.join(DATA_DIR, 'events.jsonl');
 
 const RISK_PENALTY = { info: 0, low: 0, medium: 8, high: 25, critical: 40 };
