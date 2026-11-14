@@ -114,16 +114,26 @@ function card(entry) {
   return art;
 }
 
-// The install help lives in a closed dropdown. Open it when a link points inside.
-function openInstallHelp() {
-  const target = location.hash && document.querySelector(location.hash);
+// The install help lives in a closed dropdown. Open it when a link points inside,
+// then scroll once it has its full height (a plain hash jump can land short).
+function showInstallHelp(hash) {
+  const target = hash && document.querySelector(hash);
   const guide = target && target.closest('details.install-guide');
-  if (guide && !guide.open) {
-    guide.open = true;
-    target.scrollIntoView();
-  }
+  if (!guide) return false;
+  guide.open = true;
+  requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
+  return true;
 }
 if (typeof window !== 'undefined') {
-  window.addEventListener('hashchange', openInstallHelp);
-  window.addEventListener('DOMContentLoaded', openInstallHelp);
+  document.addEventListener('click', (event) => {
+    const link = event.target instanceof Element && event.target.closest('a[href^="#install-"]');
+    if (!link) return;
+    const hash = link.getAttribute('href');
+    if (showInstallHelp(hash)) {
+      event.preventDefault();
+      history.replaceState(null, '', hash);
+    }
+  });
+  window.addEventListener('hashchange', () => showInstallHelp(location.hash));
+  window.addEventListener('DOMContentLoaded', () => showInstallHelp(location.hash));
 }

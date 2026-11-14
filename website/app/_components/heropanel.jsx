@@ -39,7 +39,7 @@ export default function HeroPanel() {
   const lines = [...normal.filter((l) => !hits.length || l.at < BAD[0].at), ...hits.map((h) => ({ id: 'b' + h.at, cmd: h.cmd, bad: true }))].slice(-4);
 
   return (
-    <div className="panel-wrap" aria-hidden="true">
+    <div className="panel-wrap" aria-hidden="true" data-tilt>
       <div className={`stack is-${phase}`}>
         <div className="panel panel-a">
           <div className={`pug-rig is-${phase}`}><Pug size={132} /></div>
