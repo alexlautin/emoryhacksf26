@@ -56,7 +56,7 @@ export function downloadPlan(releases, os) {
     comingSoon: releases.macos?.comingSoon === true,
     button: 'Download for Apple silicon',
     soon: 'No Mac build is configured in releases.js.',
-    ready: 'Open the DMG and drag Harness to Applications. This preview is signed ad hoc and is not notarized; macOS may require approval in Privacy & Security.',
+    ready: 'This free preview is not notarized by Apple. If macOS blocks it, use Open Anyway in System Settings → Privacy & Security. First-open steps are below.',
   });
   const win = item({
     id: 'windows',
