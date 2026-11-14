@@ -24,12 +24,17 @@ const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const demoClients = new Set();
 
-// Icons: a small SVG sprite built from Lucide (lucide-static, ISC license), served as /icons.svg.
+// Icons: a small SVG sprite served as /icons.svg. UI icons from Lucide (lucide-static, ISC license);
+// agent logos from Lobe Icons (@lobehub/icons-static-svg, MIT), as `brand-<agent kind>`.
 const ICONS = [
   'terminal', 'square-terminal', 'globe', 'file', 'file-text', 'wrench', 'message-square', 'eye', 'eye-off',
   'key-round', 'upload', 'package', 'pause', 'play', 'octagon-x', 'octagon-alert', 'triangle-alert', 'circle-pause',
-  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x',
+  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x', 'bot',
 ];
+const BRANDS = {
+  claude: 'claudecode', codex: 'codex', gemini: 'geminicli', cursor: 'cursor',
+  copilot: 'githubcopilot', opencode: 'opencode', amp: 'amp',
+};
 let sprite = null;
 function iconSprite() {
   if (sprite) return sprite;
@@ -39,6 +44,12 @@ function iconSprite() {
     const inner = svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
     return `<symbol id="${name}" viewBox="0 0 24 24">${inner}</symbol>`;
   });
+  const brandDir = path.join(ROOT, 'node_modules', '@lobehub', 'icons-static-svg', 'icons');
+  for (const [kind, file] of Object.entries(BRANDS)) {
+    const svg = fs.readFileSync(path.join(brandDir, `${file}.svg`), 'utf8').replace(/<title>.*?<\/title>/, '');
+    const inner = svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
+    symbols.push(`<symbol id="brand-${kind}" viewBox="0 0 24 24"><g fill="currentColor" fill-rule="evenodd">${inner}</g></symbol>`);
+  }
   sprite = `<svg xmlns="http://www.w3.org/2000/svg">${symbols.join('')}</svg>`;
   return sprite;
 }
