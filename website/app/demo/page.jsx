@@ -55,6 +55,7 @@ export default function Demo() {
   return (
     <div className="demo">
       <section className="wrap demo-head">
+        <a className="back-home" href="/">← Back to home</a>
         <p className="eyebrow">Live demo · Powered by Gemini</p>
         <h1>Gemini plays the agent.<br /><span>Harness keeps score.</span></h1>
         <p className="lead">Pick a situation. Gemini writes a coding session to match, and every command it invents is judged by the same rules the app runs on your computer.</p>

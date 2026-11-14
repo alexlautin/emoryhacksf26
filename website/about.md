@@ -116,6 +116,18 @@ After a tool runs, if its output contains a decoy marker, Harness marks that ses
 
 The hook works for Claude Code only. Other agents get the process watcher and auto-protect.
 
+## Uninstalling
+
+Harness puts a few things outside its own app folder, so removing it properly takes more than deleting the app:
+
+- **Claude Code hooks** in every folder you protected (`.claude/settings.json` and `.harness/harness-hook.sh`). This is the one that matters. While Harness isn't running the hook blocks Claude Code's tool calls, so a leftover hook stops Claude Code working in that folder.
+- **Decoy files** in `~/.harness/bait`, and in the equivalent folders from the earlier Lookout and Seatbelt names.
+- **A login item**, if you turned on "Open at login", plus the app's settings, event history and caches.
+
+In the desktop app, choose **Uninstall Harness…** from the menu bar or tray menu. After you confirm, it removes the hooks from every protected folder, deletes the decoys, settings, history and login item, then moves the app to the Trash on a Mac or runs its uninstaller on Windows. If any hook can't be removed it stops and leaves the app installed, so you can try again. Uninstalling from Windows Settings also stops Harness and cleans up the hooks, and asks before going ahead if it couldn't.
+
+Harness remembers the folders it protects. For ones protected by an older version, and when the app is already gone, `pnpm uninstall-harness` in the repository scans your home folder (six levels deep) for the hooks and removes them. Add `--dry-run` to see what it would change first. A folder outside your home folder that Harness has no record of won't be found.
+
 ## Privacy
 
 - The monitor and dashboard are served from `127.0.0.1` and nowhere else.
