@@ -21,6 +21,17 @@ export const LUCIDE_DIR = path.join(ROOT, 'node_modules', 'lucide-static', 'icon
 export const BRAND_DIR = path.join(ROOT, 'node_modules', '@lobehub', 'icons-static-svg', 'icons');
 export const FONT_FILE = path.join(ROOT, 'node_modules', '@fontsource-variable', 'instrument-sans', 'files', 'instrument-sans-latin-wght-normal.woff2');
 
+/**
+ * Every file the sprite is made from. The desktop app bundles exactly this list
+ * (scripts/stage-desktop.mjs), so anything read below has to be in it.
+ */
+export function iconFiles() {
+  return [
+    ...ICONS.map((name) => path.join(LUCIDE_DIR, `${name}.svg`)),
+    ...[...Object.values(BRANDS), ...Object.values(BRAND_COLORS)].map((file) => path.join(BRAND_DIR, `${file}.svg`)),
+  ];
+}
+
 const innerOf = (svg) => svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
 
 let sprite = null;
@@ -34,7 +45,9 @@ export function iconSprite() {
     const svg = fs.readFileSync(path.join(BRAND_DIR, `${file}.svg`), 'utf8').replace(/<title>.*?<\/title>/, '');
     symbols.push(`<symbol id="brand-${kind}" viewBox="0 0 24 24"><g fill="currentColor" fill-rule="evenodd">${innerOf(svg)}</g></symbol>`);
     const color = BRAND_COLORS[kind];
-    const colored = color ? fs.readFileSync(path.join(BRAND_DIR, `${color}.svg`), 'utf8').replace(/<title>.*?<\/title>/, '') : null;
+    // A missing color version falls back to the plain logo rather than taking the page down.
+    let colored = null;
+    try { if (color) colored = fs.readFileSync(path.join(BRAND_DIR, `${color}.svg`), 'utf8').replace(/<title>.*?<\/title>/, ''); } catch {}
     symbols.push(colored
       ? `<symbol id="brandc-${kind}" viewBox="0 0 24 24">${innerOf(colored)}</symbol>`
       : `<symbol id="brandc-${kind}" viewBox="0 0 24 24"><g fill="currentColor" fill-rule="evenodd">${innerOf(svg)}</g></symbol>`);

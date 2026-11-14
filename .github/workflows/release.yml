@@ -88,6 +88,9 @@ jobs:
           hdiutil detach "$mnt" -quiet
           if [ "$ok" != 1 ]; then echo "The DMG has no Finder layout (.DS_Store) or no background image."; exit 1; fi
           echo "The DMG has its Finder layout and background."
+      # tauri build has just staged the files the installer carries. Run them on their own.
+      - name: Smoke test the staged app
+        run: node scripts/smoke-staged.mjs
       - name: Collect installer
         shell: bash
         env:
