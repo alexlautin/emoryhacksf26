@@ -6,7 +6,7 @@ import { computeScore, withHealth } from './score.js';
 import { canBaseline } from './baseline.js';
 import { sessionTouch } from './touch.js';
 import { mountPug, setPugMood, pugReact } from './pug.js';
-import { REVIEW_CASES, REVIEW_VERDICTS } from './demo-review.js';
+import { REVIEW_VERDICTS, canReviewEvent } from './event-review.js';
 
 const $ = (s) => document.querySelector(s);
 const PANEL = document.documentElement.classList.contains('panel');
@@ -559,7 +559,6 @@ function homeScore() {
       <div class="hs-actions">
         <a class="pbtn" href="/api/report.md" download>Download Report</a>
         <button type="button" class="pbtn" data-demo>Run Demo Attack</button>
-        ${state.remote ? '' : '<button type="button" class="pbtn" data-review-demo>Gemini Review Demo</button>'}
       </div>
     </div>
     <span class="ss-track" aria-hidden="true"><span class="ss-fill ${s.level.cls}" style="width:${s.score}%"></span></span>
@@ -763,6 +762,11 @@ function baselineButton(e) {
   return e && canBaseline(e) ? `<div class="ins-actions"><button type="button" class="linkbtn" data-base="${e.id}">Normal for this project</button></div>` : '';
 }
 
+function reviewButton(event) {
+  if (state.remote || !canReviewEvent(event)) return '';
+  return `<div class="ins-actions"><button type="button" class="pbtn" data-review-event="${event.id}">${icon('sparkles')}Review with Gemini</button></div>`;
+}
+
 function insProc(n) {
   const v = procVerdict(n);
   const reasons = n.events.flatMap((e) => e.reasons ?? []);
@@ -783,6 +787,7 @@ function insProc(n) {
     ${hosts.length ? sec('Servers', `<ul>${hosts.map((h) => `<li class="mono">${esc(h)}</li>`).join('')}</ul>`) : ''}
     ${files.length ? sec('Files', `<ul>${files.map((f) => `<li class="mono">${esc(f)}</li>`).join('')}</ul>`) : ''}
     ${n.role === 'agent' ? '' : commandHTML(n.cmd)}
+    ${reviewButton(top)}
     ${baselineButton(top)}`;
 }
 
@@ -803,6 +808,7 @@ function insEvent(e) {
     <div class="ins-actions">
       ${a ? `<button type="button" class="pbtn" data-show-event="${e.id}">Show in Session</button>` : ''}
     </div>
+    ${reviewButton(e)}
     ${baselineButton(e)}`;
 }
 
@@ -812,7 +818,8 @@ function insFile(r) {
     <div><div class="ins-title">${esc(f.path.split(/[\\/]/).pop())}</div><div class="ins-sub mono">${esc(f.path)}</div></div>
     ${kv([['Verdict', f.bait ? vText({ text: 'Opened a decoy secret', tone: 'bad' }) : vText(verdictOf(r.top)) || 'Routine'], ['Last seen', esc(clock(f.ts))], ['Times', String(f.events.length)]])}
     ${f.bait ? sec('What this means', '<p>Harness planted this fake secret on purpose. Nothing you ask an agent to do needs it, so opening it is a strong sign something went rogue.</p>') : ''}
-    ${sec('Why it matters', reasonsHTML(f.events.flatMap((e) => e.reasons ?? [])))}`;
+    ${sec('Why it matters', reasonsHTML(f.events.flatMap((e) => e.reasons ?? [])))}
+    ${reviewButton(r.top)}`;
 }
 
 function insHost(r) {
@@ -821,6 +828,7 @@ function insHost(r) {
     <div><div class="ins-title">${esc(h.host)}</div><div class="ins-sub">${h.trusted ? 'A service Harness recognizes' : 'A server Harness doesn’t recognize'}</div></div>
     ${kv([['Verdict', vText(verdictOf(r.top)) || 'Routine'], ['Connections', String(h.events.length)], ['Last seen', esc(clock(h.ts))]])}
     ${sec('Why it matters', reasonsHTML(h.events.flatMap((e) => e.reasons ?? [])))}
+    ${reviewButton(r.top)}
     ${baselineButton(r.top && RANK[r.top.risk] >= 1 ? r.top : null)}`;
 }
 
@@ -834,9 +842,6 @@ function renderInspector() {
   else if (r?.hostRow) html = insHost(r);
   else if (state.view === 'agent' && state.agents.get(state.agentId)) html = insAgent(state.agents.get(state.agentId));
   else html = insOverview();
-  if (!state.remote && state.view === 'agent' && state.agents.get(state.agentId)?.kind === 'demo') {
-    html += `<div class="ins-actions"><button type="button" class="pbtn" data-review-demo>${icon('sparkles')}Gemini Review Demo</button></div>`;
-  }
   if (r) html = `<button type="button" class="sheet-close" data-close-sel aria-label="Close details">${icon('x')}</button>${html}`;
   setHTML(el, html);
 }
@@ -1015,39 +1020,59 @@ async function explain(agentId) {
   render();
 }
 
-let reviewCase = 'staging';
-const demoReviews = new Map();
+let eventReview;
 
-function renderDemoReview() {
-  setHTML($('#review-cases'), Object.entries(REVIEW_CASES).map(([id, { label }]) => {
-    const selected = id === reviewCase;
-    return `<button type="button" class="${selected ? 'on' : ''}" data-review-case="${id}" aria-pressed="${selected}">${esc(label)}</button>`;
+function renderEventReview() {
+  const { preview, loading, result, error } = eventReview;
+  setHTML($('#review-timeline'), (preview?.evidence ?? []).map(({ id, text, eventId }) => {
+    const event = state.events.find((item) => item.id === eventId);
+    const link = state.agents.has(event?.agentId)
+      ? ` <button type="button" class="linkbtn" data-review-source="${eventId}">View event</button>` : '';
+    return `<li id="review-event-${id}" tabindex="-1">${esc(text)}${link}</li>`;
   }).join(''));
-  const { events } = REVIEW_CASES[reviewCase];
-  setHTML($('#review-timeline'), events.map(({ id, text }) => `<li id="review-event-${id}" tabindex="-1">${esc(text)}</li>`).join(''));
-  const review = demoReviews.get(reviewCase);
-  $('#review-run').disabled = !!(review?.loading || review?.verdict);
-  if (review?.loading) return setHTML($('#review-result'), '<p class="hint">Gemini is reviewing the timeline…</p>');
-  if (review?.error) return setHTML($('#review-result'), `<p class="t-bad">${esc(review.error)}</p>`);
-  if (!review?.verdict) return setHTML($('#review-result'), '');
-  const evidence = review.evidence.map((id) => `<button type="button" class="linkbtn" data-review-evidence="${id}">Event ${id}</button>`).join('');
-  setHTML($('#review-result'), `<h3>${esc(REVIEW_VERDICTS[review.verdict])}</h3><p>${esc(review.explanation)}</p><div class="review-evidence">${evidence}</div>`);
+  $('#review-run').disabled = !preview?.configured || loading || !!result;
+  const status = error || (!preview ? 'Preparing the evidence preview…' : !preview.configured ? 'Set GEMINI_API_KEY and restart Harness to enable review.' : loading ? 'Gemini is reviewing the event…' : '');
+  if (status) return setHTML($('#review-result'), `<p class="${error ? 't-bad' : 'hint'}">${esc(status)}</p>`);
+  if (!result) return setHTML($('#review-result'), '');
+  const evidence = result.evidence.map((id) => `<button type="button" class="linkbtn" data-review-evidence="${id}">Observation ${id}</button>`).join('');
+  setHTML($('#review-result'), `<h3>${esc(REVIEW_VERDICTS[result.verdict])}</h3><p>${esc(result.explanation)}</p><p><strong>What to check</strong> ${esc(result.nextStep)}</p><div class="review-evidence">${evidence}</div>`);
 }
 
-async function reviewDemoCase() {
-  const caseId = reviewCase;
-  const current = demoReviews.get(caseId);
-  if (current?.loading || current?.verdict) return;
-  demoReviews.set(caseId, { loading: true });
-  renderDemoReview();
+async function openEventReview(eventId) {
+  const review = eventReview = { eventId };
+  renderEventReview();
+  $('#event-review').showModal();
   try {
-    const response = await post('/api/demo/review', { caseId });
-    const review = await response.json();
-    demoReviews.set(caseId, response.ok ? review : { error: review.error });
+    const response = await fetch(`/api/review?event=${eventId}`, { cache: 'no-store' });
+    const data = await response.json();
+    if (response.ok) review.preview = data;
+    else review.error = data.error;
   } catch {
-    demoReviews.set(caseId, { error: 'Could not reach Harness. Try again.' });
+    review.error = 'Could not load review evidence.';
   }
-  renderDemoReview();
+  if (eventReview === review) renderEventReview();
+}
+
+async function runEventReview() {
+  const review = eventReview;
+  if (!review?.preview?.configured || review.loading || review.result) return;
+  review.loading = true;
+  review.error = '';
+  renderEventReview();
+  try {
+    const response = await post('/api/review', { eventId: review.eventId, revision: review.preview.revision });
+    const data = await response.json();
+    if (response.ok) review.result = data;
+    else {
+      review.error = data.error;
+      if (response.status === 404 || response.status === 409) review.preview = null;
+    }
+  } catch {
+    review.error = 'Could not reach Harness. Try again.';
+  } finally {
+    review.loading = false;
+    if (eventReview === review) renderEventReview();
+  }
 }
 
 function showEvent(id) {
@@ -1194,16 +1219,20 @@ document.addEventListener('click', (e) => {
   }
   const ex = t.closest('[data-explain]');
   if (ex) { explain(ex.dataset.explain); return; }
-  if (t.closest('[data-review-demo]')) {
-    renderDemoReview();
-    $('#demo-review').showModal();
-    return;
-  }
-  const example = t.closest('[data-review-case]');
-  if (example) {
-    reviewCase = example.dataset.reviewCase;
-    renderDemoReview();
-    $(`[data-review-case="${reviewCase}"]`).focus();
+  const review = t.closest('[data-review-event]');
+  if (review) { openEventReview(Number(review.dataset.reviewEvent)); return; }
+  const source = t.closest('[data-review-source]');
+  if (source) {
+    const event = state.events.find((item) => item.id === Number(source.dataset.reviewSource));
+    if (!event) return;
+    $('#event-review').close();
+    state.search = '';
+    $('#search').value = '';
+    if (isNotable(event)) go({ view: 'agent', agentId: event.agentId, tab: 'activity', sel: `e${event.id}` });
+    else {
+      for (const step of event.steps ?? []) state.collapsed.delete(step.pid);
+      showEvent(event.id);
+    }
     return;
   }
   const evidence = t.closest('[data-review-evidence]');
@@ -1295,7 +1324,7 @@ $('#phone-toggle').onclick = () => phoneCall(state.phone?.enabled ? 'disable' : 
 $('#phone-reset').onclick = () => phoneCall('reset');
 
 $('#prefs').addEventListener('click', (e) => { if (e.target === $('#prefs')) $('#prefs').close(); });
-$('#review-run').onclick = reviewDemoCase;
+$('#review-run').onclick = runEventReview;
 
 $('#mp-open').onclick = openDashboard;
 $('#mp-quit').onclick = quitApp;
@@ -1316,7 +1345,7 @@ document.addEventListener('keydown', (e) => {
     items[i === -1 ? 0 : next].focus();
     return;
   }
-  if ($('#prefs').open || $('#demo-review').open) return;
+  if ($('#prefs').open || $('#event-review').open) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
   if (e.key === 'Escape') {
     if (typing) { document.activeElement.blur(); return; }

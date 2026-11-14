@@ -180,23 +180,20 @@
     </form>
   </dialog>
 
-  <dialog id="demo-review" aria-labelledby="demo-review-title">
+  <dialog id="event-review" aria-labelledby="event-review-title">
     <form method="dialog">
       <header class="prefs-head">
-        <h2 id="demo-review-title">Gemini Review Demo</h2>
+        <h2 id="event-review-title">Review with Gemini</h2>
         <button class="btn icon ghost" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
       </header>
-      <fieldset>
-        <legend>Choose an example</legend>
-        <div class="seg" id="review-cases"></div>
-      </fieldset>
-      <section class="review-timeline" aria-label="Sample timeline">
-        <p class="hint">Simulated connection · Local rating <strong class="t-warn">Worth a look</strong></p>
+      <section class="review-timeline" aria-label="Evidence preview">
+        <p class="hint">Local rating <strong class="t-warn">Worth a look</strong></p>
+        <h3>Observations sent to Google</h3>
         <ol id="review-timeline"></ol>
       </section>
       <div class="review-action">
-        <button type="button" class="pbtn primary" id="review-run">Review with Gemini</button>
-        <p class="hint">Sends only the fictional timeline to Google for an advisory review.</p>
+        <button type="button" class="pbtn primary" id="review-run" disabled>Send for review</button>
+        <p class="hint">The assessment is advisory. Harness makes protection decisions locally.</p>
       </div>
       <section id="review-result" aria-live="polite" aria-label="Gemini assessment"></section>
     </form>
