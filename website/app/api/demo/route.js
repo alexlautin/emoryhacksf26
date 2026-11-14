@@ -14,12 +14,20 @@ async function generate(scenario, key) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: `Create a fictional coding-agent activity trace for an educational Lookout demo. Output JSON only: {"events":[{"title":"short step","command":"illustrative command","explanation":"plain English","risk":"info|low|medium|high|critical","reasons":["classification reason"]}]}. Use 3-8 events in chronological order, starting with a routine command. Never execute commands. Use fake files and example.invalid for destinations. For installs use risk low and reason "installed packages". A credential upload is ONE critical event with reasons "touched a decoy secret" and "uploaded data". Do not split the credential read into a separate event. The prior install plus this event should score 19. End with a separate upload-completion event so auto-protect can stop before completion. For persistence use high and reason "run automatically". Safe commands have risk info and empty reasons. Do not claim this is an actual monitored session.` }] },
       contents: [{ role: 'user', parts: [{ text: SCENARIOS[scenario] }] }],
-      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 3000, temperature: 0.4 },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        // A valid trace is at most 8 events of 600-character fields. Flash also spends this budget on thinking, which cuts the JSON off.
+        maxOutputTokens: 16384,
+        temperature: 0.4,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     }),
   });
   if (!response.ok) throw new Error('Gemini unavailable');
   const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
+  const parts = data.candidates?.[0]?.content?.parts;
+  const text = Array.isArray(parts) ? parts.filter(p => p && !p.thought && typeof p.text === 'string').map(p => p.text).join('') : '';
+  if (!text || data.candidates?.[0]?.finishReason === 'MAX_TOKENS') throw new Error('Incomplete model reply');
   return validateEvents(JSON.parse(text).events);
 }
 export async function POST(request) {
