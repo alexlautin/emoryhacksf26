@@ -7,10 +7,22 @@ import { applyBaseline, baselineFromEvent, canBaseline, fingerprint, revertBasel
 
 const agent = { id: 'claude-1', label: 'Claude Code', project: 'app', cwd: '/work/app' };
 
-test('fingerprints drop the home folder and long numbers', () => {
-  assert.equal(fingerprint('git -C /Users/ada/app status'), 'git -C <path> status');
-  assert.equal(fingerprint('curl https://example.com/123456'), 'curl https://example.com/<n>');
-  assert.equal(fingerprint('npm   install'), 'npm install');
+test('command fingerprints preserve paths, quoted whitespace, numbers and long suffixes', () => {
+  for (const command of ['git -C /Users/ada/app status', 'curl https://example.com/123456', 'echo "a   b"', 'npm install ' + 'a'.repeat(200)]) {
+    assert.equal(fingerprint(command), command);
+  }
+});
+
+test('a cache cleanup exception does not suppress deletion of personal files', () => {
+  const event = { kind: 'process', risk: 'medium', command: 'rm -rf /tmp/build-cache', reasons: ['deleted a folder and everything inside it'] };
+  const mark = baselineFromEvent(event, agent);
+  assert.equal(applyBaseline(event, [mark], agent).risk, 'info');
+  for (const command of ['rm -rf /Users/alex/Documents', 'rm -rf /tmp/build-cache other-folder']) {
+    assert.equal(applyBaseline({ ...event, command }, [mark], agent).risk, 'medium');
+  }
+  const legacy = { ...mark, value: 'rm -rf <path>' };
+  delete legacy.matchVersion;
+  assert.equal(applyBaseline(event, [legacy], agent).risk, 'medium');
 });
 
 test('decoy reads and high risk cannot be marked normal', () => {

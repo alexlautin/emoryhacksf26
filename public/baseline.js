@@ -4,14 +4,9 @@
 const SECRET = /decoy secret|Keychain|whole home folder|saved passwords|scrambled secret/;
 
 export function fingerprint(command) {
-  let s = String(command ?? '').replace(/\s+/g, ' ').trim();
-  s = s.replace(/(?:\/Users\/|\/home\/)[^/\s'"]+/g, '~');
-  s = s.replace(/[A-Za-z]:\\Users\\[^\\\s'"]+/gi, '~');
-  // Filesystem paths only. A URL's slashes are not a path.
-  s = s.replace(/(^|[\s'"`=])(?:~|\/)[^\s'"]+/g, '$1<path>');
-  s = s.replace(/\b\d{5,}\b/g, '<n>');
-  if (s.length > 180) s = `${s.slice(0, 179)}…`;
-  return s;
+  // Commands are executable text. Paths, quoted whitespace, numbers and suffixes
+  // change their meaning, so an exception must match the complete command.
+  return String(command ?? '');
 }
 
 export function projectKey(agent) {
@@ -41,6 +36,8 @@ export function canBaseline(event) {
 
 export function matchesBaseline(baseline, event, agent) {
   if (!baseline || !agent || baseline.projectKey !== projectKey(agent)) return false;
+  // Old command fingerprints discarded arguments. Never trust those broad marks.
+  if (baseline.type === 'command' && baseline.matchVersion !== 2) return false;
   const v = baselineValue(event.baseline ? { ...event, kind: event.kind, command: event.command, host: event.host } : event);
   if (!v) return false;
   return baseline.type === v.type && baseline.value === v.value;
@@ -59,6 +56,7 @@ export function baselineFromEvent(event, agent, now = Date.now()) {
     project: agent.project || agent.cwd,
     type: v.type,
     value: v.value,
+    ...(v.type === 'command' ? { matchVersion: 2 } : {}),
     createdAt: now,
   };
 }
