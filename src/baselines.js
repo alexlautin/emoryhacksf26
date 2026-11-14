@@ -20,13 +20,31 @@ export function listBaselines() {
   return items.map((b) => ({ ...b }));
 }
 
+function sameMark(a, b) {
+  return a.projectKey === b.projectKey && a.type === b.type && a.value === b.value;
+}
+
 export function addBaseline(entry) {
-  const exists = items.some((b) => b.projectKey === entry.projectKey && b.type === entry.type && b.value === entry.value);
-  if (!exists) {
-    items.push(entry);
-    save();
+  const same = (b) => sameMark(b, entry);
+  const replacing = entry.type === 'command' && entry.matchVersion === 2;
+  if (replacing) {
+    // An older row can store the same text and still not count. Replace it.
+    const hasLive = items.some((b) => same(b) && b.matchVersion === 2);
+    const hasStale = items.some((b) => same(b) && b.matchVersion !== 2);
+    if (hasLive) {
+      if (hasStale) {
+        items = items.filter((b) => !(same(b) && b.matchVersion !== 2));
+        save();
+      }
+      return { baselines: listBaselines(), added: false };
+    }
+    if (hasStale) items = items.filter((b) => !(same(b) && b.matchVersion !== 2));
+  } else if (items.some(same)) {
+    return { baselines: listBaselines(), added: false };
   }
-  return { baselines: listBaselines(), added: !exists };
+  items.push(entry);
+  save();
+  return { baselines: listBaselines(), added: true };
 }
 
 export function removeBaseline(id) {
