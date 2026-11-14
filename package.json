@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "Watches what AI coding agents (Claude Code, Codex, Gemini CLI, Cursor and more) do on your computer.",
   "type": "module",
