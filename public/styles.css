@@ -121,10 +121,10 @@ html.mac-app .side-top > :not(.live) { visibility: hidden; }
   --pug-shadow: light-dark(rgba(0, 0, 0, .1), rgba(0, 0, 0, .35));
   --pug-alert: light-dark(#d9480f, #ff8a4c);
   --pug-z: var(--w-text-2);
-  height: 92px; display: flex; justify-content: center; align-items: flex-end; cursor: pointer;
+  height: 100px; display: flex; justify-content: center; align-items: flex-end; cursor: pointer;
   -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
 }
-.pug-svg { width: 124px; height: 93px; overflow: visible; display: block; }
+.pug-svg { width: 112px; height: 112px; margin-bottom: -6px; overflow: visible; display: block; }
 .side-score { border: 0; background: transparent; border-radius: 6px; padding: 6px 8px 8px; text-align: left; display: grid; gap: 6px; color: var(--w-text); margin-bottom: 4px; }
 .side-score:hover { background: var(--w-hover); }
 .ss-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
