@@ -1,6 +1,6 @@
 # Harness website and Gemini demo
 
-Next.js App Router site for Vercel. The homepage and white paper are prerendered; `/demo` is an interactive client and `/api/demo` calls Gemini on the server.
+Next.js App Router site for Vercel. The homepage and about page (`/about`) are prerendered; `/demo` is an interactive client and `/api/demo` calls Gemini on the server.
 
 ## Run
 
@@ -30,7 +30,7 @@ Nothing executes, no files are inspected, and no desktop agent is contacted. Sce
 
 ## Content
 
-The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_components/scenario.jsx` and the score widget in `app/_components/scoreplay.jsx`. Styles are in `src/site.css` (`app/demo.css` for `/demo`). `whitepaper.md` is rendered at `/whitepaper`, and the build copies it to `public` for download. Shared brand foundations, components, and the canonical pug mark live in `../public/ui/`. `prepare.mjs` copies the kit into this site before development and builds; open `/ui/index.html` for the visual reference. Edit the canonical directory rather than the generated copy. The tab icon is `app/icon.png`. `releases.js` remains the single download configuration. It points to the published Apple silicon and Intel Mac DMGs and Windows x64 installer. Unpublished entries stay disabled. Add `?os=mac` or `?os=windows` to preview OS-specific cards.
+The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_components/scenario.jsx` and the score widget in `app/_components/scoreplay.jsx`. Styles are in `src/site.css` (`app/demo.css` for `/demo`). `whitepaper.md` is rendered at `/about`, and the build copies it to `public` for download. Shared brand foundations, components, and the canonical pug mark live in `../public/ui/`. `prepare.mjs` copies the kit into this site before development and builds; open `/ui/index.html` for the visual reference. Edit the canonical directory rather than the generated copy. The tab icon is `app/icon.png`. `releases.js` remains the single download configuration. It points to the published Apple silicon and Intel Mac DMGs and Windows x64 installer. Unpublished entries stay disabled. Add `?os=mac` or `?os=windows` to preview OS-specific cards.
 
 ## First deployment checklist
 
@@ -38,7 +38,7 @@ The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_compone
 2. In [Vercel](https://vercel.com/new), import `alexlautin/harness`. Name the project `harness` (or another available name), select the `main` production branch, set Root Directory to `website`, and use the Next.js preset with Node 22. The checked-in `vercel.json` supplies install and build commands; leave Output Directory at its default.
 3. Add `GEMINI_API_KEY` for Production and Preview. Optionally add `GEMINI_MODEL=gemini-2.5-flash`. The key stays on the server; do not use `NEXT_PUBLIC_` for it.
 4. Deploy. If you add or change environment variables after deployment, redeploy so the function receives them.
-5. Open `/`, `/whitepaper`, and `/demo`. On `/demo`, choose a scenario and request a Gemini simulation to verify a live response. The scripted example works even without credentials and does not verify the key.
+5. Open `/`, `/about`, and `/demo`. On `/demo`, choose a scenario and request a Gemini simulation to verify a live response. The scripted example works even without credentials and does not verify the key.
 6. Before sharing widely, configure request limits for `/api/demo` in Vercel Firewall and review your Gemini project's quotas in AI Studio. The in-memory scenario cache is per instance.
 
 A Gemini `502` means generation failed (for example, invalid credentials, quota, timeout, or an incomplete response); `503` means the server has no API key. Check the deployment's function logs and AI Studio usage. No live Gemini request was verified as part of the repository merge.

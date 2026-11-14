@@ -160,6 +160,11 @@ export default function Scenario() {
             </div></div>
           </div>
         </div>
+        <p className={`scn-cue${step < STEPS.length - 1 ? ' is-on' : ''}`} aria-hidden="true">
+          <span>{step === 0 ? 'Scroll to step through' : 'Keep scrolling'}</span>
+          <i><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2.5v11M3.5 9L8 13.5 12.5 9" /></svg></i>
+        </p>
+        <p className="scn-note">This walkthrough follows the scripted attack that ships with Harness. Real timing depends on a half-second check. <a href="/about#known-limits">What it can miss</a></p>
         <a className="scn-skip" href="#watch">Skip the walkthrough</a>
       </div>
     </section>
