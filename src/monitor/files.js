@@ -1,6 +1,7 @@
 // File activity:
-//  1. Decoy secrets ("bait files"). macOS updates a file's access time when it is read,
-//     so we can tell when something opens one, even without sudo.
+//  1. Decoy secrets ("bait files"). The system updates a file's access time when it is read,
+//     so we can tell when something opens one without admin rights. (Windows may have
+//     access-time updates turned off; the command-line rules still catch most reads.)
 //  2. Files changed inside each agent's project folder (batched into one readable line).
 //  3. Changes to sensitive places outside the project (login items, SSH folder, shell startup files).
 import fs from 'node:fs';
@@ -9,6 +10,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { addEvent, listAgents, getAgent } from '../store.js';
 import { analyzePath, baitPaths, maxRisk, shortPath } from '../rules.js';
+import { SENSITIVE_DIRS } from '../platform.js';
 
 const HOME = os.homedir();
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -58,7 +60,7 @@ function likelyAgent(withinMs = 15000) {
   const now = Date.now();
   const live = listAgents().filter((a) => a.alive && now - (a.lastActive ?? 0) < withinMs);
   live.sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
-  return live[0] ?? null;
+  return { agent: live[0] ?? null, sure: live.length === 1 };
 }
 
 function pollBait() {
@@ -68,19 +70,22 @@ function pollBait() {
     try { st = fs.statSync(p); } catch { continue; }
     if (!lastAtime.has(p)) { arm(p); continue; }
     if (st.atimeMs !== lastAtime.get(p)) {
-      const agent = likelyAgent();
+      const { agent, sure } = likelyAgent();
       addEvent({
         agentId: agent?.id ?? null,
         kind: 'file',
         risk: 'critical',
         reasons: [
           'opened a decoy secret Seatbelt planted on purpose. No honest task needs it, so this is a strong sign something went rogue',
-          agent ? `happened while ${agent.label} was the active program` : 'happened while no agent was active, so it may have been something else on your Mac',
+          agent ? `happened while ${agent.label} was the active program` : 'happened while no agent was active, so it may have been something else on this computer',
         ],
         title: agent ? `Something under ${agent.label} opened a decoy secret: ${path.basename(p)}` : `Something opened a decoy secret: ${path.basename(p)}`,
         detail: `${shortPath(p)} was read at ${new Date(st.atimeMs).toLocaleTimeString()}`,
         path: p,
         bait: true,
+        // Access times don't say which process read the file. With several agents active this is a
+        // guess, so auto-protect won't pause anyone over it (the person still gets the alert).
+        attribution: sure ? 'sole' : 'guess',
       });
       arm(p);
     }
@@ -89,12 +94,13 @@ function pollBait() {
 
 // ---- project folders ----
 const watchers = new Map(); // agentId -> { watcher, pending: Set }
-const IGNORED = /(^|\/)(\.git|\.DS_Store|\.next|dist|build|\.turbo|\.cache)(\/|$)/;
+const IGNORED = /(^|[\\/])(\.git|\.DS_Store|\.next|dist|build|\.turbo|\.cache)([\\/]|$)/;
+const DEPS = /[\\/](node_modules|\.venv)[\\/]/;
 
 function watchProjects() {
   for (const a of listAgents()) {
     if (!a.alive || !a.cwd || watchers.has(a.id)) continue;
-    if (a.cwd === HOME || a.cwd === '/' || !a.cwd.startsWith(HOME)) { watchers.set(a.id, null); continue; }
+    if (a.cwd === HOME || path.parse(a.cwd).root === a.cwd || !a.cwd.startsWith(HOME)) { watchers.set(a.id, null); continue; }
     try {
       const pending = new Set();
       const watcher = fs.watch(a.cwd, { recursive: true }, (_ev, rel) => {
@@ -104,7 +110,7 @@ function watchProjects() {
         for (const [dir, until] of quiet) if (full.startsWith(dir) && Date.now() < until) return;
         // If another live agent works in a folder nested inside this one, the change is theirs.
         for (const [otherId, ow] of watchers) {
-          if (otherId !== a.id && ow && ow.cwd.length > a.cwd.length && ow.cwd.startsWith(a.cwd + '/') && full.startsWith(ow.cwd + '/') && getAgent(otherId)?.alive) return;
+          if (otherId !== a.id && ow && ow.cwd.length > a.cwd.length && ow.cwd.startsWith(a.cwd + path.sep) && full.startsWith(ow.cwd + path.sep) && getAgent(otherId)?.alive) return;
         }
         pending.add(full);
       });
@@ -126,7 +132,7 @@ function flushProjects() {
     const files = [...w.pending].filter((f) => fs.existsSync(f) && !fs.statSync(f).isDirectory());
     const deleted = [...w.pending].filter((f) => !fs.existsSync(f));
     w.pending.clear();
-    const deps = files.filter((f) => f.includes('/node_modules/') || f.includes('/.venv/'));
+    const deps = files.filter((f) => DEPS.test(f));
     const own = files.filter((f) => !deps.includes(f));
     if (!own.length && !deps.length && !deleted.length) continue;
 
@@ -141,7 +147,8 @@ function flushProjects() {
     }
     const parts = [];
     if (own.length) parts.push(`${own.length} file${own.length > 1 ? 's' : ''}`);
-    if (deleted.filter((f) => !f.includes('/node_modules/')).length) parts.push(`deleted ${deleted.filter((f) => !f.includes('/node_modules/')).length}`);
+    const gone = deleted.filter((f) => !DEPS.test(f)).length;
+    if (gone) parts.push(`deleted ${gone}`);
     if (deps.length) parts.push(`${deps.length} inside installed packages`);
     addEvent({
       agentId: id,
@@ -156,13 +163,7 @@ function flushProjects() {
   }
 }
 
-// ---- sensitive places outside any project ----
-const SENSITIVE_DIRS = [
-  { dir: path.join(HOME, 'Library', 'LaunchAgents') },
-  { dir: path.join(HOME, '.ssh') },
-  { dir: HOME, only: /^\.(zshrc|bashrc|zprofile|bash_profile|profile|zshenv)$/ },
-];
-
+// ---- sensitive places outside any project (SENSITIVE_DIRS comes from platform.js) ----
 function watchSensitive() {
   for (const { dir, only } of SENSITIVE_DIRS) {
     if (!fs.existsSync(dir)) continue;
@@ -170,7 +171,7 @@ function watchSensitive() {
       const w = fs.watch(dir, (_ev, name) => {
         if (!name || (only && !only.test(name.toString()))) return;
         if (/^known_hosts/.test(name.toString())) return; // ssh updates this on every new server
-        const agent = likelyAgent(10000);
+        const { agent, sure } = likelyAgent(10000);
         if (!agent) return; // probably the person, not an agent
         const full = path.join(dir, name.toString());
         const r = analyzePath(full, { write: true, projectDir: agent.cwd });
@@ -182,6 +183,7 @@ function watchSensitive() {
           title: `${shortPath(full)} changed while ${agent.label} was working`,
           detail: `${shortPath(full)} (outside the project)`,
           path: full,
+          attribution: sure ? 'sole' : 'guess',
         });
       });
       w.on('error', () => {});

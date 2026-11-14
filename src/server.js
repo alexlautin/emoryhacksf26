@@ -13,14 +13,35 @@ import { startEslogger } from './monitor/eslogger.js';
 import { summarize, ollamaStatus } from './llm.js';
 import { shortPath } from './rules.js';
 import { resetDemo } from '../demo/reset.js';
+import { startGuard, getSettings, setSettings, pauseAgent, resumeAgent, endAgent } from './guard.js';
+import { IS_MAC, OS_NAME } from './platform.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
-const DEEP = process.argv.includes('--eslogger');
+const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const demoClients = new Set();
+
+// Icons: a small SVG sprite built from Lucide (lucide-static, ISC license), served as /icons.svg.
+const ICONS = [
+  'terminal', 'square-terminal', 'globe', 'file', 'file-text', 'wrench', 'message-square', 'eye', 'eye-off',
+  'key-round', 'upload', 'package', 'pause', 'play', 'octagon-x', 'octagon-alert', 'triangle-alert', 'circle-pause',
+  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x',
+];
+let sprite = null;
+function iconSprite() {
+  if (sprite) return sprite;
+  const dir = path.join(ROOT, 'node_modules', 'lucide-static', 'icons');
+  const symbols = ICONS.map((name) => {
+    const svg = fs.readFileSync(path.join(dir, `${name}.svg`), 'utf8');
+    const inner = svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
+    return `<symbol id="${name}" viewBox="0 0 24 24">${inner}</symbol>`;
+  });
+  sprite = `<svg xmlns="http://www.w3.org/2000/svg">${symbols.join('')}</svg>`;
+  return sprite;
+}
 
 function json(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json' });
@@ -34,12 +55,22 @@ async function readBody(req) {
 }
 
 let demoRunning = false;
+let demoChild = null;
+
+/** End any demo agent that is still around (for example one Seatbelt paused) and wait for it to exit. */
+async function stopDemo() {
+  if (!demoRunning || !demoChild) return;
+  const exited = new Promise((r) => { demoChild.once('exit', r); setTimeout(r, 4000); });
+  for (const a of listAgents()) if (a.kind === 'demo' && a.alive) await endAgent(a.id, { quiet: true }).catch(() => {});
+  try { process.kill(demoChild.pid, 'SIGKILL'); } catch {}
+  await exited;
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname === '/api/state') {
-      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, baitDir: shortPath(BAIT_DIR), demoRunning });
+      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning });
     }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -53,7 +84,21 @@ const server = http.createServer(async (req, res) => {
       const { agentId } = await readBody(req);
       return json(res, 200, await summarize(agentId));
     }
+    if (url.pathname === '/api/settings' && req.method === 'POST') {
+      return json(res, 200, setSettings(await readBody(req)));
+    }
+    if (url.pathname === '/api/agent' && req.method === 'POST') {
+      const { agentId, action } = await readBody(req);
+      const fn = { pause: pauseAgent, resume: resumeAgent, end: endAgent }[action];
+      if (!fn) return json(res, 400, { error: 'action must be pause, resume or end' });
+      try {
+        return json(res, 200, await fn(agentId));
+      } catch (err) {
+        return json(res, 409, { error: err.message });
+      }
+    }
     if (url.pathname === '/api/reset' && req.method === 'POST') {
+      await stopDemo();
       clearAll();
       rearmBait();
       return json(res, 200, { ok: true });
@@ -72,14 +117,24 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     if (url.pathname === '/api/demo/run' && req.method === 'POST') {
-      if (demoRunning) return json(res, 409, { error: 'Demo already running' });
+      await stopDemo();
       demoRunning = true;
       ignoreWrites(path.join(ROOT, 'demo'));
       await resetDemo();
       rearmBait();
       const child = spawn(process.execPath, [path.join(ROOT, 'demo', 'fake-agent.js')], { cwd: path.join(ROOT, 'demo', 'victim-project'), stdio: 'inherit' });
-      child.on('exit', () => { demoRunning = false; });
+      demoChild = child;
+      child.on('exit', () => { if (demoChild === child) { demoRunning = false; demoChild = null; } });
       return json(res, 200, { ok: true });
+    }
+    if (url.pathname === '/icons.svg') {
+      res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' });
+      return res.end(iconSprite());
+    }
+    if (url.pathname === '/fonts/instrument-sans.woff2') {
+      const font = path.join(ROOT, 'node_modules', '@fontsource-variable', 'instrument-sans', 'files', 'instrument-sans-latin-wght-normal.woff2');
+      res.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'max-age=86400' });
+      return fs.createReadStream(font).pipe(res);
     }
     // Static files
     const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname);
@@ -93,10 +148,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 // The pretend "attacker" for the demo. It only counts bytes; it never stores what it receives.
+// If Seatbelt ends the upload partway, the request is cut off; report what got through.
 const attacker = http.createServer(async (req, res) => {
   let bytes = 0;
-  for await (const c of req) bytes += c.length;
-  const msg = `event: demo\ndata: ${JSON.stringify({ bytes, path: req.url, at: Date.now() })}\n\n`;
+  let cutOff = false;
+  try {
+    for await (const c of req) bytes += c.length;
+  } catch {
+    cutOff = true;
+  }
+  const msg = `event: demo\ndata: ${JSON.stringify({ bytes, cutOff, path: req.url, at: Date.now() })}\n\n`;
   for (const r of demoClients) r.write(msg);
   res.end('ok');
 });
@@ -104,7 +165,8 @@ const attacker = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Seatbelt is watching. Dashboard: http://localhost:${PORT}\n`);
   console.log(`  Decoy secrets planted in ${shortPath(BAIT_DIR)}`);
-  console.log(DEEP ? '  Deep mode: eslogger (experimental)' : '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.');
+  if (process.argv.includes('--eslogger') && !IS_MAC) console.log('  Deep mode needs macOS; running in standard mode.');
+  console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : '  Mode: standard (no admin rights needed).');
 });
 attacker.listen(4199, '127.0.0.1').on('error', () => console.log('  (demo attacker port 4199 busy; demo upload will fail)'));
 
@@ -112,4 +174,5 @@ startProcessMonitor();
 startNetworkMonitor();
 startFileMonitor();
 startTranscriptMonitor();
+startGuard();
 if (DEEP) startEslogger();

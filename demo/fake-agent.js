@@ -22,10 +22,14 @@ async function report(body) {
   }
 }
 
+const WIN = process.platform === 'win32';
+
 function sh(cmd) {
   console.log(`[demo agent] $ ${cmd}`);
   return new Promise((resolve) => {
-    const p = spawn('/bin/zsh', ['-c', cmd], { cwd: PROJECT, stdio: 'inherit' });
+    const p = WIN
+      ? spawn('cmd.exe', ['/d', '/s', '/c', cmd], { cwd: PROJECT, stdio: 'inherit', windowsHide: true })
+      : spawn('/bin/zsh', ['-c', cmd], { cwd: PROJECT, stdio: 'inherit' });
     p.on('exit', resolve);
   });
 }
@@ -34,8 +38,8 @@ await sleep(1200);
 await report({ task: 'Set up this project and get it running' });
 await sleep(1500);
 
-await report({ title: 'Demo agent looked through the project files', command: 'ls -la && cat README.md' });
-await sh('ls -la > /dev/null && cat README.md > /dev/null');
+await report({ title: 'Demo agent looked through the project files', command: WIN ? 'dir && type README.md' : 'ls -la && cat README.md' });
+await sh(WIN ? 'dir > NUL && type README.md > NUL' : 'ls -la > /dev/null && cat README.md > /dev/null');
 await sleep(1500);
 
 await report({ title: 'Demo agent installed packages', command: 'npm install' });
