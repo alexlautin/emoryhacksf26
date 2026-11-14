@@ -299,3 +299,16 @@ td .reasons { color: var(--muted); font-size: 12.5px; }
 .protect[data-level="off"] .protect-tile { background: var(--panel-2); color: var(--muted); }
 .protect[data-level="risky"] .protect-tile { background: color-mix(in srgb, var(--pause) 13%, transparent); color: var(--pause); }
 .muted { color: var(--muted); }
+
+/* ---------- Desktop app: menu bar panel (?view=panel) ---------- */
+/* A compact view: score, anything paused, and the sessions. The full dashboard is one click away. */
+.panel .top-inner { padding: 10px 14px; flex-wrap: nowrap; }
+.panel .top-actions > :not(#open-dash) { display: none; }
+.panel #open-dash { padding: 5px 10px; font-size: 13px; }
+.panel main { padding: 14px 14px 20px; gap: 16px; }
+.panel .report { grid-template-columns: minmax(0, 1fr); }
+.panel .score-col { padding: 14px 16px; border: 0; }
+.panel .score-num { font-size: 44px; }
+.panel .factors-col, .panel .scale, .panel #score-basis, .panel #protect, .panel #explain,
+.panel #simple, .panel #advanced, .panel #agent-hint, .panel #earlier { display: none !important; }
+.panel .session { cursor: default; }

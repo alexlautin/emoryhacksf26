@@ -7,6 +7,8 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%230f9d63'/><path d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>" />
   <script>
     // Apply the saved theme before first paint so the page doesn't flash.
+    // The desktop app's menu bar panel loads this page with ?view=panel: a compact version.
+    if (new URLSearchParams(location.search).get('view') === 'panel') document.documentElement.classList.add('panel');
     try { const t = localStorage.getItem('seatbelt.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
   </script>
   <link rel="stylesheet" href="/styles.css" />
@@ -31,6 +33,7 @@
         </div>
         <button id="reset" class="btn ghost" title="Clear the activity and start the score over">Reset</button>
         <button id="demo" class="btn primary">Run demo attack</button>
+        <button id="open-dash" class="btn primary" hidden>Open dashboard</button>
       </div>
     </div>
   </header>

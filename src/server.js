@@ -3,7 +3,6 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { subscribe, listAgents, listEvents, clearAll, upsertAgent, addEvent } from './store.js';
 import { startProcessMonitor } from './monitor/processes.js';
 import { startNetworkMonitor } from './monitor/network.js';
@@ -16,44 +15,17 @@ import { resetDemo } from '../demo/reset.js';
 import { startGuard, getSettings, setSettings, pauseAgent, resumeAgent, endAgent } from './guard.js';
 import { IS_MAC, OS_NAME } from './platform.js';
 import { handleHook } from './hooks.js';
+import { ROOT, DEMO_DIR, prepareDemoDir } from './paths.js';
+import { iconSprite, FONT_FILE } from './icons.js';
+import { fixPath, startDesktopBridge } from './desktop.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
-const PORT = +(process.env.PORT ?? 4100);
+const PORT = +(process.env.PORT ?? 4100); // 0 picks a free port (the desktop app does this)
+fixPath();
 const DEEP = process.argv.includes('--eslogger') && IS_MAC;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml' };
 const demoClients = new Set();
-
-// Icons: a small SVG sprite served as /icons.svg. UI icons from Lucide (lucide-static, ISC license);
-// agent logos from Lobe Icons (@lobehub/icons-static-svg, MIT), as `brand-<agent kind>`.
-const ICONS = [
-  'terminal', 'square-terminal', 'globe', 'file', 'file-text', 'wrench', 'message-square', 'eye', 'eye-off',
-  'key-round', 'upload', 'package', 'pause', 'play', 'octagon-x', 'octagon-alert', 'triangle-alert', 'circle-pause',
-  'shield', 'shield-check', 'shield-off', 'shield-alert', 'sun', 'moon', 'monitor', 'check', 'info', 'x', 'bot',
-];
-const BRANDS = {
-  claude: 'claudecode', codex: 'codex', gemini: 'geminicli', cursor: 'cursor',
-  copilot: 'githubcopilot', opencode: 'opencode', amp: 'amp',
-};
-let sprite = null;
-function iconSprite() {
-  if (sprite) return sprite;
-  const dir = path.join(ROOT, 'node_modules', 'lucide-static', 'icons');
-  const symbols = ICONS.map((name) => {
-    const svg = fs.readFileSync(path.join(dir, `${name}.svg`), 'utf8');
-    const inner = svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
-    return `<symbol id="${name}" viewBox="0 0 24 24">${inner}</symbol>`;
-  });
-  const brandDir = path.join(ROOT, 'node_modules', '@lobehub', 'icons-static-svg', 'icons');
-  for (const [kind, file] of Object.entries(BRANDS)) {
-    const svg = fs.readFileSync(path.join(brandDir, `${file}.svg`), 'utf8').replace(/<title>.*?<\/title>/, '');
-    const inner = svg.slice(svg.indexOf('>', svg.indexOf('<svg')) + 1, svg.lastIndexOf('</svg>')).trim();
-    symbols.push(`<symbol id="brand-${kind}" viewBox="0 0 24 24"><g fill="currentColor" fill-rule="evenodd">${inner}</g></symbol>`);
-  }
-  sprite = `<svg xmlns="http://www.w3.org/2000/svg">${symbols.join('')}</svg>`;
-  return sprite;
-}
 
 function json(res, code, body) {
   res.writeHead(code, { 'content-type': 'application/json' });
@@ -136,10 +108,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/demo/run' && req.method === 'POST') {
       await stopDemo();
       demoRunning = true;
-      ignoreWrites(path.join(ROOT, 'demo'));
-      await resetDemo();
+      prepareDemoDir();
+      ignoreWrites(DEMO_DIR);
+      await resetDemo(DEMO_DIR);
       rearmBait();
-      const child = spawn(process.execPath, [path.join(ROOT, 'demo', 'fake-agent.js')], { cwd: path.join(ROOT, 'demo', 'victim-project'), stdio: 'inherit' });
+      const child = spawn(process.execPath, [path.join(DEMO_DIR, 'fake-agent.js')], { cwd: path.join(DEMO_DIR, 'victim-project'), stdio: 'inherit' });
       demoChild = child;
       child.on('exit', () => { if (demoChild === child) { demoRunning = false; demoChild = null; } });
       return json(res, 200, { ok: true });
@@ -149,9 +122,8 @@ const server = http.createServer(async (req, res) => {
       return res.end(iconSprite());
     }
     if (url.pathname === '/fonts/instrument-sans.woff2') {
-      const font = path.join(ROOT, 'node_modules', '@fontsource-variable', 'instrument-sans', 'files', 'instrument-sans-latin-wght-normal.woff2');
       res.writeHead(200, { 'content-type': 'font/woff2', 'cache-control': 'max-age=86400' });
-      return fs.createReadStream(font).pipe(res);
+      return fs.createReadStream(FONT_FILE).pipe(res);
     }
     // Static files
     const file = path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname);
@@ -180,7 +152,10 @@ const attacker = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`\n  Seatbelt is watching. Dashboard: http://localhost:${PORT}\n`);
+  const port = server.address().port;
+  process.env.PORT = String(port); // the demo agent reports back to this port
+  startDesktopBridge(port);
+  console.log(`\n  Seatbelt is watching. Dashboard: http://localhost:${port}\n`);
   console.log(`  Decoy secrets planted in ${shortPath(BAIT_DIR)}`);
   if (process.argv.includes('--eslogger') && !IS_MAC) console.log('  Deep mode needs macOS; running in standard mode.');
   console.log(DEEP ? '  Deep mode: eslogger (experimental)' : IS_MAC ? '  Mode: standard (no sudo). Use `pnpm deep` for eslogger.' : '  Mode: standard (no admin rights needed).');

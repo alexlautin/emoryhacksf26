@@ -514,3 +514,13 @@ drawScale();
 try { const v = localStorage.getItem('seatbelt.view'); if (v) setView(v); } catch {}
 connect();
 setInterval(render, 10000); // refresh "x seconds ago"
+
+// ---------- Desktop app ----------
+// In the menu bar panel (?view=panel), offer the full dashboard window. The app exposes an
+// `open_dashboard` command to pages served by its own Seatbelt server.
+if (document.documentElement.classList.contains('panel')) {
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  const btn = $('#open-dash');
+  btn.hidden = !invoke;
+  btn.addEventListener('click', () => invoke?.('open_dashboard'));
+}
