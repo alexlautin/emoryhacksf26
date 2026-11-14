@@ -29,7 +29,7 @@ export function build() {
   const article = `<article class="paper">\n${renderMarkdown(fs.readFileSync(path.join(root, 'whitepaper.md'), 'utf8'))}\n</article>\n`;
   fs.writeFileSync(path.join(dist, 'whitepaper.html'), page({
     title: 'Lookout white paper',
-    description: 'How Lookout watches coding agents: process polls, decoy files, the rules, the 300 to 850 score, and the limits.',
+    description: 'How Lookout watches coding agents: process polls, decoy files, the rules, the score out of 100, and the limits.',
     current: 'paper',
     body: article,
   }));

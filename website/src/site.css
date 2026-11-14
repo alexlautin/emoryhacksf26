@@ -341,12 +341,27 @@ code {
 
 .session-top { color: var(--log-muted); font-size: 0.82rem; }
 
-.session-top p:first-child {
+.session-top #session-title {
   font-family: var(--mono);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   font-size: 12px;
 }
+
+.session-score {
+  margin: 0;
+  font-family: var(--mono);
+  color: var(--log-ink);
+  font-size: 0.95rem;
+}
+
+.session-score b {
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.session-score span { color: var(--log-muted); }
 
 .session-task {
   margin-top: 14px;

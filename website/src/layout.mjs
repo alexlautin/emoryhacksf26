@@ -80,7 +80,7 @@ export function page({ title, description, current, body, script = false }) {
       </div>
     </div>
     <div class="wrap footer-end">
-      <p>Built at Emory Hacks. The app in this repo still says Seatbelt in a few paths and on-screen messages. This site uses the new name, Lookout.</p>
+      <p>Built at Emory Hacks.</p>
     </div>
   </footer>
   ${scriptTag}

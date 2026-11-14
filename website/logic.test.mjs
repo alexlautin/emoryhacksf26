@@ -132,6 +132,6 @@ test('the white paper renders the sections the site links to', () => {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /<script/);
-  assert.match(html, /300 to 850/);
-  assert.match(html, /~\/\.seatbelt\/bait/);
+  assert.match(html, /0 to 100/);
+  assert.match(html, /~\/\.lookout\/bait/);
 });
