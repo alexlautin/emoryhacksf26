@@ -104,7 +104,7 @@
 
       <footer class="statusbar">
         <span id="status-left"></span>
-        <span class="status-right" id="foot-text">Nothing leaves this computer</span>
+        <span class="status-right" id="foot-text">Activity log stored on this computer</span>
       </footer>
     </section>
   </div>
@@ -177,6 +177,28 @@
           <button type="button" class="btn ghost" id="reset" title="Clear the activity and start the score over">Reset activity</button>
         </div>
       </fieldset>
+    </form>
+  </dialog>
+
+  <dialog id="demo-review" aria-labelledby="demo-review-title">
+    <form method="dialog">
+      <header class="prefs-head">
+        <h2 id="demo-review-title">Gemini Review Demo</h2>
+        <button class="btn icon ghost" aria-label="Close"><svg class="i" aria-hidden="true"><use href="#x"/></svg></button>
+      </header>
+      <fieldset>
+        <legend>Choose an example</legend>
+        <div class="seg" id="review-cases"></div>
+      </fieldset>
+      <section class="review-timeline" aria-label="Sample timeline">
+        <p class="hint">Simulated connection · Local rating <strong class="t-warn">Worth a look</strong></p>
+        <ol id="review-timeline"></ol>
+      </section>
+      <div class="review-action">
+        <button type="button" class="pbtn primary" id="review-run">Review with Gemini</button>
+        <p class="hint">Sends only the fictional timeline to Google for an advisory review.</p>
+      </div>
+      <section id="review-result" aria-live="polite" aria-label="Gemini assessment"></section>
     </form>
   </dialog>
 

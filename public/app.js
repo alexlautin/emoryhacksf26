@@ -6,6 +6,7 @@ import { computeScore, withHealth } from './score.js';
 import { canBaseline } from './baseline.js';
 import { sessionTouch } from './touch.js';
 import { mountPug, setPugMood, pugReact } from './pug.js';
+import { REVIEW_CASES, REVIEW_VERDICTS } from './demo-review.js';
 
 const $ = (s) => document.querySelector(s);
 const PANEL = document.documentElement.classList.contains('panel');
@@ -558,6 +559,7 @@ function homeScore() {
       <div class="hs-actions">
         <a class="pbtn" href="/api/report.md" download>Download Report</a>
         <button type="button" class="pbtn" data-demo>Run Demo Attack</button>
+        ${state.remote ? '' : '<button type="button" class="pbtn" data-review-demo>Gemini Review Demo</button>'}
       </div>
     </div>
     <span class="ss-track" aria-hidden="true"><span class="ss-fill ${s.level.cls}" style="width:${s.score}%"></span></span>
@@ -832,6 +834,9 @@ function renderInspector() {
   else if (r?.hostRow) html = insHost(r);
   else if (state.view === 'agent' && state.agents.get(state.agentId)) html = insAgent(state.agents.get(state.agentId));
   else html = insOverview();
+  if (!state.remote && state.view === 'agent' && state.agents.get(state.agentId)?.kind === 'demo') {
+    html += `<div class="ins-actions"><button type="button" class="pbtn" data-review-demo>${icon('sparkles')}Gemini Review Demo</button></div>`;
+  }
   if (r) html = `<button type="button" class="sheet-close" data-close-sel aria-label="Close details">${icon('x')}</button>${html}`;
   setHTML(el, html);
 }
@@ -1010,6 +1015,41 @@ async function explain(agentId) {
   render();
 }
 
+let reviewCase = 'staging';
+const demoReviews = new Map();
+
+function renderDemoReview() {
+  setHTML($('#review-cases'), Object.entries(REVIEW_CASES).map(([id, { label }]) => {
+    const selected = id === reviewCase;
+    return `<button type="button" class="${selected ? 'on' : ''}" data-review-case="${id}" aria-pressed="${selected}">${esc(label)}</button>`;
+  }).join(''));
+  const { events } = REVIEW_CASES[reviewCase];
+  setHTML($('#review-timeline'), events.map(({ id, text }) => `<li id="review-event-${id}" tabindex="-1">${esc(text)}</li>`).join(''));
+  const review = demoReviews.get(reviewCase);
+  $('#review-run').disabled = !!(review?.loading || review?.verdict);
+  if (review?.loading) return setHTML($('#review-result'), '<p class="hint">Gemini is reviewing the timeline…</p>');
+  if (review?.error) return setHTML($('#review-result'), `<p class="t-bad">${esc(review.error)}</p>`);
+  if (!review?.verdict) return setHTML($('#review-result'), '');
+  const evidence = review.evidence.map((id) => `<button type="button" class="linkbtn" data-review-evidence="${id}">Event ${id}</button>`).join('');
+  setHTML($('#review-result'), `<h3>${esc(REVIEW_VERDICTS[review.verdict])}</h3><p>${esc(review.explanation)}</p><div class="review-evidence">${evidence}</div>`);
+}
+
+async function reviewDemoCase() {
+  const caseId = reviewCase;
+  const current = demoReviews.get(caseId);
+  if (current?.loading || current?.verdict) return;
+  demoReviews.set(caseId, { loading: true });
+  renderDemoReview();
+  try {
+    const response = await post('/api/demo/review', { caseId });
+    const review = await response.json();
+    demoReviews.set(caseId, response.ok ? review : { error: review.error });
+  } catch {
+    demoReviews.set(caseId, { error: 'Could not reach Harness. Try again.' });
+  }
+  renderDemoReview();
+}
+
 function showEvent(id) {
   const e = state.events.find((x) => x.id === id);
   if (!e?.agentId) return;
@@ -1154,6 +1194,20 @@ document.addEventListener('click', (e) => {
   }
   const ex = t.closest('[data-explain]');
   if (ex) { explain(ex.dataset.explain); return; }
+  if (t.closest('[data-review-demo]')) {
+    renderDemoReview();
+    $('#demo-review').showModal();
+    return;
+  }
+  const example = t.closest('[data-review-case]');
+  if (example) {
+    reviewCase = example.dataset.reviewCase;
+    renderDemoReview();
+    $(`[data-review-case="${reviewCase}"]`).focus();
+    return;
+  }
+  const evidence = t.closest('[data-review-evidence]');
+  if (evidence) { $(`#review-event-${evidence.dataset.reviewEvidence}`).focus(); return; }
   const base = t.closest('[data-base]');
   if (base) { markNormal(Number(base.dataset.base)); return; }
   const unbase = t.closest('[data-unbase]');
@@ -1241,6 +1295,7 @@ $('#phone-toggle').onclick = () => phoneCall(state.phone?.enabled ? 'disable' : 
 $('#phone-reset').onclick = () => phoneCall('reset');
 
 $('#prefs').addEventListener('click', (e) => { if (e.target === $('#prefs')) $('#prefs').close(); });
+$('#review-run').onclick = reviewDemoCase;
 
 $('#mp-open').onclick = openDashboard;
 $('#mp-quit').onclick = quitApp;
@@ -1261,7 +1316,7 @@ document.addEventListener('keydown', (e) => {
     items[i === -1 ? 0 : next].focus();
     return;
   }
-  if ($('#prefs').open) return;
+  if ($('#prefs').open || $('#demo-review').open) return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
   if (e.key === 'Escape') {
     if (typing) { document.activeElement.blur(); return; }
