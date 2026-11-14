@@ -1,5 +1,5 @@
 // Gets everything the desktop app bundles ready, before `tauri dev` / `tauri build`:
-//   src-tauri/binaries/node-<target>  this Node, which runs the Seatbelt server inside the app
+//   src-tauri/binaries/node-<target>  this Node, which runs the Lookout server inside the app
 //   src-tauri/build/app/              the server, dashboard, demo and Claude Code hook, plus just the icon and
 //                                     font files it needs from node_modules
 // Builds for the machine you're on. Build each platform on that platform (or in CI).
@@ -32,6 +32,6 @@ copy(path.join(ROOT, 'hooks'));
 for (const name of ICONS) copy(path.join(LUCIDE_DIR, `${name}.svg`));
 for (const file of Object.values(BRANDS)) copy(path.join(BRAND_DIR, `${file}.svg`));
 copy(FONT_FILE);
-fs.writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ name: 'seatbelt', private: true, type: 'module' }, null, 2) + '\n');
+fs.writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ name: 'lookout', private: true, type: 'module' }, null, 2) + '\n');
 
-console.log(`Staged Seatbelt for ${target}: Node ${process.version}, app files in ${path.relative(ROOT, OUT)}`);
+console.log(`Staged Lookout for ${target}: Node ${process.version}, app files in ${path.relative(ROOT, OUT)}`);

@@ -14,17 +14,17 @@ import { SENSITIVE_DIRS } from '../platform.js';
 import { DATA_DIR, DEMO_DIR } from '../paths.js';
 
 const HOME = os.homedir();
-const SEATBELT_DATA = DATA_DIR;
-export const BAIT_DIR = path.join(HOME, '.seatbelt', 'bait');
+export const BAIT_DIR = path.join(HOME, '.lookout', 'bait');
+const LEGACY_BAIT_DIR = path.join(HOME, '.seatbelt', 'bait');
 
 // Each decoy embeds a random marker made at install time (kept in data/bait-markers.json), so the
 // values are unique to this computer and can be recognised wherever they show up later.
 const BAIT_FILES = {
-  'aws_credentials': (m) => `# Seatbelt decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${m}\naws_secret_access_key = sb-decoy/${m}${m.toLowerCase().slice(0, 12)}\n`,
-  'passwords.txt': (m) => `Seatbelt decoy file. Nothing real here.\nbank: ${m}-decoy\nemail: ${m.toLowerCase()}-decoy\n`,
-  'id_ed25519_backup': (m) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${Buffer.from(`Seatbelt decoy key. Not real. ${m}`).toString('base64')}\n${m}\n-----END OPENSSH PRIVATE KEY-----\n`,
+  'aws_credentials': (m) => `# Lookout decoy. These keys are fake and do nothing.\n[default]\naws_access_key_id = AKIA${m}\naws_secret_access_key = lk-decoy/${m}${m.toLowerCase().slice(0, 12)}\n`,
+  'passwords.txt': (m) => `Lookout decoy file. Nothing real here.\nbank: ${m}-decoy\nemail: ${m.toLowerCase()}-decoy\n`,
+  'id_ed25519_backup': (m) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${Buffer.from(`Lookout decoy key. Not real. ${m}`).toString('base64')}\n${m}\n-----END OPENSSH PRIVATE KEY-----\n`,
 };
-const MARKERS_FILE = path.join(SEATBELT_DATA, 'bait-markers.json');
+const MARKERS_FILE = path.join(DATA_DIR, 'bait-markers.json');
 // The demo's .env is rebuilt by demo/reset.js with fixed values; this string is in all of them.
 const DEMO_MARKER = 'DECOY-NOT-REAL';
 
@@ -35,7 +35,7 @@ function newMarker() {
 const DEMO_ENV = path.join(DEMO_DIR, 'victim-project', '.env');
 
 const lastAtime = new Map();
-const quiet = new Map(); // dir -> until (ms): Seatbelt's own writes, not the agent's
+const quiet = new Map(); // dir -> until (ms): Lookout's own writes, not the agent's
 
 export function ignoreWrites(dir, ms = 4000) {
   quiet.set(dir, Date.now() + ms);
@@ -52,8 +52,11 @@ function setupBait() {
     let marker = saved[name];
     // Write the decoy if it's missing, or upgrade an older decoy that has no marker yet.
     // Never overwrite a file that isn't one of ours.
-    if (body === null || (/Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body) && !(marker && body.includes(marker)))) {
-      marker = newMarker();
+    const owned = body !== null && /Lookout decoy|Seatbelt decoy/i.test(Buffer.from(body.split('\n')[1] ?? '', 'base64').toString() + body);
+    // Rewrite old "Seatbelt decoy" wording in place, keeping the same marker.
+    const legacyWording = owned && marker && body.includes(marker) && /Seatbelt decoy/i.test(body);
+    if (body === null || (owned && !(marker && body.includes(marker))) || legacyWording) {
+      if (!marker) marker = newMarker();
       fs.writeFileSync(p, render(marker), { mode: 0o600 });
     } else if (!(marker && body.includes(marker))) {
       marker = null;
@@ -64,8 +67,25 @@ function setupBait() {
     }
     baitPaths.add(p);
   }
-  fs.mkdirSync(SEATBELT_DATA, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(MARKERS_FILE, JSON.stringify(saved, null, 2), { mode: 0o600 });
+  registerLegacyBait();
+}
+
+// Decoys from before the rename live in ~/.seatbelt/bait.
+// Copy them once, and keep watching the old files so a read there still counts.
+function migrateBaitDir() {
+  if (fs.existsSync(BAIT_DIR) || !fs.existsSync(LEGACY_BAIT_DIR)) return;
+  fs.mkdirSync(path.dirname(BAIT_DIR), { recursive: true });
+  fs.cpSync(LEGACY_BAIT_DIR, BAIT_DIR, { recursive: true });
+}
+
+function registerLegacyBait() {
+  if (!fs.existsSync(LEGACY_BAIT_DIR)) return;
+  for (const name of Object.keys(BAIT_FILES)) {
+    const p = path.join(LEGACY_BAIT_DIR, name);
+    if (fs.existsSync(p)) baitPaths.add(p);
+  }
 }
 
 function refreshDemoBait() {
@@ -109,7 +129,7 @@ function pollBait() {
         kind: 'file',
         risk: 'critical',
         reasons: [
-          'opened a decoy secret Seatbelt planted on purpose. No honest task needs it, so this is a strong sign something went rogue',
+          'opened a decoy secret Lookout planted on purpose. No honest task needs it, so this is a strong sign something went rogue',
           agent ? `happened while ${agent.label} was the active program` : 'happened while no agent was active, so it may have been something else on this computer',
         ],
         title: agent ? `Something under ${agent.label} opened a decoy secret: ${path.basename(p)}` : `Something opened a decoy secret: ${path.basename(p)}`,
@@ -139,7 +159,7 @@ function watchProjects() {
       const watcher = fs.watch(a.cwd, { recursive: true }, (_ev, rel) => {
         if (!rel) return;
         const full = path.join(a.cwd, rel.toString());
-        if (full.startsWith(SEATBELT_DATA) || IGNORED.test(rel.toString()) || baitPaths.has(full)) return;
+        if (full.startsWith(DATA_DIR) || IGNORED.test(rel.toString()) || baitPaths.has(full)) return;
         for (const [dir, until] of quiet) if (full.startsWith(dir) && Date.now() < until) return;
         // If another live agent works in a folder nested inside this one, the change is theirs.
         for (const [otherId, ow] of watchers) {
@@ -225,6 +245,7 @@ function watchSensitive() {
 }
 
 export function startFileMonitor() {
+  migrateBaitDir();
   setupBait();
   refreshDemoBait();
   watchSensitive();

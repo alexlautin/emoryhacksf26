@@ -18,18 +18,19 @@ async function report(body) {
       const r = await fetch(`${API}/api/demo/step`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pid: process.pid, ...body }) });
       if (r.ok) return;
     } catch {}
-    await sleep(300); // Seatbelt hasn't noticed us yet
+    await sleep(300); // Lookout hasn't noticed us yet
   }
 }
 
 const WIN = process.platform === 'win32';
+const SHELL = WIN ? null : (fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/sh');
 
 function sh(cmd) {
   console.log(`[demo agent] $ ${cmd}`);
   return new Promise((resolve) => {
     const p = WIN
       ? spawn('cmd.exe', ['/d', '/s', '/c', cmd], { cwd: PROJECT, stdio: 'inherit', windowsHide: true })
-      : spawn('/bin/zsh', ['-c', cmd], { cwd: PROJECT, stdio: 'inherit' });
+      : spawn(SHELL, ['-c', cmd], { cwd: PROJECT, stdio: 'inherit' });
     p.on('exit', resolve);
   });
 }

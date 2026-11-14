@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The panel and dashboard load the local Seatbelt server; let them ask the app to open the dashboard.",
+  "description": "The panel and dashboard load the local Lookout server. They can open the dashboard, quit, and resize the menu.",
   "windows": ["panel", "dashboard"],
   "remote": { "urls": ["http://127.0.0.1:*"] },
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "allow-open-dashboard", "allow-quit-app", "allow-resize-panel"]
 }
