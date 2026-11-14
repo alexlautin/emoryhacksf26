@@ -1,6 +1,7 @@
 import '../src/site.css';
 import './demo.css';
 import Brand from './_components/brand.jsx';
+import Pointer from './_components/pointer.jsx';
 import { DEVPOST_URL } from '../releases.js';
 
 export const metadata = {
@@ -29,6 +30,7 @@ export default function Layout({ children }) {
           </div>
         </header>
         <main id="main" tabIndex={-1}>{children}</main>
+        <Pointer />
         <footer className="foot">
           <div className="wrap foot-in">
             <div>

@@ -62,7 +62,7 @@ function Exposure() {
           </div>
           <ul className="xp-grid">
             {REACH.map((r) => (
-              <li key={r.what}>
+              <li key={r.what} data-spot>
                 <code>{r.path}</code>
                 <h3>{r.what}</h3>
                 <p>{r.unlocks}</p>
@@ -86,42 +86,44 @@ function Watch() {
           <h2>Everything the window leaves out.</h2>
           <p>Four kinds of evidence, checked against a fixed list of rules. A model can summarize a session afterwards, but it never decides what counts as dangerous.</p>
         </header>
+        <p className="hint" aria-hidden="true">Hover a line to inspect it</p>
         <div className="bento">
-          <article className="card card-wide" data-reveal>
+          <article className="card card-wide" data-reveal data-spot>
             <div className="viz viz-tree">
-              <p><code>claude</code></p>
-              <p style={{ '--d': 1 }}><code>zsh -lc</code></p>
-              <p style={{ '--d': 2 }}><code>npm install</code></p>
-              <p style={{ '--d': 3 }} className="is-hot"><code>node install.js</code><b>came from a package</b></p>
+              <p><code>claude</code><span className="viz-meta">pid 4102 · the agent</span></p>
+              <p style={{ '--d': 1 }}><code>zsh -lc</code><span className="viz-meta">pid 4118 · started by claude</span></p>
+              <p style={{ '--d': 2 }}><code>npm install</code><span className="viz-meta">pid 4120 · started by zsh</span></p>
+              <p style={{ '--d': 3 }} className="is-hot"><code>node install.js</code><b>came from a package</b><span className="viz-meta">pid 4131 · color-helpers’ install script</span></p>
             </div>
             <h3>The whole process chain</h3>
             <p>Every program an agent starts, and every program those start. When something goes wrong three levels down, Harness says which package did it instead of blaming the agent.</p>
           </article>
-          <article className="card" data-reveal>
+          <article className="card" data-reveal data-spot>
             <div className="viz viz-decoy">
               <div className="viz-file">
                 <p className="file-name">aws_credentials<b>decoy</b></p>
                 <p><code>aws_access_key_id = AKIA…7F3A</code></p>
                 <p><code>aws_secret_access_key = hb_9c1e…</code></p>
+                <p className="viz-trip"><i />Read by <code>node install.js</code> · session paused</p>
               </div>
             </div>
             <h3>Decoy secrets</h3>
             <p>Fake keys, planted where a thief would look, each holding a value unique to your computer. No honest task opens them, so a single read is proof.</p>
           </article>
-          <article className="card" data-reveal>
+          <article className="card" data-reveal data-spot>
             <div className="viz viz-net">
-              <p><i className="ok" />api.anthropic.com</p>
-              <p><i className="ok" />registry.npmjs.org</p>
-              <p className="is-hot"><i />203.0.113.7<b>unrecognized</b></p>
+              <p><i className="ok" />api.anthropic.com<span className="viz-meta">the agent’s own API</span></p>
+              <p><i className="ok" />registry.npmjs.org<span className="viz-meta">package downloads</span></p>
+              <p className="is-hot"><i />203.0.113.7<span className="viz-meta">41 KB out</span><b>unrecognized</b></p>
             </div>
             <h3>Where data goes</h3>
             <p>Every connection an agent’s processes open, by name. The services agents normally talk to stay quiet. Uploads and strangers do not.</p>
           </article>
-          <article className="card card-wide" data-reveal>
+          <article className="card card-wide" data-reveal data-spot>
             <div className="viz viz-persist">
-              <p><code>~/.zshrc</code><span>runs in every new terminal</span></p>
-              <p><code>~/Library/LaunchAgents</code><span>runs at every login</span></p>
-              <p><code>crontab</code><span>runs on a schedule</span></p>
+              <p><code>~/.zshrc</code><span>runs in every new terminal</span><b>watched</b></p>
+              <p><code>~/Library/LaunchAgents</code><span>runs at every login</span><b>watched</b></p>
+              <p><code>crontab</code><span>runs on a schedule</span><b>watched</b></p>
             </div>
             <h3>Things built to outlast the session</h3>
             <p>Startup files, login items and scheduled tasks are how software stays on a computer after you close the window. Harness watches those places and flags anything that writes to them.</p>
@@ -197,14 +199,14 @@ function DemoCta() {
   return (
     <section className="sec sec-tight">
       <div className="wrap">
-        <div className="democta" data-reveal>
+        <div className="democta" data-reveal data-spot>
           <div>
             <p className="eyebrow">Live demo · Powered by Gemini</p>
             <h2>Gemini plays the agent.<br />Harness keeps score.</h2>
             <p>Pick a situation and Gemini writes a coding session to match, attacker included. Every command it invents is then judged by the same rules the app runs. Nothing executes, and nothing on your computer is read.</p>
             <p><a className="btn btn-ink" href="/demo">Open the live demo <span aria-hidden="true">→</span></a></p>
           </div>
-          <ol className="democta-viz" aria-hidden="true">
+          <ol className="democta-viz" aria-hidden="true" data-tilt>
             <li><code>npm install</code><b className="tag">Note</b></li>
             <li><code>node install.js</code><b className="tag">Clear</b></li>
             <li className="is-hot"><code>cat ~/.harness/bait/… | curl -X POST</code><b className="tag tag-bad">Dangerous</b></li>
