@@ -69,10 +69,13 @@ main:focus { outline: none; }
 @media (max-width: 860px) { .nav-links { display: none; } .nav-in .btn { margin-left: auto; } }
 
 /* Hero */
-.hero { padding: clamp(48px, 8vw, 104px) 0 0; overflow: hidden; }
+.hero { padding: clamp(32px, 4vw, 56px) 0 0; overflow: hidden; display: flex; flex-direction: column; min-height: calc(100svh - var(--nav-h)); }
+.hero > .hero-grid { flex: 1; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(32px, 6vw, 88px); align-items: center; }
-.hero h1 { margin-top: 22px; font-size: clamp(44px, 6.6vw, 92px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.98; }
+.hero h1 { margin-top: 22px; font-size: clamp(44px, min(6.6vw, 9.5vh), 92px); font-weight: 700; letter-spacing: -0.05em; line-height: 0.98; }
 .hero h1 span { color: var(--teal-deep); }
+/* Desktop: size the headline from its column so it always breaks "Let your agent run." / "Keep it on a" / "harness." */
+@media (min-width: 901px) { .hero h1 .h1-end { display: block; } .hero h1 { font-size: min(calc((min(1180px, 100vw - 48px) - clamp(32px, 6vw, 88px)) * 0.0655), 9.5vh); } }
 .hero .lead { margin-top: 28px; max-width: 34em; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
 .hero-note { margin-top: 20px; font-size: 14px; color: var(--ink-3); }
@@ -87,13 +90,14 @@ main:focus { outline: none; }
 /* Hero panel: the card breaks in two when the agent does something risky. */
 .stack { position: relative; --pop: cubic-bezier(.2,1.35,.3,1); --red-line: color-mix(in srgb, var(--red) 50%, var(--line)); }
 .panel-a { border-radius: var(--h-radius-lg) var(--h-radius-lg) 0 0; padding-bottom: 6px; position: relative; z-index: 1; box-shadow: none; }
-.panel-b { border-top: 0 solid transparent; border-radius: 0 0 var(--h-radius-lg) var(--h-radius-lg); padding: 0 20px 16px; animation-delay: 0.25s; }
+.panel-b { display: flow-root; border-top: 0 solid transparent; border-radius: 0 0 var(--h-radius-lg) var(--h-radius-lg); padding: 0 20px 16px; animation-delay: 0.25s; }
 .panel-a, .panel-b { transition: transform 0.8s var(--pop), border-radius 0.5s, border-color 0.4s, border-top-width 0.5s, padding-top 0.5s, box-shadow 0.5s; will-change: transform; }
 .seam { position: relative; height: 0; z-index: 2; pointer-events: none; transition: transform 0.8s var(--pop); }
 .seam i { position: absolute; left: 6%; right: 6%; top: -1px; height: 2px; border-radius: 2px; background: var(--red); transform: scaleX(0); opacity: 0; box-shadow: 0 0 14px 2px color-mix(in srgb, var(--red) 55%, transparent); transition: transform 0.5s var(--ease) 0.1s, opacity 0.3s; }
 .seam span { position: absolute; left: 50%; top: 0; font: 600 11px/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; background: var(--red); color: #fff; padding: 6px 12px; border-radius: 99px; white-space: nowrap; opacity: 0; transform: translate(-50%, -50%) scale(0.6); transition: opacity 0.3s 0.25s, transform 0.6s var(--pop) 0.25s; }
 .is-alert .panel-a { animation: rise 0.9s var(--ease) 0.1s backwards, shake 0.5s; border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent); }
 .is-alert .panel-b { border-color: var(--red-line); }
+.is-calm .panel-a, .is-alert .panel-a { border-bottom-color: transparent; }
 .is-split .panel-a { transform: translate(-8px, -8px) rotate(-1.5deg); border-radius: var(--h-radius-lg); border-color: var(--red-line); box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 30px 60px -28px rgba(13,16,18,0.22); }
 .is-split .panel-b { transform: translate(10px, 28px) rotate(1.8deg); border-radius: var(--h-radius-lg); border-top-width: 1px; border-color: var(--red-line); padding-top: 14px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 10%, transparent), 0 40px 60px -26px rgba(193,53,42,0.35); }
 .is-split .seam { transform: translateY(10px); }
@@ -137,6 +141,8 @@ main:focus { outline: none; }
 .panel-sessions span { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
 .panel-sessions em { display: inline-flex; align-items: center; gap: 7px; font-style: normal; font-size: 12.5px; color: var(--ink-2); }
 .panel-sessions em::before { content: ""; }
+.panel-sessions .is-paused em { color: var(--red); font-weight: 600; }
+.panel-sessions .is-paused em::before { background: var(--red); animation: none; box-shadow: none; }
 .panel-feed { height: 78px; overflow: hidden; margin-top: 6px; padding: 8px 12px; border-radius: var(--h-radius-card); background: var(--tint); font-family: var(--mono); font-size: 12px; mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
 .panel-feed ol { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
 .panel-feed li { height: 21px; line-height: 21px; white-space: nowrap; color: var(--ink); }
@@ -144,7 +150,15 @@ main:focus { outline: none; }
 .panel-feed li span { color: var(--ink-3); margin-right: 10px; }
 @keyframes feed { to { transform: translateY(-168px); } }
 
-.agents { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; margin-top: clamp(48px, 7vw, 88px); padding: 22px 0; border-top: 1px solid var(--line); font-weight: 600; font-size: 15px; color: var(--ink-2); letter-spacing: -0.01em; }
+.agents { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; margin-top: clamp(28px, 4vw, 48px); padding: 22px 0; border-top: 1px solid var(--line); font-weight: 600; font-size: 15px; color: var(--ink-2); letter-spacing: -0.01em; }
+.agents-more { margin-left: auto; }
+.agents-more a { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--ink-3); font: 400 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; transition: color 0.15s; }
+.agents-more a:hover { color: var(--ink); }
+.agents-more i { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 50%; font-style: normal; animation: nudge 1.6s ease-in-out infinite; }
+.agents-more svg { display: block; }
+@keyframes nudge { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .agents-more i { animation: none; } }
+@media (max-width: 900px) { .agents-more { display: none; } }
 .agents-label { font-family: var(--mono); font-weight: 400; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 
 @media (max-width: 900px) {
