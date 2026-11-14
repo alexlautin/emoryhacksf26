@@ -4,65 +4,114 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Seatbelt</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%2316a34a'/><path d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z' fill='%230f9d63'/><path d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round'/></svg>" />
+  <script>
+    // Apply the saved theme before first paint so the page doesn't flash.
+    try { const t = localStorage.getItem('seatbelt.theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+  </script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="top">
-    <div class="brand">
-      <svg viewBox="0 0 32 32" class="logo" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z" /><path d="m10 16 4 4 8-8" class="check" /></svg>
-      <div>
+    <div class="top-inner">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" class="logo" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5 13 12 15 7-2 12-7.5 12-15V7z" /><path d="m10 16 4 4 8-8" class="check" /></svg>
         <h1>Seatbelt</h1>
-        <p class="tag">See what your AI agents actually do on this Mac</p>
+        <span id="live" class="live"><span class="dot"></span><span id="live-text">Connecting</span></span>
       </div>
-    </div>
-    <div class="top-actions">
-      <span id="live" class="pill"><span class="dot"></span><span id="live-text">Connecting…</span></span>
-      <div class="seg" role="tablist" aria-label="View">
-        <button id="view-simple" class="on" role="tab">Simple</button>
-        <button id="view-advanced" role="tab">Advanced</button>
+      <div class="top-actions">
+        <div class="seg" role="tablist" aria-label="View">
+          <button id="view-simple" class="on" role="tab">Simple</button>
+          <button id="view-advanced" role="tab">Advanced</button>
+        </div>
+        <div class="seg icons" role="radiogroup" aria-label="Theme" id="theme-seg">
+          <button data-theme="system" role="radio" title="Match system"><svg class="i" aria-hidden="true"><use href="/icons.svg#monitor"/></svg></button>
+          <button data-theme="light" role="radio" title="Light"><svg class="i" aria-hidden="true"><use href="/icons.svg#sun"/></svg></button>
+          <button data-theme="dark" role="radio" title="Dark"><svg class="i" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+        </div>
+        <button id="reset" class="btn ghost" title="Clear the activity and start the score over">Reset</button>
+        <button id="demo" class="btn primary">Run demo attack</button>
       </div>
-      <button id="demo" class="btn primary">Run demo attack</button>
-      <button id="reset" class="btn ghost" title="Clear the feed and reset scores">Reset</button>
     </div>
   </header>
 
   <main>
     <section id="alert" class="alert" hidden></section>
 
-    <section class="summary-strip" id="totals"></section>
+    <section class="report">
+      <div class="score-col">
+        <div class="label">Safety score</div>
+        <div class="score-line">
+          <span id="score-num" class="score-num">850</span>
+          <span class="score-of">/ 850</span>
+        </div>
+        <div id="score-band" class="band-word excellent">Excellent</div>
+        <p id="score-blurb" class="score-blurb"></p>
+        <div class="scale" aria-hidden="true">
+          <div id="scale-marker" class="scale-marker"></div>
+          <div id="scale-bar" class="scale-bar"></div>
+          <div id="scale-labels" class="scale-labels"></div>
+        </div>
+        <p id="score-basis" class="basis"></p>
+      </div>
+
+      <div class="factors-col">
+        <div class="col-head">
+          <h2>What's affecting your score</h2>
+          <button id="factor-clear" class="link" hidden>Show everything</button>
+        </div>
+        <ul id="factors" class="factors"></ul>
+      </div>
+    </section>
+
+    <section class="protect" id="protect">
+      <span class="tile protect-tile"><svg class="i" aria-hidden="true"><use id="protect-icon" href="/icons.svg#shield-check"/></svg></span>
+      <div class="protect-text">
+        <h2>Auto-protect <span id="protect-state" class="state-word">On</span></h2>
+        <p id="protect-desc"></p>
+      </div>
+      <div class="seg" role="radiogroup" aria-label="Auto-protect level" id="protect-seg">
+        <button data-level="off" role="radio">Off</button>
+        <button data-level="dangerous" role="radio">Dangerous only</button>
+        <button data-level="risky" role="radio">Anything risky</button>
+      </div>
+    </section>
 
     <section>
       <div class="section-head">
-        <h2>Your agents</h2>
-        <span class="muted" id="agent-hint">Click one to see only its activity</span>
+        <h2>Active sessions <span id="active-count" class="count">0</span></h2>
+        <span class="hint" id="agent-hint">Click a session to see only its activity</span>
       </div>
       <div id="agents" class="agents"></div>
+      <details id="earlier" class="earlier" hidden>
+        <summary>Earlier sessions <span id="earlier-count" class="count">0</span></summary>
+        <div id="earlier-list" class="earlier-list"></div>
+      </details>
     </section>
 
     <section id="explain" class="explain" hidden>
-      <div class="explain-head">
-        <h3 id="explain-title">What happened, in plain English</h3>
+      <div class="col-head">
+        <h3 id="explain-title">Summary</h3>
         <button class="btn ghost small" id="explain-close">Close</button>
       </div>
       <div id="explain-body" class="explain-body"></div>
-      <div id="explain-src" class="muted small"></div>
+      <div id="explain-src" class="hint"></div>
     </section>
 
     <section id="simple" class="simple">
       <div class="section-head">
-        <h2 id="feed-title">What's happening</h2>
-        <label class="muted small"><input type="checkbox" id="show-routine" /> Show routine activity</label>
+        <h2 id="feed-title">Activity</h2>
+        <label class="toggle"><input type="checkbox" id="show-routine" /> <span>Show routine activity</span></label>
       </div>
       <ol id="feed" class="feed"></ol>
-      <p id="feed-empty" class="empty">Nothing worth your attention yet. Ask Claude Code or Codex to do something, or press <b>Run demo attack</b>.</p>
+      <p id="feed-empty" class="empty">Nothing worth your attention yet. Ask Claude Code or Codex to do something, or run the demo.</p>
     </section>
 
     <section id="advanced" class="advanced" hidden>
       <div class="section-head">
         <h2>Everything Seatbelt saw</h2>
         <div class="filters">
-          <input id="q" type="search" placeholder="Filter (command, file, server…)" />
+          <input id="q" type="search" placeholder="Filter by command, file, server" />
           <select id="risk-filter">
             <option value="0">All levels</option>
             <option value="1">Low and up</option>
@@ -89,8 +138,8 @@
     </section>
   </main>
 
-  <footer class="foot muted small">
-    Everything stays on this Mac. Decoy secrets live in <code id="bait-dir">~/.seatbelt/bait</code>. <span id="mode"></span>
+  <footer class="foot">
+    Nothing leaves this computer. Decoy secrets live in <code id="bait-dir">~/.seatbelt/bait</code>. <span id="mode"></span>
   </footer>
 
   <div id="toast" class="toast" hidden></div>
