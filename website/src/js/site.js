@@ -91,3 +91,17 @@ function card(entry) {
   }
   return art;
 }
+
+// The install help lives in a closed dropdown. Open it when a link points inside.
+function openInstallHelp() {
+  const target = location.hash && document.querySelector(location.hash);
+  const guide = target && target.closest('details.install-guide');
+  if (guide && !guide.open) {
+    guide.open = true;
+    target.scrollIntoView();
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', openInstallHelp);
+  window.addEventListener('DOMContentLoaded', openInstallHelp);
+}

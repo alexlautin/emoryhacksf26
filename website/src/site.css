@@ -113,7 +113,7 @@ main:focus { outline: none; }
 }
 
 /* Scenario: a tall section with a pinned stage. scenario.jsx sets data-step and --p. */
-.scn { position: relative; height: 620vh; background: var(--night); color: var(--night-ink); border-radius: 28px 28px 0 0; margin-top: 8px; }
+.scn { position: relative; height: 330vh; background: var(--night); color: var(--night-ink); border-radius: 28px 28px 0 0; margin-top: 8px; }
 .scn-stage { position: sticky; top: 0; height: 100vh; height: 100svh; display: flex; align-items: center; overflow: hidden; }
 .scn-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 5vw, 80px); align-items: center; padding-top: var(--nav-h); }
 .scn-copy { display: grid; grid-template-columns: auto 1fr; column-gap: 28px; row-gap: 28px; align-items: start; }
@@ -239,7 +239,7 @@ main:focus { outline: none; }
 .vbtn-end { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 @media (max-width: 900px) {
-  .scn { height: 560vh; border-radius: 20px 20px 0 0; }
+  .scn { height: 300vh; border-radius: 20px 20px 0 0; }
   .scn-stage { align-items: flex-start; }
   .scn-grid { grid-template-columns: 1fr; gap: 18px; padding-top: calc(var(--nav-h) + 14px); align-items: start; }
   .scn-copy { grid-template-columns: 1fr; row-gap: 12px; }
@@ -398,7 +398,7 @@ main:focus { outline: none; }
 .dl .btn { margin-top: 24px; }
 .dl-status { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
 .dl-help { margin-top: 12px; font-size: 14px; }
-.install-guide { width: min(100%, 720px); margin-top: 36px; padding: clamp(22px, 4vw, 36px); text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-lg); }
+.install-guide { width: min(100%, 720px); margin-top: 24px; padding: 14px 20px; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--h-radius-lg); }
 .install-guide h3 { margin-top: 10px; font-size: clamp(24px, 3vw, 32px); letter-spacing: -0.035em; line-height: 1.15; }
 .install-guide h4 { margin: 0; font-size: 20px; }
 .install-guide :where(p:not(.eyebrow)), .install-guide li { font-size: 15px; line-height: 1.65; color: var(--ink-2); }
@@ -447,3 +447,7 @@ main:focus { outline: none; }
   .panel-feed ol { animation: none; }
   .type { width: 38ch; }
 }
+
+.install-guide:not([open]) > summary { text-align: center; }
+.install-guide[open] { padding-bottom: 24px; }
+.install-guide > summary { color: var(--ink-2); }
