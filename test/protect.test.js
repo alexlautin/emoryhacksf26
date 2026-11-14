@@ -5,6 +5,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { isProtected, protect, unprotect } from '../src/protect.js';
 
+process.env.HARNESS_PROTECTED_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'harness-registry-')), 'protected-folders.json');
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'harness-protect-'));
 }
