@@ -461,3 +461,13 @@ html.panel .toast { position: absolute; left: 8px; right: 8px; bottom: 8px; tran
 .mp-latest.medium .mp-latest-k { color: var(--review); font-weight: 600; }
 html.panel body { overflow: auto; height: auto; }
 html.panel, html.panel body { height: auto; }
+
+/* Phone access */
+.phone-on { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 16px; align-items: start; }
+.phone-on[hidden] { display: none; }
+.phone-qr { width: 168px; aspect-ratio: 1; background: #fff; border-radius: var(--h-radius-control); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+.phone-qr svg { display: block; width: 100%; height: 100%; }
+.phone-help { display: grid; gap: 8px; }
+@media (max-width: 520px) { .phone-on { grid-template-columns: minmax(0, 1fr); } }
+/* On a paired phone: hide what only works on the computer. */
+html.remote [data-local-only], html.remote [data-base], html.remote [data-demo], html.remote #reset { display: none !important; }

@@ -23,6 +23,7 @@ import { applyBaseline, baselineFromEvent, revertBaseline } from '../public/base
 import { incidentReport } from '../public/report.js';
 import { takeNotice } from '../public/notice.js';
 import { deliverNotice } from './notify.js';
+import { startPhoneAccess, setPhoneAccess, phoneStatus } from './phone.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
@@ -71,9 +72,22 @@ async function stopDemo() {
   await exited;
 }
 
-const server = http.createServer(async (req, res) => {
+/**
+ * The dashboard only answers to the names this computer uses for itself. A web page that points
+ * its own domain at 127.0.0.1 (DNS rebinding) sends a different Host, so it can't read or change anything.
+ */
+function localHost(req) {
+  const host = req.headers.host;
+  if (!host) return true;
+  const port = server.address()?.port;
+  return [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(host.toLowerCase());
+}
+
+/** remote: the request came from a paired phone through src/phone.js, which already checked what it may reach. */
+async function handle(req, res, { remote = false } = {}) {
   const url = new URL(req.url, 'http://localhost');
   try {
+    if (!remote && !localHost(req)) { res.writeHead(421); return res.end('Misdirected request'); }
     if (url.pathname.startsWith('/hooks/') && req.method === 'POST') {
       // Claude Code hook (via hooks/harness-hook.sh). Answers before the tool call runs.
       const event = url.pathname.slice('/hooks/'.length);
@@ -81,7 +95,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, handleHook(event, await readBody(req), project));
     }
     if (url.pathname === '/api/state') {
-      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning, baselines: listBaselines() });
+      return json(res, 200, { agents: listAgents(), events: listEvents({ limit: 1500 }), ollama: await ollamaStatus(), deep: DEEP, remote, os: OS_NAME, settings: getSettings(), baitDir: shortPath(BAIT_DIR), demoRunning, baselines: listBaselines() });
     }
     if (url.pathname === '/api/stream') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -97,6 +111,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/settings' && req.method === 'POST') {
       return json(res, 200, setSettings(await readBody(req)));
+    }
+    if (url.pathname === '/api/phone' && !remote) {
+      if (req.method === 'GET') return json(res, 200, phoneStatus());
+      if (req.method === 'POST') {
+        try { return json(res, 200, await setPhoneAccess((await readBody(req)).action)); } catch (err) { return json(res, 400, { error: err.message }); }
+      }
     }
     if (url.pathname === '/api/agent' && req.method === 'POST') {
       const { agentId, action } = await readBody(req);
@@ -184,7 +204,9 @@ const server = http.createServer(async (req, res) => {
     console.error(err);
     json(res, 500, { error: err.message });
   }
-});
+}
+
+const server = http.createServer((req, res) => handle(req, res));
 
 // The pretend "attacker" for the demo. It only counts bytes; it never stores what it receives.
 // If Harness ends the upload partway, the request is cut off; report what got through.
@@ -234,4 +256,5 @@ startNetworkMonitor();
 startFileMonitor();
 startTranscriptMonitor();
 startGuard();
+startPhoneAccess(handle);
 if (DEEP) startEslogger();

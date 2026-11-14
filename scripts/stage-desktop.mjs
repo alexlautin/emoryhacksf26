@@ -34,6 +34,10 @@ copy(path.join(ROOT, 'hooks'));
 for (const name of ICONS) copy(path.join(LUCIDE_DIR, `${name}.svg`));
 for (const file of Object.values(BRANDS)) copy(path.join(BRAND_DIR, `${file}.svg`));
 copy(FONT_FILE);
+// Phone access draws its pairing QR code with this (no dependencies of its own).
+const QR = path.dirname(fileURLToPath(import.meta.resolve('qrcode-generator')));
+for (const f of ['qrcode.mjs']) copy(path.join(QR, f), path.join('node_modules', 'qrcode-generator', 'dist', f));
+fs.writeFileSync(path.join(OUT, 'node_modules', 'qrcode-generator', 'package.json'), JSON.stringify({ name: 'qrcode-generator', type: 'module', exports: { import: './dist/qrcode.mjs' } }) + '\n');
 fs.writeFileSync(path.join(OUT, 'package.json'), JSON.stringify({ name: 'harness', private: true, type: 'module' }, null, 2) + '\n');
 
 console.log(`Staged Harness for ${target}: Node ${process.version}, app files in ${path.relative(ROOT, OUT)}`);

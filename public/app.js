@@ -987,6 +987,7 @@ document.addEventListener('click', (e) => {
   if (t.closest('[data-demo]')) { $('#prefs').close?.(); runDemo(); return; }
   if (t.closest('[data-prefs]')) {
     const d = $('#prefs');
+    if (!state.remote) phoneCall();
     if (typeof d.showModal === 'function') d.showModal();
   }
 });
@@ -1024,6 +1025,41 @@ $('#prefs-notify').onclick = async () => {
   const perm = await Notification.requestPermission();
   toast(perm === 'granted' ? 'Browser alerts are on for Dangerous events.' : 'Browser alerts stay off.');
 };
+// Phone access (this computer only; a paired phone never sees this section or its key).
+function renderPhone(p) {
+  $('#phone-state').textContent = p.enabled ? 'On' : 'Off';
+  $('#phone-toggle').textContent = p.enabled ? 'Turn off' : 'Turn on';
+  $('#phone-reset').hidden = !p.enabled;
+  $('#phone-on').hidden = !p.enabled;
+  if (!p.enabled) return;
+  $('#phone-qr').innerHTML = p.qr || '';
+  $('#phone-qr').hidden = !p.qr;
+  $('#phone-where').textContent = !p.running
+    ? 'Phone access could not start. Quit Harness and open it again.'
+    : !p.address
+      ? 'This computer isn’t on a Wi-Fi or local network right now.'
+      : `Scan with your phone’s camera. It opens Harness at ${p.url}${p.otherAddresses.length ? ` (also reachable at ${p.otherAddresses.join(', ')})` : ''}.`;
+  $('#phone-trust').textContent = p.via === 'tailscale'
+    ? 'Using Tailscale: works on any network. Your phone needs the Tailscale app, signed in to the same account.'
+    : 'Only on Wi-Fi you trust. For school or public Wi-Fi, install Tailscale on this computer and your phone.';
+}
+async function phoneCall(action) {
+  try {
+    const r = action
+      ? await fetch('/api/phone', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action }) })
+      : await fetch('/api/phone');
+    if (!r.ok) throw new Error();
+    const p = await r.json();
+    state.phone = p;
+    renderPhone(p);
+    if (action === 'reset') toast('Every phone is signed out. Scan the new code to pair again.');
+  } catch {
+    if (action) toast('Couldn’t change phone access');
+  }
+}
+$('#phone-toggle').onclick = () => phoneCall(state.phone?.enabled ? 'disable' : 'enable');
+$('#phone-reset').onclick = () => phoneCall('reset');
+
 $('#prefs').addEventListener('click', (e) => { if (e.target === $('#prefs')) $('#prefs').close(); });
 
 $('#mp-open').onclick = openDashboard;
@@ -1083,12 +1119,18 @@ document.addEventListener('keydown', (e) => {
 async function load() {
   try {
     const r = await fetch('/api/state');
+    if (r.status === 401) { location.replace('/pair'); return; } // a phone that was unpaired
     if (!r.ok) throw new Error(`status ${r.status}`);
     const s = await r.json();
     state.agents = new Map(s.agents.map((a) => [a.id, a]));
     state.events = s.events;
     if (s.settings) state.settings = { ...state.settings, ...s.settings };
     if (s.baselines) state.baselines = s.baselines;
+    if (s.remote && !state.remote) {
+      state.remote = true;
+      document.documentElement.classList.add('remote');
+      $('#foot-text').textContent = 'Viewing Harness from your phone. Settings can only be changed on your computer.';
+    }
     if (!state.ready) {
       // Don't jump to a pause that happened before this window opened.
       state.autoNavAt = Math.max(0, ...s.agents.map((a) => a.pausedAt ?? 0));
