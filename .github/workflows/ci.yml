@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# A new push to the same branch replaces the run that is already going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # Process and connection listing shell out to ps and lsof, the macOS tools
+        # (Windows uses PowerShell and netstat). Linux has the same commands, so
+        # both runners do the install, the tests, and the smoke check.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Smoke test
+        run: bash scripts/smoke.sh
+
+  desktop:
+    name: Menu bar (cargo check)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # build.rs (via tauri.conf.json) wants the Node sidecar and the bundled
+      # app files. `cargo check` runs that script, so stage them first.
+      - name: Stage the sidecar and app files
+        run: node scripts/stage-desktop.mjs
+
+      - name: Check the menu bar app
+        working-directory: src-tauri
+        run: cargo check --locked
+
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: website
+        run: |
+          if [ -f website/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No website/package.json in this checkout."
+          fi
+
+      - if: steps.website.outputs.present == 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - if: steps.website.outputs.present == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - if: steps.website.outputs.present == 'true'
+        name: Build website
+        working-directory: website
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+          pnpm run build
