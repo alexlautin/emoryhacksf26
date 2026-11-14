@@ -25,14 +25,16 @@ const files = {
   '.env': '# Seatbelt demo decoy. None of these are real.\nDATABASE_URL=postgres://admin:DECOY-NOT-REAL@db.example.com/recipes\nSTRIPE_KEY=DECOY-NOT-REAL-4f9a2c\nOPENAI_API_KEY=DECOY-NOT-REAL-77b1\n',
 };
 
-export async function resetDemo() {
-  fs.rmSync(PROJECT, { recursive: true, force: true });
+/** Rebuild the victim project inside `demoDir` (this folder, or the desktop app's writable copy). */
+export async function resetDemo(demoDir = DEMO) {
+  const project = path.join(demoDir, 'victim-project');
+  fs.rmSync(project, { recursive: true, force: true });
   for (const [rel, body] of Object.entries(files)) {
-    const p = path.join(PROJECT, rel);
+    const p = path.join(project, rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, body);
   }
-  return PROJECT;
+  return project;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
