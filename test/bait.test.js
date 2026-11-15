@@ -104,3 +104,16 @@ test('a decoy read is still reported when another Harness copy re-armed the file
   // Windows does not arm; any change is a read.
   assert.deepEqual(classifyBaitChange({ atimeMs: 997_111, mtimeMs, last: 997_500, win32: true }), { kind: 'read', readAt: 997_111 });
 });
+
+test("Harness reading its own decoy doesn't look like a read to other copies", { skip: process.platform === 'win32' }, async () => {
+  const { readOwnDecoy } = await import('../src/monitor/files.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lk-own-'));
+  const p = path.join(dir, 'passwords.txt');
+  fs.writeFileSync(p, 'Harness decoy file. Nothing real here.\n');
+  const armed = new Date(fs.statSync(p).mtimeMs - 2500);
+  fs.utimesSync(p, armed, fs.statSync(p).mtime);
+  const before = fs.statSync(p).atimeMs;
+  assert.match(readOwnDecoy(p), /Harness decoy/);
+  assert.equal(fs.statSync(p).atimeMs, before);
+  assert.equal(readOwnDecoy(path.join(dir, 'missing')), null);
+});
