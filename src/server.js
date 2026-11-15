@@ -97,6 +97,10 @@ function killDemoNow() {
   try { process.kill(IS_WIN ? demoChild.pid : -demoChild.pid, 'SIGKILL'); } catch {}
 }
 
+// A demo agent must not outlive the Harness that started it. Left behind, it sits frozen or idle
+// forever, and the next Harness counts it as a running agent.
+process.on('exit', killDemoNow);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(sig, () => process.exit(0));
 
 /**
  * The dashboard only answers to the names this computer uses for itself. A web page that points
