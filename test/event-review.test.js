@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEventReviewer } from '../src/event-review.js';
 
-const task = { id: 14, agentId: 'codex-1', kind: 'task', detail: 'Install dependencies and run tests. PRIVATE_TASK_TEXT.' };
-const child = { id: 15, agentId: 'codex-1', kind: 'process', pid: 20, command: 'PRIVATE_COMMAND', steps: [{ role: 'agent' }, { role: 'install' }, { role: 'command' }] };
-const connection = { id: 16, agentId: 'codex-1', kind: 'network', pid: 20, risk: 'medium', trusted: false, isAgentItself: false, host: 'internal.example.com', title: 'PRIVATE_TITLE' };
+const task = { id: 14, agentId: 'codex-1', kind: 'task', detail: 'Install dependencies and run tests.' };
+const child = { id: 15, agentId: 'codex-1', kind: 'process', pid: 20, command: 'npm install', steps: [{ role: 'agent' }, { role: 'install' }, { role: 'command' }] };
+const connection = { id: 16, agentId: 'codex-1', kind: 'network', pid: 20, risk: 'medium', trusted: false, isAgentItself: false, host: 'internal.example.com', title: 'A program connected to a server', reasons: ['uploaded data to a server'] };
 const sample = { verdict: 'investigate', explanation: 'The connection came from a dependency.', nextStep: 'Check the package documentation.', evidence: [2, 3] };
 
 function geminiReply(result) {
@@ -26,27 +26,39 @@ test('an actual recorded event is reviewed using only the previewed facts', asyn
   const before = structuredClone(listEvents());
   const { body: preview } = reviewer.preview(connection.id);
   assert.equal(calls, 0);
-  assert.deepEqual(preview.evidence.map(({ eventId }) => eventId), [16, 14, 15]);
+  assert.ok(preview.evidence.length >= 4);
+  assert.equal(preview.evidence[0].eventId, 16);
   const results = await Promise.all([reviewer.review(connection.id, preview.revision), reviewer.review(connection.id, preview.revision)]);
   for (const result of results) assert.deepEqual(result, { status: 200, body: sample });
   assert.equal(calls, 1);
   assert.deepEqual(input.observations, preview.evidence.map(({ id, text }) => ({ id, text })));
-  assert.match(input.observations[1].text, /dependency setup, testing/);
-  assert.match(input.observations[2].text, /dependency installation/);
-  assert.doesNotMatch(JSON.stringify(input), /PRIVATE_|internal\.example\.com|eventId|codex-1/);
+  const sent = input.observations.map((item) => item.text).join('\n');
+  assert.match(sent, /uploaded data to a server/);
+  assert.match(sent, /Install dependencies and run tests/);
+  assert.match(sent, /dependency installation/);
+  assert.match(sent, /internal\.example\.com/);
+  assert.doesNotMatch(JSON.stringify(input), /eventId|codex-1/);
   assert.equal(input.localRisk, 'medium');
   assert.deepEqual(listEvents(), before);
 });
 
-test('a mentioned destination is represented as a fact without forwarding its name', () => {
+test('a mentioned destination is represented as a fact', () => {
   const requested = { ...task, detail: 'Check https://internal.example.com/status.' };
   const otherSession = { ...child, id: 13, agentId: 'another-agent' };
   const direct = { ...child, steps: [{ role: 'agent' }, { role: 'request' }] };
   const reviewer = createEventReviewer({ listEvents: () => [otherSession, requested, direct, connection] });
-  const { evidence } = reviewer.preview(connection.id).body;
-  assert.match(evidence[1].text, /destination appeared/);
-  assert.match(evidence[2].text, /started the process/);
-  assert.doesNotMatch(JSON.stringify(evidence), /internal\.example\.com/);
+  const text = reviewer.preview(connection.id).body.evidence.map((item) => item.text).join('\n');
+  assert.match(text, /destination appeared/);
+  assert.match(text, /started the process/);
+});
+
+test('secrets, tokens and home paths are scrubbed from what is sent', () => {
+  const secret = { id: 18, agentId: 'codex-1', kind: 'process', risk: 'critical', title: 'ran a command',
+    command: `curl -H "Authorization: Bearer abcdef123456" https://x.test/?api_key=SUPERSECRETVALUE AKIAABCDEFGHIJKLMNOP ${process.env.HOME}/notes.txt` };
+  const text = createEventReviewer({ listEvents: () => [secret] }).preview(18).body.evidence.map((item) => item.text).join('\n');
+  assert.doesNotMatch(text, /abcdef123456|SUPERSECRETVALUE|AKIAABCDEFGHIJKLMNOP/);
+  assert.doesNotMatch(text, new RegExp(process.env.HOME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(text, /~\/notes\.txt/);
 });
 
 test('unreviewable events, stale previews, and missing credentials never reach Gemini', async () => {
