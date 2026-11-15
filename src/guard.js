@@ -12,6 +12,31 @@ import { DATA_DIR } from './paths.js';
 
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
+// Agents Harness has frozen, by root pid. Kept on disk because a frozen agent stays frozen when
+// Harness quits or crashes: the next Harness has to show it as paused, or it would sit frozen with
+// no Continue or End button. It is not resumed on its own, since Harness paused it for a reason.
+const FROZEN_FILE = path.join(DATA_DIR, 'frozen.json');
+const frozen = new Map(); // rootPid -> { pids, reason, since }
+let leftovers = loadFrozen(); // what the previous Harness left frozen
+
+function loadFrozen(file = FROZEN_FILE) {
+  try {
+    return new Map(Object.entries(JSON.parse(fs.readFileSync(file, 'utf8'))).map(([pid, entry]) => [Number(pid), entry]));
+  } catch {
+    return new Map();
+  }
+}
+
+function saveFrozen() {
+  try { fs.writeFileSync(FROZEN_FILE, JSON.stringify(Object.fromEntries([...leftovers, ...frozen]))); } catch {}
+}
+
+function forgetFrozen(rootPid) {
+  const was = frozen.delete(rootPid);
+  if (leftovers.delete(rootPid) || was) saveFrozen();
+}
+
+
 /** autoProtect: 'off' | 'dangerous' (critical only) | 'risky' (high and critical) */
 const DEFAULTS = { autoProtect: 'dangerous', menuBarDisplay: 'score' };
 const THRESHOLD = { dangerous: 'critical', risky: 'high' };
@@ -68,6 +93,8 @@ export async function pauseAgent(agentId, { reason = null, auto = false, trigger
     const again = await agentTree(agentId);
     const missed = again ? again.pids.filter((p) => !tree.pids.includes(p)) : [];
     if (missed.length) await suspend(missed);
+    frozen.set(tree.rootPid, { pids: [...new Set([...tree.pids, ...missed])], reason, since: Date.now() });
+    saveFrozen();
     upsertAgent({ id: agentId, paused: true, pausedAt: Date.now(), pausedBy: auto ? 'harness' : 'you', pausedReason: reason, pausedEventId: trigger?.id ?? null });
     addEvent({
       agentId, kind: 'system', risk: 'info', guard: 'paused',
@@ -87,6 +114,7 @@ export async function resumeAgent(agentId) {
   // Children first, then the agent, so nothing wakes up to find its helpers still frozen.
   await resume(tree.pids.filter((p) => p !== tree.rootPid));
   await resume([tree.rootPid]);
+  forgetFrozen(tree.rootPid);
   upsertAgent({ id: agentId, paused: false, pausedAt: null, pausedBy: null, pausedReason: null, pausedEventId: null, resumedAt: Date.now() });
   addEvent({ agentId, kind: 'system', risk: 'info', guard: 'resumed', title: `You let ${a.label} continue` });
   return getAgent(agentId);
@@ -98,6 +126,7 @@ export async function endAgent(agentId, { auto = false, quiet = false } = {}) {
   if (!a?.alive) throw new Error('That session is no longer running');
   const tree = await treeFor(agentId);
   await terminate(tree.pids);
+  forgetFrozen(tree.rootPid);
   upsertAgent({ id: agentId, endedBy: auto ? 'harness' : 'you', endedAt: Date.now() });
   if (!quiet) {
     addEvent({ agentId, kind: 'system', risk: 'info', guard: 'ended', title: auto ? `Harness ended ${a.label}` : `You ended ${a.label}`, detail: `${tree.pids.length} programs stopped` });
