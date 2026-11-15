@@ -304,7 +304,9 @@ dialog .btn { height: 28px; font-size: 12px; font-weight: 500; border-radius: 6p
 dialog .btn.ghost { background: transparent; border-color: transparent; color: var(--w-text-2); }
 dialog .btn.icon { width: 28px; padding: 0; }
 dialog .btn.on { background: var(--w-sel); border-color: var(--w-sel); color: #fff; }
-.review-timeline, .review-action, #review-result { display: grid; gap: 8px; }
+/* min-width and overflow-wrap: long paths and commands must wrap, or they widen the dialog past a
+   phone's screen and push the Close button out of sight. */
+.review-timeline, .review-action, #review-result { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .review-timeline h3 { font-size: 13px; }
 .review-timeline ol { margin: 0; padding-left: 24px; font-size: 13px; }
 .review-timeline li { padding: 3px 5px; }
