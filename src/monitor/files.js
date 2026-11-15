@@ -43,6 +43,39 @@ const lastAtime = new Map();
 // just touched. That is not an agent, so access-time changes in this window only re-arm.
 const SETTLE_MS = 6000;
 const settleUntil = new Map();
+// Several Harness copies can run at once (the desktop app, and `pnpm start` on another port when
+// 4100 is busy) and they share the decoys. Whichever copy notices a read re-arms the file, so the
+// others would see nothing. So each copy arms to its own access time and notes each read it saw,
+// with the time it armed to, here. The others can then tell "re-armed after a read" from "armed".
+const READS_FILE = path.join(HOME, '.harness', 'bait-reads.json');
+const seenRead = new Map(); // path -> time of the last read this copy reported
+
+function sharedReads() {
+  try { return JSON.parse(fs.readFileSync(READS_FILE, 'utf8')); } catch { return {}; }
+}
+
+function noteRead(p, readAt, armedTo) {
+  const all = sharedReads();
+  all[p] = { readAt, armedTo };
+  const tmp = `${READS_FILE}.${process.pid}.tmp`;
+  try {
+    fs.mkdirSync(path.dirname(READS_FILE), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(all));
+    fs.renameSync(tmp, READS_FILE);
+  } catch {}
+}
+
+/**
+ * What a decoy's new access time means. A read (or, on Windows, any change) leaves it at or after
+ * the modified time. A value below it was set by some copy arming the file, and it was a read only
+ * if that copy noted one with exactly that value that this copy has not reported yet.
+ */
+export function classifyBaitChange({ atimeMs, mtimeMs, last, shared, lastReported = 0, win32 = false }) {
+  if (atimeMs === last) return null;
+  if (win32 || atimeMs > mtimeMs - 1000) return { kind: 'read', readAt: atimeMs };
+  if (shared && Math.abs(shared.armedTo - atimeMs) < 1 && shared.readAt > lastReported) return { kind: 'read', readAt: shared.readAt, rearmed: true };
+  return { kind: 'armed' };
+}
 const quiet = new Map(); // dir -> until (ms): Harness's own writes, not the agent's
 
 export function ignoreWrites(dir, ms = 4000) {
@@ -143,12 +176,14 @@ function refreshDemoBait() {
  * the current value: touching the file would make antivirus rescan it, and the rescan looks like a
  * read, which re-arms it again, in a loop of false alerts.
  */
-function arm(p) {
+function arm(p, { afterRead } = {}) {
   try {
     if (process.platform !== 'win32') {
       const st = fs.statSync(p);
-      const t = new Date(st.mtimeMs - 2000);
-      fs.utimesSync(p, t, st.mtime);
+      // A value of our own, so other copies can tell this arm apart from theirs.
+      const t = Math.floor(st.mtimeMs) - 2000 - crypto.randomInt(1, 1000);
+      if (afterRead !== undefined) noteRead(p, afterRead, t);
+      fs.utimesSync(p, new Date(t), st.mtime);
     }
     lastAtime.set(p, fs.statSync(p).atimeMs);
   } catch {}
@@ -169,7 +204,10 @@ function pollBait() {
     try { st = fs.statSync(p); } catch { continue; }
     if (!lastAtime.has(p)) { arm(p); settleUntil.set(p, Date.now() + SETTLE_MS); continue; }
     if (st.atimeMs !== lastAtime.get(p) && Date.now() < (settleUntil.get(p) ?? 0)) { arm(p); continue; }
-    if (st.atimeMs !== lastAtime.get(p)) {
+    const change = classifyBaitChange({ atimeMs: st.atimeMs, mtimeMs: st.mtimeMs, last: lastAtime.get(p),
+      shared: sharedReads()[p], lastReported: seenRead.get(p), win32: process.platform === 'win32' });
+    if (change?.kind === 'armed') { lastAtime.set(p, st.atimeMs); continue; }
+    if (change) {
       const { agent, sure } = likelyAgent();
       addEvent({
         agentId: agent?.id ?? null,
@@ -180,14 +218,17 @@ function pollBait() {
           agent ? `happened while ${agent.label} was the active program` : 'happened while no agent was active, so it may have been something else on this computer',
         ],
         title: agent ? `Something under ${agent.label} opened a decoy secret: ${path.basename(p)}` : `Something opened a decoy secret: ${path.basename(p)}`,
-        detail: `${shortPath(p)} was read at ${new Date(st.atimeMs).toLocaleTimeString()}`,
+        detail: `${shortPath(p)} was read at ${new Date(change.readAt).toLocaleTimeString()}`,
         path: p,
         bait: true,
         // Access times don't say which process read the file. With several agents active this is a
         // guess, so auto-protect won't pause anyone over it (the person still gets the alert).
         attribution: sure ? 'sole' : 'guess',
       });
-      arm(p);
+      seenRead.set(p, change.readAt);
+      // Another copy already re-armed it; arming again would hide the next read from that copy.
+      if (change.rearmed) lastAtime.set(p, st.atimeMs);
+      else arm(p, { afterRead: change.readAt });
     }
   }
 }

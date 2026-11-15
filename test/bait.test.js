@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { prepareBait, markerIn } from '../src/monitor/files.js';
+import { prepareBait, markerIn, classifyBaitChange } from '../src/monitor/files.js';
 import { baitMarkers, baitPaths } from '../src/rules.js';
 
 const OLD = 'ABCDEFGHIJKLMNOP';
@@ -87,4 +87,20 @@ test('Lookout decoys migrate to Harness while both legacy folders remain monitor
   assert.ok(migrated.includes(NEW));
   assert.equal(baitMarkers.get(OLD), path.join(dirs.legacyDir, 'aws_credentials'));
   assert.ok(baitPaths.has(path.join(lookout, 'aws_credentials')));
+});
+
+test('a decoy read is still reported when another Harness copy re-armed the file first', () => {
+  const mtimeMs = 1_000_000;
+  // This copy armed the file to 997_500 and nothing changed.
+  assert.equal(classifyBaitChange({ atimeMs: 997_500, mtimeMs, last: 997_500 }), null);
+  // Someone read it: the access time moved past the modified time.
+  assert.deepEqual(classifyBaitChange({ atimeMs: 1_500_000, mtimeMs, last: 997_500 }), { kind: 'read', readAt: 1_500_000 });
+  // Another copy saw the read first and re-armed to 997_222, noting it.
+  const shared = { readAt: 1_500_000, armedTo: 997_222 };
+  assert.deepEqual(classifyBaitChange({ atimeMs: 997_222, mtimeMs, last: 997_500, shared }), { kind: 'read', readAt: 1_500_000, rearmed: true });
+  // ...but not twice, and not when the other copy only armed it (for example while starting up).
+  assert.deepEqual(classifyBaitChange({ atimeMs: 997_222, mtimeMs, last: 997_500, shared, lastReported: 1_500_000 }), { kind: 'armed' });
+  assert.deepEqual(classifyBaitChange({ atimeMs: 997_111, mtimeMs, last: 997_500, shared }), { kind: 'armed' });
+  // Windows does not arm; any change is a read.
+  assert.deepEqual(classifyBaitChange({ atimeMs: 997_111, mtimeMs, last: 997_500, win32: true }), { kind: 'read', readAt: 997_111 });
 });
