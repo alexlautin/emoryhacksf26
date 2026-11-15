@@ -9,10 +9,11 @@ export function scrub(text, max = 400) {
   if (typeof text !== 'string') return '';
   let out = text.split(HOME).join('~')
     .replace(/\/(?:Users|home)\/[^/\s"']+/g, '~')
+    .replace(/\b[A-Za-z]:\\Users\\[^\\\s"']+/gi, '~')
     .replace(/\/var\/folders\/[^\s"']+/g, '<temp file>')
-    .replace(/(authorization:\s*)(bearer\s+)?\S+/gi, '$1[hidden]')
-    .replace(/\b(AKIA|ASIA|AIza|ghp_|gho_|github_pat_|sk-|xox[bap]-)[A-Za-z0-9_\-.]{8,}/g, '[hidden key]')
-    .replace(/((?:password|passwd|secret|token|api[_-]?key|key)=)[^\s&"']+/gi, '$1[hidden]')
+    .replace(/((?:authorization|x-[a-z-]*key|api-key|cookie):\s*)(bearer\s+)?[^\s"']+/gi, '$1[hidden]')
+    .replace(/\b(AKIA|ASIA|AIza|AQ\.|ghp_|gho_|github_pat_|sk-|xox[bap]-)[A-Za-z0-9_\-.]{8,}/g, '[hidden key]')
+    .replace(/(\b(?:password|passwd|secret|token|api[_-]?key|key)=)[^\s&"']+/gi, '$1[hidden]')
     .replace(/(?<![\w/.~-])[A-Za-z0-9+_-]{40,}={0,2}(?![\w/.-])/g, '[hidden]')
     .replace(/\s+/g, ' ')
     .trim();
