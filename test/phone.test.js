@@ -89,3 +89,14 @@ test('pairing: no cookie is refused, the key signs a phone in, and unpairing sig
   const after = await fetch(`${base}/api/state`, { headers: jar }).catch(() => fetch(`${base}/api/state`, { headers: jar }));
   assert.equal(after.status, 401);
 });
+
+test('writes from other websites are refused, Harness itself and tools without an Origin are not', async () => {
+  const { crossSiteWrite } = await import('../src/phone.js');
+  const req = (method, origin, host = '127.0.0.1:4100') => ({ method, headers: { host, ...(origin === undefined ? {} : { origin }) } });
+  assert.equal(crossSiteWrite(req('POST', 'https://evil.example')), true);
+  assert.equal(crossSiteWrite(req('POST', 'null')), true);
+  assert.equal(crossSiteWrite(req('POST', 'http://localhost:4100')), true); // different host string than the request's
+  assert.equal(crossSiteWrite(req('POST', 'http://127.0.0.1:4100')), false);
+  assert.equal(crossSiteWrite(req('POST', undefined)), false); // CLI, hook script, demo agent
+  assert.equal(crossSiteWrite(req('GET', 'https://evil.example')), false);
+});

@@ -144,6 +144,17 @@ async function readJson(req) {
 }
 
 /** POSTs must come from this server's own page: same Origin, JSON body. Stops other sites posting in. */
+/**
+ * A browser request that changes something, sent by a page that isn't Harness's own. Browsers always
+ * send Origin on a cross-site POST, and a "simple" text/plain POST skips the CORS preflight, so
+ * without this any website could reset the log, change settings or end agents. Harness's CLI, hook
+ * script and demo agent send no Origin, so they still get through.
+ */
+export function crossSiteWrite(req) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return false;
+  return req.headers.origin !== undefined && !sameOrigin(req);
+}
+
 export function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return false;
