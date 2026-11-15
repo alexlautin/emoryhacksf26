@@ -1040,6 +1040,10 @@ function renderEventReview() {
 
 async function openEventReview(eventId) {
   const review = eventReview = { eventId };
+  // The rating Harness gave this event (reviews cover Worth a look, Risky and Dangerous).
+  const [word, cls] = VERDICT[state.events.find((e) => e.id === eventId)?.risk] ?? ['', ''];
+  $('#review-rating').textContent = word;
+  $('#review-rating').className = cls ? `t-${cls}` : '';
   renderEventReview();
   $('#event-review').showModal();
   try {
