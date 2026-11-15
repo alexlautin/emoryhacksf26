@@ -2,6 +2,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { subscribe, listAgents, listEvents, clearAll, clearFinishedAgents, upsertAgent, addEvent, getAgent, reviseEvents, onEvent, broadcast } from './store.js';
 import { startProcessMonitor, describeCaller } from './monitor/processes.js';
@@ -30,7 +31,14 @@ import { createEventReviewer } from './event-review.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
-const eventReviewer = createEventReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined, listEvents });
+// The Gemini key comes from GEMINI_API_KEY, or from ~/.harness/gemini-key so the desktop app (which
+// doesn't inherit your shell's environment) can use it too.
+function geminiKey() {
+  const fromEnv = process.env.GEMINI_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  try { return fs.readFileSync(path.join(os.homedir(), '.harness', 'gemini-key'), 'utf8').trim() || undefined; } catch { return undefined; }
+}
+const eventReviewer = createEventReviewer({ key: geminiKey(), model: process.env.GEMINI_MODEL || undefined, listEvents });
 // Keep the key in this process when launching the demo and other helpers.
 delete process.env.GEMINI_API_KEY;
 fixPath();

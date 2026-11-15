@@ -68,7 +68,7 @@ export function createEventReviewer({ key, model = 'gemini-3.5-flash-lite', list
       const data = preview(eventId);
       if (!data) return unavailable;
       if (revision !== data.revision) return { status: 409, body: { error: 'The evidence changed. Reopen the review to see the current preview.' } };
-      if (!key) return { status: 503, body: { error: 'Set GEMINI_API_KEY and restart Harness to use Gemini review.' } };
+      if (!key) return { status: 503, body: { error: 'Add your Gemini key to ~/.harness/gemini-key (or set GEMINI_API_KEY) and restart Harness.' } };
       if (pending.has(revision)) return pending.get(revision);
       if (pending.size >= 3) return { status: 429, body: { error: 'Wait for a review to finish and try again.' } };
       const request = generate(data.input)
