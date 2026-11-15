@@ -44,3 +44,10 @@ The landing page is `app/page.jsx`, with the scroll walkthrough in `app/_compone
 A Gemini `502` means generation failed (for example, invalid credentials, quota, timeout, or an incomplete response); `503` means the server has no API key. Check the deployment's function logs and AI Studio usage. No live Gemini request was verified as part of the repository merge.
 
 The release workflow keeps asset names stable: `Harness-macos-arm64.dmg`, `Harness-macos-x64.dmg`, and `Harness-windows-x64.exe`. After a new release finishes, update the version in `releases.js` and verify all three URLs before deploying.
+
+
+## Hosted desktop review
+
+The desktop dashboard calls `POST /api/event-review` on the production Harness domain. Set `HARNESS_REVIEW_GEMINI_API_KEY` as a server-only Production secret on Vercel, then redeploy. Use a key restricted to the Gemini API from a separate Google project with a quota you are willing to share. `HARNESS_REVIEW_GEMINI_MODEL` optionally overrides `gemini-3.5-flash-lite`. The browser demo keeps its own `GEMINI_API_KEY`.
+
+The endpoint accepts only observations built from the shared review vocabulary. A warm function instance allows up to six requests per source IP and 30 total per minute. Its cache reuses successful assessments for ten minutes. These controls are per instance. The Google project quota applies across instances, and a Vercel Firewall rule for `/api/event-review` can limit public traffic before it reaches the function.

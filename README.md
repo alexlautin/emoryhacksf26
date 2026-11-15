@@ -130,7 +130,7 @@ Select a **Worth a look** event in **Activity**, **Alerts**, or an agent’s ses
 
 The review shares derived facts such as whether an unfamiliar destination was named in the task and whether the process came from a dependency install. Raw commands, hostnames, file paths, file contents, and task text stay local. See [Google’s Gemini API terms](https://ai.google.dev/gemini-api/terms) for how Google may use free-tier requests.
 
-Set `GEMINI_API_KEY` in the environment you use to launch Harness, then run `pnpm start` or `pnpm desktop`. If you’re using an installed build, launch its executable from that environment. `GEMINI_MODEL` overrides the default `gemini-3.5-flash-lite`. Standard text requests on this model are available within the Gemini Developer API’s [free-tier quota](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite).
+The desktop app sends the previewed observations to the Harness review service, which uses the project’s Gemini key. When running Harness locally, you can set `GEMINI_API_KEY` to use your own Gemini key directly.
 
 ## How it works
 

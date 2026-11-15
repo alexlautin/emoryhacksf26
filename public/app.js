@@ -1031,7 +1031,7 @@ function renderEventReview() {
     return `<li id="review-event-${id}" tabindex="-1">${esc(text)}${link}</li>`;
   }).join(''));
   $('#review-run').disabled = !preview?.configured || loading || !!result;
-  const status = error || (!preview ? 'Preparing the evidence preview…' : !preview.configured ? 'Set GEMINI_API_KEY and restart Harness to enable review.' : loading ? 'Gemini is reviewing the event…' : '');
+  const status = error || (!preview ? 'Preparing the evidence preview…' : !preview.configured ? 'Gemini review is unavailable.' : loading ? 'Gemini is reviewing the event…' : '');
   if (status) return setHTML($('#review-result'), `<p class="${error ? 't-bad' : 'hint'}">${esc(status)}</p>`);
   if (!result) return setHTML($('#review-result'), '');
   const evidence = result.evidence.map((id) => `<button type="button" class="linkbtn" data-review-evidence="${id}">Observation ${id}</button>`).join('');

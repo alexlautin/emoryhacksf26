@@ -74,3 +74,16 @@ test('Gemini quota errors and invalid citations can be retried', async () => {
   assert.equal((await reviewer.review(connection.id, revision)).status, 502);
   assert.deepEqual((await reviewer.review(connection.id, revision)).body.evidence, [1]);
 });
+
+test('the desktop can request review from the hosted service without a Gemini key', async () => {
+  const hostedUrl = 'https://getharness.vercel.app/api/event-review';
+  const reviewer = createEventReviewer({ hostedUrl, listEvents: () => [task, child, connection], fetcher: async (url, options) => {
+    assert.equal(url, hostedUrl);
+    assert.equal(options.headers['x-goog-api-key'], undefined);
+    assert.doesNotMatch(options.body, /codex-1|internal\.example\.com|PRIVATE_|eventId/);
+    return Response.json(sample);
+  } });
+  const { body: preview } = reviewer.preview(connection.id);
+  assert.equal(preview.configured, true);
+  assert.deepEqual(await reviewer.review(connection.id, preview.revision), { status: 200, body: sample });
+});

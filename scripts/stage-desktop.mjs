@@ -27,6 +27,8 @@ const copy = (from, to = path.relative(ROOT, from)) =>
 
 copy(path.join(ROOT, 'src'));
 copy(path.join(ROOT, 'public'));
+copy(path.join(ROOT, 'website', 'lib', 'review-observations.js'));
+copy(path.join(ROOT, 'website', 'lib', 'gemini-review.js'));
 // The native startup screen uses the same brand assets before the server is ready.
 fs.cpSync(path.join(ROOT, 'public', 'ui'), path.join(TAURI, 'loading', 'ui'), { recursive: true });
 copy(path.join(ROOT, 'demo'));

@@ -136,7 +136,7 @@ Harness remembers the folders it protects. For ones protected by an older versio
 - Summaries are optional. They come from Ollama on your computer, and any model with "cloud" in its name is skipped. With no local model, Harness builds a shorter summary straight from the rules.
 - Decoy markers are specific to your computer. They aren't credentials for anything, but seeing one in a command means a decoy was read.
 
-**Review with Gemini** can assess a **Worth a look** event when you configure an API key. Harness previews the derived observations and sends them to Google only after you choose to share them. Raw commands, file contents, hostnames, paths, and task text stay local. Gemini provides an advisory assessment, and Harness applies its rules locally. The browser demo asks Gemini to write a fictional session from the scenario you choose.
+**Review with Gemini** can assess a **Worth a look** event through the Harness review service. Harness previews the derived observations and shares them with the review service and Google only after you choose to share them. Raw commands, file contents, hostnames, paths, and task text stay local. Gemini provides an advisory assessment, and Harness applies its rules locally. The browser demo asks Gemini to write a fictional session from the scenario you choose.
 
 ## Known limits
 

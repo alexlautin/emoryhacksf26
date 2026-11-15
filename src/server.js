@@ -30,7 +30,7 @@ import { createEventReviewer } from './event-review.js';
 
 const PUBLIC = path.join(ROOT, 'public');
 const PORT = +(process.env.PORT ?? 4100);
-const eventReviewer = createEventReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined, listEvents });
+const eventReviewer = createEventReviewer({ key: process.env.GEMINI_API_KEY?.trim(), model: process.env.GEMINI_MODEL || undefined, hostedUrl: 'https://getharness.vercel.app/api/event-review', listEvents });
 // Keep the key in this process when launching the demo and other helpers.
 delete process.env.GEMINI_API_KEY;
 fixPath();
