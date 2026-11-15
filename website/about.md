@@ -39,7 +39,7 @@ Everything below runs on your computer, and the server listens on `127.0.0.1` on
 
 ### Processes
 
-Harness checks the process list every 500 ms and walks each process's parents (up to 64 steps) looking for a recognized agent: Claude Code, Codex, Gemini CLI, Cursor, Copilot, opencode or Amp. Anything under one belongs to that session. Shell wrappers like `zsh -lc "..."` are unwrapped so rules see the real command.
+Harness checks the process list every 500 ms and walks each process's parents (up to 64 steps) looking for a recognized agent: Claude Code, Codex, Antigravity, Cursor, Copilot, opencode or Amp. Anything under one belongs to that session. Shell wrappers like `zsh -lc "..."` are unwrapped so rules see the real command.
 
 If a risky command has a package install somewhere above it, Harness says it came from an install script and raises the risk to at least high. A process that starts and exits between two checks, about half a second, can be missed.
 
@@ -163,7 +163,7 @@ We listed these from the code and the README, and softened none of them:
 
 - Finish and test deep mode, and test Windows on real machines, including the hook under Git Bash.
 - Extend blocking before a command runs beyond Claude Code.
-- Read session logs for Gemini CLI, Cursor, Copilot, opencode and Amp, not just Claude Code and Codex.
+- Read session logs for Antigravity, Cursor, Copilot, opencode and Amp, not just Claude Code and Codex.
 - Fewer false alarms, and some idea of what's normal for a project. None of that learning exists yet.
 - A timeline on the dashboard.
 - A Developer ID signature, notarization, Windows code signing and broader install testing.
