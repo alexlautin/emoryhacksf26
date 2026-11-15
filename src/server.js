@@ -84,9 +84,23 @@ async function stopDemo() {
   if (!demoRunning || !demoChild) return;
   const exited = new Promise((r) => { demoChild.once('exit', r); setTimeout(r, 4000); });
   for (const a of listAgents()) if (a.kind === 'demo' && a.alive) await endAgent(a.id, { quiet: true }).catch(() => {});
-  try { process.kill(demoChild.pid, 'SIGKILL'); } catch {}
+  killDemoNow();
   await exited;
 }
+
+/**
+ * End the demo agent and everything it started, right away. On macOS and Linux it runs in its own
+ * process group, so one signal reaches npm and the install script too, even if Harness had paused them.
+ */
+function killDemoNow() {
+  if (!demoChild) return;
+  try { process.kill(IS_WIN ? demoChild.pid : -demoChild.pid, 'SIGKILL'); } catch {}
+}
+
+// A demo agent must not outlive the Harness that started it. Left behind, it sits frozen or idle
+// forever, and the next Harness counts it as a running agent.
+process.on('exit', killDemoNow);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(sig, () => process.exit(0));
 
 /**
  * The dashboard only answers to the names this computer uses for itself. A web page that points
@@ -236,7 +250,7 @@ async function handle(req, res, { remote = false } = {}) {
       ignoreWrites(DEMO_DIR);
       await resetDemo(DEMO_DIR);
       rearmBait();
-      const child = spawn(process.execPath, [path.join(DEMO_DIR, 'fake-agent.js')], { cwd: path.join(DEMO_DIR, 'victim-project'), stdio: 'inherit' });
+      const child = spawn(process.execPath, [path.join(DEMO_DIR, 'fake-agent.js')], { cwd: path.join(DEMO_DIR, 'victim-project'), stdio: 'inherit', detached: !IS_WIN });
       demoChild = child;
       child.on('exit', () => { if (demoChild === child) { demoRunning = false; demoChild = null; } });
       return json(res, 200, { ok: true });
