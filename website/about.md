@@ -39,7 +39,7 @@ Everything below runs on your computer, and the server listens on `127.0.0.1` on
 
 ### Processes
 
-Harness checks the process list every 500 ms and walks each process's parents (up to 64 steps) looking for a recognized agent: Claude Code, Codex, Gemini CLI, Cursor, Copilot, opencode or Amp. Anything under one belongs to that session. Shell wrappers like `zsh -lc "..."` are unwrapped so rules see the real command.
+Harness checks the process list every 500 ms and walks each process's parents (up to 64 steps) looking for a recognized agent: Claude Code, Codex, Antigravity, Cursor, Copilot, opencode or Amp. Anything under one belongs to that session. Shell wrappers like `zsh -lc "..."` are unwrapped so rules see the real command.
 
 If a risky command has a package install somewhere above it, Harness says it came from an install script and raises the risk to at least high. A process that starts and exits between two checks, about half a second, can be missed.
 
@@ -116,6 +116,12 @@ After a tool runs, if its output contains a decoy marker, Harness marks that ses
 
 The hook works for Claude Code only. Other agents get the process watcher and auto-protect.
 
+### From your phone
+
+Phone access is off by default. Turn it on in **Settings → Phone access** and scan the QR code. The phone opens the same dashboard in its browser, with no app or account. It sees the score, your agents and what happened, and can pause, resume or end an agent. It can't change settings, mark anything as normal, reset activity or run the demo.
+
+When it's on, Harness opens a second port (4101, or `HARNESS_PHONE_PORT`) on your network address, and every request has to carry the key from the QR code. **Unpair phones** makes a new key and signs every phone out. **Turn off** closes the port. Plain Wi-Fi traffic isn't encrypted, so use it only on a network you trust. On school or public Wi-Fi, put [Tailscale](https://tailscale.com) on both devices; Harness puts the Tailscale address in the QR code, and the connection is encrypted.
+
 ## Uninstalling
 
 Harness puts a few things outside its own app folder, so removing it properly takes more than deleting the app:
@@ -130,7 +136,7 @@ Harness remembers the folders it protects. For ones protected by an older versio
 
 ## Privacy
 
-- The monitor and dashboard are served from `127.0.0.1` and nowhere else.
+- The monitor and dashboard are served from `127.0.0.1`. If you turn on phone access, a second port opens on your network address and needs the key from the QR code.
 - Every event is appended to a file on your disk (`data/events.jsonl`, or the app's data folder in the desktop build).
 - Harness has no account, license check, or telemetry. The monitor can use reverse DNS to name a connection it observed.
 - Summaries are optional. They come from Ollama on your computer, and any model with "cloud" in its name is skipped. With no local model, Harness builds a shorter summary straight from the rules.
@@ -157,6 +163,7 @@ We listed these from the code and the README, and softened none of them:
 
 - Finish and test deep mode, and test Windows on real machines, including the hook under Git Bash.
 - Extend blocking before a command runs beyond Claude Code.
+- Read session logs for Antigravity, Cursor, Copilot, opencode and Amp, not just Claude Code and Codex.
 - Fewer false alarms, and some idea of what's normal for a project. None of that learning exists yet.
 - A timeline on the dashboard.
 - A Developer ID signature, notarization, Windows code signing and broader install testing.

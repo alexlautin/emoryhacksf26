@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/alexlautin/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/alexlautin/harness/actions/workflows/ci.yml)
 
-Harness watches what Claude Code and Codex do on your computer, including the parts their own windows don't show, and tells you about anything risky.
+Harness watches what your coding agents (Claude Code, Codex, Gemini CLI, Cursor, Copilot, opencode and Amp) do on your computer, including the parts their own windows don't show, and tells you about anything risky.
 
 Say an agent runs `npm install`. Its window shows one line and a checkmark. Underneath, a package's install script could be reading your `.env` and uploading it. Harness follows the whole chain (agent, shell, npm, install script, curl) along with the files and servers involved, and can pause the agent before it finishes.
 
@@ -36,7 +36,7 @@ pnpm install
 pnpm start
 ```
 
-Then open http://localhost:4100. Any Claude Code or Codex session already running shows up on its own. Set `PORT` to use a different port.
+Then open http://localhost:4100. Any agent session already running shows up on its own. Set `PORT` to use a different port.
 
 Works on macOS and Windows 10/11. On Windows, run it from PowerShell or Windows Terminal. It doesn't need admin rights on either system.
 
@@ -134,7 +134,7 @@ Set `GEMINI_API_KEY` in the environment you use to launch Harness, then run `pnp
 
 ## How it works
 
-`src/monitor/processes.js` polls the process list every half second and follows every process under a `claude` or `codex` process. On macOS this uses `ps`. On Windows, one long-running PowerShell process keeps reporting `Win32_Process`.
+`src/monitor/processes.js` polls the process list every half second and walks each process's parents to find a recognized agent (Claude Code, Codex, Gemini CLI, Cursor, Copilot, opencode or Amp); anything under one belongs to that session. On macOS this uses `ps`. On Windows, one long-running PowerShell process keeps reporting `Win32_Process`.
 
 `src/monitor/network.js` lists open connections for those processes (`lsof` on macOS, `netstat -ano` on Windows) and names the server with reverse DNS or the URL in the command.
 
@@ -171,17 +171,18 @@ A Dangerous event also raises a banner across the top of the window. On a Mac, `
   - Windows can't easily report a process's working folder, so an agent's project is filled in from its session log.
   - Pausing takes a second or two longer because PowerShell has to start.
   - Windows sometimes turns off last-access times, which makes decoy reads harder to catch. The command-line rules still work.
-- It only knows about Claude Code and Codex. Linux isn't supported. Process listing happens to use `ps` there too, which is enough for the scripted demo, but that isn't a promise.
+- It recognizes Claude Code, Codex, Gemini CLI, Cursor, Copilot, opencode and Amp, but reads session logs only for Claude Code and Codex; the others are recognized by process name only. Linux isn't supported. Process listing happens to use `ps` there too, which is enough for the scripted demo, but that isn't a promise.
 
 ## What's next
 
 - Collectors: finish and test `eslogger` mode, and test on Windows (including the hook script under Git Bash).
+- Agents: read session logs for Gemini CLI, Cursor, Copilot, opencode and Amp, and block actions before they run for agents beyond Claude Code.
 - Rules: better prompts for the local model, and learning what's normal for a project without asking you to mark each command.
 - Dashboard: the chain view is in. A saved recording of a real agent is not.
 - Desktop app: a Developer ID signature, notarization, Windows code signing, and broader installation testing.
 - Demo: a run with a real agent, a backup video, and slides.
 
-Product site, white paper, and Gemini browser simulation: [website/](website/). The Next.js site targets Vercel; the simulation uses a server-side Gemini API key and never executes commands.
+Product site, technical notes, and Gemini browser simulation: [website/](website/). The Next.js site targets Vercel; the simulation uses a server-side Gemini API key and never executes commands.
 
 ## Publishing a release
 

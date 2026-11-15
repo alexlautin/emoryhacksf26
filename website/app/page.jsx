@@ -5,7 +5,7 @@ import Downloads from './downloads.jsx';
 import { Pug } from './_components/brand.jsx';
 import { RELEASE_PAGE, CHECKSUMS_URL } from '../releases.js';
 
-const AGENTS = ['Claude Code', 'Codex', 'Gemini CLI', 'Cursor', 'Copilot', 'opencode', 'Amp'];
+const AGENTS = ['Claude Code', 'Codex', 'Antigravity*', 'Cursor*', 'Copilot*', 'opencode*', 'Amp*'];
 
 function Hero() {
   return (
@@ -28,6 +28,7 @@ function Hero() {
           {AGENTS.map((a) => <li key={a}>{a}</li>)}
           <li className="agents-more"><a href="#scenario" aria-label="Scroll to see the walkthrough"><span>Scroll</span><i aria-hidden="true"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2.5v11M3.5 9L8 13.5 12.5 9" /></svg></i></a></li>
         </ul>
+        <p className="agents-note">* In development. Full support is planned for a future release.</p>
       </div>
     </section>
   );
@@ -219,7 +220,7 @@ function DemoCta() {
 }
 
 const FAQ = [
-  ['Which agents does it work with?', 'Harness recognizes Claude Code, Codex, Gemini CLI, Cursor’s agent, Copilot, opencode and Amp by their process names, and can pause any of them. It reads session logs for Claude Code and Codex. Blocking an action before it runs is available for Claude Code only, in folders you choose to protect.'],
+  ['Which agents does it work with?', 'Harness recognizes Claude Code, Codex, Antigravity, Cursor’s agent, Copilot, opencode and Amp by their process names, and can pause any of them. It reads session logs for Claude Code and Codex. Blocking an action before it runs is available for Claude Code only, in folders you choose to protect.'],
   ['Where does Harness keep my activity?', 'The log stays on your disk, and session summaries use a local model or rules. The optional Review with Gemini feature shows the derived observations it will send to Google for an event you select.'],
   ['Can it actually stop a command?', 'In Claude Code, yes: the action is refused before it starts. For other agents Harness pauses the process tree once it sees a dangerous event, which usually lands before an upload completes but is not guaranteed to.'],
   ['What can it miss?', 'A process that starts and finishes in under about half a second can slip between checks. The decoy files still record that they were read. The about page lists every limit we know about.'],
