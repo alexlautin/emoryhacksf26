@@ -5,6 +5,6 @@ export const REVIEW_VERDICTS = {
 };
 
 export function canReviewEvent(event) {
-  return event?.risk === 'medium' && !!event.agentId && !event.baseline &&
+  return ['medium', 'high', 'critical'].includes(event?.risk) && !!event.agentId && !event.baseline &&
     ['process', 'tool', 'network', 'file'].includes(event.kind);
 }

@@ -51,7 +51,7 @@ test('a mentioned destination is represented as a fact without forwarding its na
 
 test('unreviewable events, stale previews, and missing credentials never reach Gemini', async () => {
   let calls = 0;
-  let events = [task, child, connection, { ...connection, id: 17, risk: 'critical' }];
+  let events = [task, child, connection, { ...connection, id: 17, risk: 'low' }];
   const reviewer = createEventReviewer({ listEvents: () => events, fetcher: async () => { calls++; } });
   const { body: preview } = reviewer.preview(connection.id);
   assert.equal(preview.configured, false);
