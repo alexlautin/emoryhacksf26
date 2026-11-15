@@ -3,7 +3,9 @@
 // undone, so a false alarm costs one click.
 import fs from 'node:fs';
 import path from 'node:path';
-import { addEvent, upsertAgent, getAgent, onEvent, broadcast } from './store.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { addEvent, upsertAgent, getAgent, listAgents, onEvent, broadcast } from './store.js';
 import { agentTree } from './monitor/processes.js';
 import { riskRank } from './rules.js';
 import { suspend, resume, terminate } from './platform.js';
@@ -36,6 +38,51 @@ function forgetFrozen(rootPid) {
   if (leftovers.delete(rootPid) || was) saveFrozen();
 }
 
+/**
+ * Match what the last Harness left frozen against the agents this one sees. A still-stopped agent
+ * is shown as paused again. One that is running (someone resumed it) or gone is forgotten.
+ */
+export function sortLeftovers(left, agents, stoppedPids) {
+  const adopt = [];
+  const drop = [];
+  for (const [rootPid, entry] of left) {
+    const agent = agents.find((a) => a.alive && a.pid === rootPid);
+    if (!agent) continue; // not seen yet; the caller gives up after a while
+    if (stoppedPids.has(rootPid)) adopt.push({ agent, rootPid, entry });
+    else drop.push(rootPid);
+  }
+  return { adopt, drop };
+}
+
+const run = promisify(execFile);
+
+/** Which of these processes are stopped (ps state T), on macOS and Linux. */
+async function stoppedAmong(pids) {
+  if (!pids.length) return new Set();
+  try {
+    const { stdout } = await run('ps', ['-o', 'pid=,stat=', '-p', pids.join(',')]);
+    return new Set(stdout.split('\n').map((l) => l.trim().split(/\s+/)).filter(([, stat]) => stat?.startsWith('T')).map(([pid]) => Number(pid)));
+  } catch {
+    return new Set(); // ps exits 1 when none of them exist
+  }
+}
+
+async function adoptLeftovers() {
+  const { adopt, drop } = sortLeftovers(leftovers, listAgents(), await stoppedAmong([...leftovers.keys()]));
+  for (const rootPid of drop) leftovers.delete(rootPid);
+  for (const { agent, rootPid, entry } of adopt) {
+    leftovers.delete(rootPid);
+    frozen.set(rootPid, entry);
+    if (agent.paused) continue;
+    upsertAgent({ id: agent.id, paused: true, pausedAt: entry.since ?? Date.now(), pausedBy: 'harness', pausedReason: entry.reason ?? null, pausedEventId: null });
+    addEvent({
+      agentId: agent.id, kind: 'system', risk: 'info', guard: 'paused',
+      title: `${agent.label} is still paused`,
+      detail: 'Harness restarted while it was paused. Let it continue or end it.',
+    });
+  }
+  if (adopt.length || drop.length) saveFrozen();
+}
 
 /** autoProtect: 'off' | 'dangerous' (critical only) | 'risky' (high and critical) */
 const DEFAULTS = { autoProtect: 'dangerous', menuBarDisplay: 'score' };
@@ -139,6 +186,14 @@ export async function endAgent(agentId, { auto = false, quiet = false } = {}) {
 const warned = new Set();
 
 export function startGuard() {
+  // Windows pauses with NtSuspendProcess, which ps can't report, so it doesn't adopt leftovers yet.
+  if (process.platform === 'win32') leftovers.clear();
+  if (leftovers.size) {
+    // Give the process monitor time to find the agents, then stop looking.
+    const timer = setInterval(() => { adoptLeftovers().catch(() => {}); }, 2000);
+    setTimeout(() => { clearInterval(timer); if (leftovers.size) { leftovers.clear(); saveFrozen(); } }, 60000).unref();
+    timer.unref();
+  }
   onEvent((e) => {
     if (settings.autoProtect === 'off' || !e.agentId || e.kind === 'system' || e.kind === 'task') return;
     if (riskRank(e.risk) < riskRank(THRESHOLD[settings.autoProtect])) return;
