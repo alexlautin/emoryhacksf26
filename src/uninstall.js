@@ -86,11 +86,11 @@ export function uninstallCleanup({ dryRun = false, onFolder, ...options } = {}) 
       unprotect(dir);
       result.removedHooks.push(dir);
     } catch (err) {
-      result.failed.push({ dir, error: err.message });
+      result.failed.push({ dir, error: err.message, kind: 'hook' });
     }
   }
   for (const dir of plan.homeDirs) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (err) { result.failed.push({ dir, error: err.message }); }
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (err) { result.failed.push({ dir, error: err.message, kind: 'decoy' }); }
   }
   return result;
 }
@@ -109,5 +109,6 @@ export function describeResult(r) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const result = uninstallCleanup({ dryRun: process.argv.includes('--dry-run') });
   if (!process.argv.includes('--quiet')) console.log(describeResult(result));
-  process.exit(result.failed.length ? 1 : 0);
+  // 1: some hooks are still in place. 2: hooks are gone but a decoy folder couldn't be deleted. The Windows uninstaller relies on this.
+  process.exit(result.failed.some((f) => f.kind === 'hook') ? 1 : result.failed.length ? 2 : 0);
 }
