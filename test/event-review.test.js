@@ -86,3 +86,12 @@ test('Gemini quota errors and invalid citations can be retried', async () => {
   assert.equal((await reviewer.review(connection.id, revision)).status, 502);
   assert.deepEqual((await reviewer.review(connection.id, revision)).body.evidence, [1]);
 });
+
+test('newer Google keys, key headers and Windows home folders are scrubbed too', async () => {
+  const { scrub } = await import('../src/review-facts.js');
+  const key = `AQ.Ab8RN6${'x'.repeat(44)}`;
+  assert.doesNotMatch(scrub(`curl -H "x-goog-api-key: ${key}" https://g.test`), /AQ\.Ab8/);
+  assert.doesNotMatch(scrub(`echo ${key}`), /AQ\.Ab8/);
+  assert.equal(scrub('type C:\\Users\\jake\\.aws\\credentials'), 'type ~\\.aws\\credentials');
+  assert.equal(scrub('echo monkey=banana'), 'echo monkey=banana');
+});
