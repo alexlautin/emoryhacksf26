@@ -157,7 +157,7 @@ main:focus { outline: none; }
 @keyframes nudge { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(3px); } }
 @media (prefers-reduced-motion: reduce) { .agents-more i { animation: none; } }
 @media (max-width: 900px) { .agents-more { display: none; } }
-.agents-note { margin: -8px 0 0; font: 400 12px/1.5 var(--mono); color: var(--ink-3); }
+.agents-note { margin: -18px 0 0; font: 400 12px/1.5 var(--mono); color: var(--ink-3); }
 .agents-label { font-family: var(--mono); font-weight: 400; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
 
 @media (max-width: 900px) {
