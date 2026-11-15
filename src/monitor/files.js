@@ -98,14 +98,29 @@ export function markerIn(body) {
   return line ? line[1] : null;
 }
 
+/**
+ * Read one of our own decoys without it counting as a read. Reading moves the access time, and any
+ * other Harness copy watching the same decoys would report a stolen secret every time a copy
+ * starts. Not on Windows, where touching the file makes antivirus rescan it (see arm).
+ */
+export function readOwnDecoy(p) {
+  let st = null;
+  try { st = fs.statSync(p); } catch { return null; }
+  let body = null;
+  try { body = fs.readFileSync(p, 'utf8'); } catch {}
+  if (process.platform !== 'win32') {
+    try { fs.utimesSync(p, st.atime, st.mtime); } catch {}
+  }
+  return body;
+}
+
 function setupBait(baitDir, markersFile) {
   fs.mkdirSync(baitDir, { recursive: true });
   let saved = {};
   try { saved = JSON.parse(fs.readFileSync(markersFile, 'utf8')); } catch {}
   for (const [name, render] of Object.entries(BAIT_FILES)) {
     const p = path.join(baitDir, name);
-    let body = null;
-    try { body = fs.readFileSync(p, 'utf8'); } catch {}
+    const body = readOwnDecoy(p);
     let marker = saved[name];
     const found = markerIn(body);
     const owned = body !== null && isOwned(body);
@@ -143,8 +158,7 @@ function registerLegacyBait(legacyDir) {
   if (!fs.existsSync(legacyDir)) return;
   for (const name of Object.keys(BAIT_FILES)) {
     const p = path.join(legacyDir, name);
-    let body = null;
-    try { body = fs.readFileSync(p, 'utf8'); } catch {}
+    const body = readOwnDecoy(p);
     if (body === null) continue;
     baitPaths.add(p);
     // The old file can still hold a value the new file no longer has. Remember it.
