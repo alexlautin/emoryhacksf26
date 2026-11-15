@@ -26,7 +26,7 @@ import { applyBaseline, baselineFromEvent, revertBaseline } from '../public/base
 import { incidentReport } from '../public/report.js';
 import { takeNotice } from '../public/notice.js';
 import { deliverNotice } from './notify.js';
-import { startPhoneAccess, setPhoneAccess, phoneStatus, sameOrigin } from './phone.js';
+import { startPhoneAccess, setPhoneAccess, phoneStatus, sameOrigin, crossSiteWrite } from './phone.js';
 import { createEventReviewer } from './event-review.js';
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -104,6 +104,7 @@ async function handle(req, res, { remote = false } = {}) {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (!remote && !localHost(req)) { res.writeHead(421); return res.end('Misdirected request'); }
+    if (!remote && crossSiteWrite(req)) return json(res, 403, { error: 'Requests from other websites are not allowed' });
     if (url.pathname.startsWith('/hooks/') && req.method === 'POST') {
       // Claude Code hook (via hooks/harness-hook.sh). Answers before the tool call runs.
       const event = url.pathname.slice('/hooks/'.length);
